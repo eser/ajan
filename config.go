@@ -1,4 +1,4 @@
-package main
+package ajan
 
 import (
 	"github.com/eser/ajan/datafx"
