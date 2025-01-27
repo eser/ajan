@@ -55,14 +55,16 @@ repos:
         pass_filenames: false
         types:
           - go
-      - id: kebab-case-files-only
-        name: kebab-case files only
-        entry: filenames must be kebab-case only
+      - id: snake-case-files-only
+        name: snake_case files only
+        entry: filenames must be snake_case only
         language: fail
-        files: '(?!(_test\.go|_grpc\.pb\.go)$)[^a-z0-9.\/\[\]@-]'
+        files: '[^a-z0-9_\.\/\[\]@]'
         exclude: |
           (?x)^(
             .github/.*|
+            .pre-commit-config.yaml|
+            .tool-versions|
             LICENSE|
             Makefile|
             README.md|
