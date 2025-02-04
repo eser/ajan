@@ -1,7 +1,8 @@
 package datafx
 
 type ConfigDataSource struct {
-	DSN string `conf:"DSN"`
+	Provider string `conf:"PROVIDER"`
+	DSN      string `conf:"DSN"`
 }
 
 type Config struct {
