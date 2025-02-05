@@ -10,6 +10,7 @@ import (
 
 type SqlDataSourceStd struct {
 	connection *sql.DB
+	dialect    Dialect
 }
 
 func NewSqlDataSourceStd(ctx context.Context, dialect Dialect, dsn string) (*SqlDataSourceStd, error) {
@@ -24,7 +25,12 @@ func NewSqlDataSourceStd(ctx context.Context, dialect Dialect, dsn string) (*Sql
 
 	return &SqlDataSourceStd{
 		connection: connection,
+		dialect:    dialect,
 	}, nil
+}
+
+func (dataSource *SqlDataSourceStd) GetDialect() Dialect {
+	return dataSource.dialect
 }
 
 func (dataSource *SqlDataSourceStd) GetConnection() SqlExecutor { //nolint:ireturn

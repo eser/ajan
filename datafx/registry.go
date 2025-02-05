@@ -17,6 +17,7 @@ type SqlExecutor interface {
 }
 
 type SqlDataSource interface {
+	GetDialect() Dialect
 	GetConnection() SqlExecutor
 	UseUnitOfWork(ctx context.Context) (*UnitOfWork, error)
 }
