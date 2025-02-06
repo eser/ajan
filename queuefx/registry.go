@@ -50,7 +50,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 	}
 
 	registry.logger.Info(
-		"adding database connection",
+		"adding broker connection",
 		slog.String("name", name),
 		slog.String("dialect", string(dialect)),
 	)
@@ -58,7 +58,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 	db, err := NewAmqpBroker(ctx, dialect, dsn) //nolint:varnamelen
 	if err != nil {
 		registry.logger.Error(
-			"failed to open database connection",
+			"failed to open broker connection",
 			slog.String("error", err.Error()),
 			slog.String("name", name),
 		)
@@ -68,7 +68,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 
 	registry.brokers[name] = db
 
-	registry.logger.Info("successfully added database connection", slog.String("name", name))
+	registry.logger.Info("successfully added broker connection", slog.String("name", name))
 
 	return nil
 }

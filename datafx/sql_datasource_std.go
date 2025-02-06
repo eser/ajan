@@ -16,11 +16,11 @@ type SqlDatasourceStd struct {
 func NewSqlDatasourceStd(ctx context.Context, dialect Dialect, dsn string) (*SqlDatasourceStd, error) {
 	connection, err := sql.Open(string(dialect), dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database connection: %w", err)
+		return nil, fmt.Errorf("failed to open datasource connection: %w", err)
 	}
 
 	if err := connection.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("failed to ping datasource: %w", err)
 	}
 
 	return &SqlDatasourceStd{
