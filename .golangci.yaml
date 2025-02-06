@@ -39,6 +39,7 @@ linters-settings:
           - github.com/golang-jwt/jwt/v5
           - github.com/prometheus/client_golang/prometheus
           - github.com/lib/pq
+          - github.com/rabbitmq/amqp091-go
   revive:
     # enable-all-rules: true
     ignore-generated-header: true

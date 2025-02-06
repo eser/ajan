@@ -1,48 +1,42 @@
-package datafx
+package queuefx
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
 )
 
-const DefaultDatasource = "default"
+const DefaultBroker = "default"
 
-type SqlExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-type SqlDatasource interface {
+type Broker interface {
 	GetDialect() Dialect
-	GetConnection() SqlExecutor
-	UseUnitOfWork(ctx context.Context) (*UnitOfWork, error)
+
+	QueueDeclare(ctx context.Context, name string) (string, error)
+	Publish(ctx context.Context, name string, body []byte) error
+	// Consume(ctx context.Context, name string)
 }
 
 type Registry struct {
-	datasources map[string]SqlDatasource
-	logger      *slog.Logger
+	brokers map[string]Broker
+	logger  *slog.Logger
 }
 
 func NewRegistry(logger *slog.Logger) *Registry {
-	datasources := make(map[string]SqlDatasource)
+	brokers := make(map[string]Broker)
 
 	return &Registry{
-		datasources: datasources,
-		logger:      logger,
+		brokers: brokers,
+		logger:  logger,
 	}
 }
 
-func (registry *Registry) GetDefaultSql() SqlDatasource { //nolint:ireturn
-	return registry.datasources[DefaultDatasource]
+func (registry *Registry) GetDefaultSql() Broker { //nolint:ireturn
+	return registry.brokers[DefaultBroker]
 }
 
-func (registry *Registry) GetNamedSql(name string) SqlDatasource { //nolint:ireturn
-	if db, exists := registry.datasources[name]; exists {
+func (registry *Registry) GetNamedSql(name string) Broker { //nolint:ireturn
+	if db, exists := registry.brokers[name]; exists {
 		return db
 	}
 
@@ -61,15 +55,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 		slog.String("dialect", string(dialect)),
 	)
 
-	// var db SqlDatasource
-
-	// var err error
-
-	// if dialect == DialectPostgresPgx {
-	// 	db, err = NewSqlDatasourcePgx(ctx, dialect, dsn)
-	// } else {
-	db, err := NewSqlDatasourceStd(ctx, dialect, dsn) //nolint:varnamelen
-	// }
+	db, err := NewAmqpBroker(ctx, dialect, dsn) //nolint:varnamelen
 	if err != nil {
 		registry.logger.Error(
 			"failed to open database connection",
@@ -80,7 +66,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 		return fmt.Errorf("failed to add connection for %s: %w", name, err)
 	}
 
-	registry.datasources[name] = db
+	registry.brokers[name] = db
 
 	registry.logger.Info("successfully added database connection", slog.String("name", name))
 
@@ -88,7 +74,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 }
 
 func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) error {
-	for name, source := range config.Sources {
+	for name, source := range config.Brokers {
 		nameLower := strings.ToLower(name)
 
 		err := registry.AddConnection(ctx, nameLower, source.Provider, source.DSN)

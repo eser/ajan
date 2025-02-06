@@ -8,12 +8,12 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type SqlDataSourceStd struct {
+type SqlDatasourceStd struct {
 	connection *sql.DB
 	dialect    Dialect
 }
 
-func NewSqlDataSourceStd(ctx context.Context, dialect Dialect, dsn string) (*SqlDataSourceStd, error) {
+func NewSqlDatasourceStd(ctx context.Context, dialect Dialect, dsn string) (*SqlDatasourceStd, error) {
 	connection, err := sql.Open(string(dialect), dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
@@ -23,21 +23,21 @@ func NewSqlDataSourceStd(ctx context.Context, dialect Dialect, dsn string) (*Sql
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &SqlDataSourceStd{
+	return &SqlDatasourceStd{
 		connection: connection,
 		dialect:    dialect,
 	}, nil
 }
 
-func (dataSource *SqlDataSourceStd) GetDialect() Dialect {
+func (dataSource *SqlDatasourceStd) GetDialect() Dialect {
 	return dataSource.dialect
 }
 
-func (dataSource *SqlDataSourceStd) GetConnection() SqlExecutor { //nolint:ireturn
+func (dataSource *SqlDatasourceStd) GetConnection() SqlExecutor { //nolint:ireturn
 	return dataSource.connection
 }
 
-func (dataSource *SqlDataSourceStd) UseUnitOfWork(ctx context.Context) (*UnitOfWork, error) {
+func (dataSource *SqlDatasourceStd) UseUnitOfWork(ctx context.Context) (*UnitOfWork, error) {
 	uow, err := UseUnitOfWork(ctx, dataSource.connection)
 	if err != nil {
 		return &UnitOfWork{}, err

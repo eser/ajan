@@ -5,6 +5,7 @@ import (
 	"github.com/eser/ajan/grpcfx"
 	"github.com/eser/ajan/httpfx"
 	"github.com/eser/ajan/logfx"
+	"github.com/eser/ajan/queuefx"
 )
 
 type BaseConfig struct {
@@ -15,8 +16,9 @@ type BaseConfig struct {
 	// CorsOrigin        string `conf:"CORS_ORIGIN"`
 	// CorsStrictHeaders bool   `conf:"CORS_STRICT_HEADERS"`
 
-	Data datafx.Config `conf:"DATA"`
-	Log  logfx.Config  `conf:"LOG"`
-	Grpc grpcfx.Config `conf:"GRPC"`
-	Http httpfx.Config `conf:"HTTP"`
+	Data  datafx.Config  `conf:"DATA"`
+	Queue queuefx.Config `conf:"QUEUE"`
+	Log   logfx.Config   `conf:"LOG"`
+	Grpc  grpcfx.Config  `conf:"GRPC"`
+	Http  httpfx.Config  `conf:"HTTP"`
 }
