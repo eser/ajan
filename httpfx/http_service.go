@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/eser/ajan/lib"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -52,6 +53,16 @@ func NewHttpService(
 			Certificates: []tls.Certificate{cert},
 			MinVersion:   tls.VersionTLS12,
 		}
+	} else if config.SelfSigned {
+		cert, err := lib.GenerateSelfSignedCert()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate self-signed certificate: %w", err))
+		}
+
+		server.TLSConfig = &tls.Config{ //nolint:exhaustruct
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
 	}
 
 	return &HttpService{
@@ -73,6 +84,10 @@ func (hs *HttpService) Router() *Router {
 
 func (hs *HttpService) Start(ctx context.Context) (func(), error) {
 	hs.logger.InfoContext(ctx, "HttpService is starting...", slog.String("addr", hs.Config.Addr))
+
+	// if hs.Server().TLSConfig == nil {
+	// 	hs.logger.WarnContext(ctx, "HttpService is starting without TLS, this will cause HTTP/2 support to be disabled")
+	// }
 
 	listener, lnErr := net.Listen("tcp", hs.InnerServer.Addr)
 	if lnErr != nil {

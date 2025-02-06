@@ -1,6 +1,6 @@
 module github.com/eser/ajan
 
-go 1.23.5
+go 1.23.6
 
 require (
 	github.com/getkin/kin-openapi v0.129.0
