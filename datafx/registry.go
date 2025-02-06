@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 )
 
 const DefaultDB = "DEFAULT"
@@ -88,9 +89,11 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 
 func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) error {
 	for name, source := range config.Sources {
-		err := registry.AddConnection(ctx, name, source.Provider, source.DSN)
+		nameLower := strings.ToLower(name)
+
+		err := registry.AddConnection(ctx, nameLower, source.Provider, source.DSN)
 		if err != nil {
-			return fmt.Errorf("failed to add connection for %s: %w", name, err)
+			return fmt.Errorf("failed to add connection for %s: %w", nameLower, err)
 		}
 	}
 
