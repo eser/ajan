@@ -4,7 +4,7 @@ import (
 	"github.com/eser/ajan/datafx"
 	"github.com/eser/ajan/grpcfx"
 	"github.com/eser/ajan/httpfx"
-	"github.com/eser/ajan/logfx"
+	"github.com/eser/ajan/obsfx/logfx"
 	"github.com/eser/ajan/queuefx"
 )
 

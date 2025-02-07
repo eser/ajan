@@ -33,7 +33,7 @@ container := di.Default
 err := di.RegisterFn(
   container,
   configfx.RegisterDependencies,
-  logfx.RegisterDependencies,
+  obsfx.RegisterDependencies,
   httpfx.RegisterDependencies,
   // ... other dependencies
 )

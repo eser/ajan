@@ -16,8 +16,7 @@ of your golang projects.
 | [grpcfx](./grpcfx/)       | .           |
 | [httpfx](./httpfx/)       | .           |
 | [lib](./lib/)             | .           |
-| [logfx](./logfx/)         | .           |
-| [metricsfx](./metricsfx/) | .           |
+| [obsfx](./obsfx/) | .           |
 | [results](./results/)     | .           |
 
 ## 🙋🏻 FAQ

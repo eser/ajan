@@ -73,8 +73,9 @@ repos:
             di/README.md|
             httpfx/README.md|
             lib/README.md|
-            logfx/README.md|
-            metricsfx/README.md|
+            obsfx/README.md|
+            obsfx/logfx/README.md|
+            obsfx/metricsfx/README.md|
             results/README.md|
           )$
       - id: run-tests
