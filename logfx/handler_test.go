@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eser/ajan/obsfx/logfx"
+	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

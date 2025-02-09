@@ -13,10 +13,13 @@ of your golang projects.
 | [configfx](./configfx/)   | .           |
 | [datafx](./datafx/)       | .           |
 | [di](./di/)               | .           |
+| [eventsfx](./eventsfx/)   | .           |
 | [grpcfx](./grpcfx/)       | .           |
 | [httpfx](./httpfx/)       | .           |
 | [lib](./lib/)             | .           |
-| [obsfx](./obsfx/) | .           |
+| [logfx](./logfx/)         | .           |
+| [metricsfx](./metricsfx/) | .           |
+| [queuefx](./queuefx/)     | .           |
 | [results](./results/)     | .           |
 
 ## 🙋🏻 FAQ

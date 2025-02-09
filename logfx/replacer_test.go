@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eser/ajan/obsfx/logfx"
+	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -158,8 +158,8 @@ func TestTraceLines(t *testing.T) { //nolint:funlen
 			stack: stackGenerator(),
 			expected: []string{
 				"runtime.Callers /usr/local/go/src/runtime/extern.go:331",
-				fmt.Sprint("github.com/eser/ajan/obsfx/logfx_test.TestTraceLines.func1 ", pwd(), ":117"),
-				fmt.Sprint("github.com/eser/ajan/obsfx/logfx_test.TestTraceLines ", pwd(), ":145"),
+				fmt.Sprint("github.com/eser/ajan/logfx_test.TestTraceLines.func1 ", pwd(), ":117"),
+				fmt.Sprint("github.com/eser/ajan/logfx_test.TestTraceLines ", pwd(), ":145"),
 				"testing.tRunner /usr/local/go/src/testing/testing.go:1690",
 			},
 		},
@@ -168,7 +168,7 @@ func TestTraceLines(t *testing.T) { //nolint:funlen
 			stack: stackGeneratorWithUnknownFunctionAddr(),
 			expected: []string{
 				"unknown",
-				fmt.Sprint("github.com/eser/ajan/obsfx/logfx_test.TestTraceLines ", pwd(), ":147"),
+				fmt.Sprint("github.com/eser/ajan/logfx_test.TestTraceLines ", pwd(), ":147"),
 			},
 		},
 	}

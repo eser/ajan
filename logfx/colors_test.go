@@ -3,7 +3,7 @@ package logfx_test
 import (
 	"testing"
 
-	"github.com/eser/ajan/obsfx/logfx"
+	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
 )
 

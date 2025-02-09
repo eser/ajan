@@ -33,8 +33,10 @@ container := di.Default
 err := di.RegisterFn(
   container,
   configfx.RegisterDependencies,
-  obsfx.RegisterDependencies,
+  logfx.RegisterDependencies,
+  metricsfx.RegisterDependencies,
   httpfx.RegisterDependencies,
+  eventsfx.RegisterDependencies,
   // ... other dependencies
 )
 if err != nil {
