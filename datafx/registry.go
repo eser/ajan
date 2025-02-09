@@ -17,19 +17,19 @@ type SqlExecutor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-type SqlDatasource interface {
+type Datasource interface {
 	GetDialect() Dialect
 	GetConnection() SqlExecutor
 	UseUnitOfWork(ctx context.Context) (*UnitOfWork, error)
 }
 
 type Registry struct {
-	datasources map[string]SqlDatasource
+	datasources map[string]Datasource
 	logger      *slog.Logger
 }
 
 func NewRegistry(logger *slog.Logger) *Registry {
-	datasources := make(map[string]SqlDatasource)
+	datasources := make(map[string]Datasource)
 
 	return &Registry{
 		datasources: datasources,
@@ -37,11 +37,11 @@ func NewRegistry(logger *slog.Logger) *Registry {
 	}
 }
 
-func (registry *Registry) GetDefaultSql() SqlDatasource { //nolint:ireturn
+func (registry *Registry) GetDefault() Datasource { //nolint:ireturn
 	return registry.datasources[DefaultDatasource]
 }
 
-func (registry *Registry) GetNamedSql(name string) SqlDatasource { //nolint:ireturn
+func (registry *Registry) GetNamed(name string) Datasource { //nolint:ireturn
 	if db, exists := registry.datasources[name]; exists {
 		return db
 	}
@@ -61,14 +61,14 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 		slog.String("dialect", string(dialect)),
 	)
 
-	// var db SqlDatasource
+	// var db Datasource
 
 	// var err error
 
 	// if dialect == DialectPostgresPgx {
-	// 	db, err = NewSqlDatasourcePgx(ctx, dialect, dsn)
+	// 	db, err = NewPgxDatasource(ctx, dialect, dsn)
 	// } else {
-	db, err := NewSqlDatasourceStd(ctx, dialect, dsn) //nolint:varnamelen
+	db, err := NewSqlDatasource(ctx, dialect, dsn) //nolint:varnamelen
 	// }
 	if err != nil {
 		registry.logger.Error(
