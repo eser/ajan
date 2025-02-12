@@ -31,11 +31,11 @@ func NewRegistry(logger *slog.Logger) *Registry {
 	}
 }
 
-func (registry *Registry) GetDefaultSql() Broker { //nolint:ireturn
+func (registry *Registry) GetDefault() Broker { //nolint:ireturn
 	return registry.brokers[DefaultBroker]
 }
 
-func (registry *Registry) GetNamedSql(name string) Broker { //nolint:ireturn
+func (registry *Registry) GetNamed(name string) Broker { //nolint:ireturn
 	if db, exists := registry.brokers[name]; exists {
 		return db
 	}
