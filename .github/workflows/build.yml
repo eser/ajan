@@ -71,11 +71,5 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Setup govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Setup betteralign
-        run: go install github.com/dkorunic/betteralign/cmd/betteralign@latest
-
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1

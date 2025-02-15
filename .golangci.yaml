@@ -15,7 +15,7 @@ linters:
   disable:
     - godox
     - stylecheck
-    - exportloopref
+    - tenv
     - varnamelen
 
 linters-settings:

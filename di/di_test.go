@@ -49,7 +49,7 @@ func TestRegisterAndGetValue(t *testing.T) {
 	require.NotNil(t, adder, "Adder implementation should not be nil")
 
 	// Use the implementation
-	result, err := adder.Add(context.Background(), 2, 3)
+	result, err := adder.Add(t.Context(), 2, 3)
 	require.NoError(t, err, "Adder.Add should not return an error")
 	assert.Equal(t, 5, result, "Adder.Add should return the correct sum")
 }
@@ -71,7 +71,7 @@ func TestRegisterProviderAndGetValue(t *testing.T) {
 	require.NotNil(t, adder, "Adder implementation should not be nil")
 
 	// Use the implementation
-	result, err := adder.Add(context.Background(), 2, 3)
+	result, err := adder.Add(t.Context(), 2, 3)
 	require.NoError(t, err, "Adder.Add should not return an error")
 	assert.Equal(t, 5, result, "Adder.Add should return the correct sum")
 }
@@ -89,7 +89,7 @@ func TestMustGetValue(t *testing.T) {
 	require.NotNil(t, multiplier, "Multiplier implementation should not be nil")
 
 	// Use the implementation
-	result, err := multiplier.Multiply(context.Background(), 2, 3)
+	result, err := multiplier.Multiply(t.Context(), 2, 3)
 	require.NoError(t, err, "Multiplier.Multiply should not return an error")
 	assert.Equal(t, 6, result, "Multiplier.Multiply should return the correct product")
 }
@@ -110,7 +110,7 @@ func TestMustGetValueWithProvider(t *testing.T) {
 	require.NotNil(t, multiplier, "Multiplier implementation should not be nil")
 
 	// Use the implementation
-	result, err := multiplier.Multiply(context.Background(), 2, 3)
+	result, err := multiplier.Multiply(t.Context(), 2, 3)
 	require.NoError(t, err, "Multiplier.Multiply should not return an error")
 	assert.Equal(t, 6, result, "Multiplier.Multiply should return the correct product")
 }
@@ -190,11 +190,11 @@ func TestInvoke(t *testing.T) {
 
 	// Invoke a function that takes dependencies
 	err := di.DynamicInvoke(c, func(adder Adder, multiplier Multiplier) error {
-		sum, err := adder.Add(context.Background(), 2, 3)
+		sum, err := adder.Add(t.Context(), 2, 3)
 		require.NoError(t, err, "Adder.Add should not return an error")
 		assert.Equal(t, 5, sum, "Adder.Add should return the correct sum")
 
-		product, err := multiplier.Multiply(context.Background(), 2, 3)
+		product, err := multiplier.Multiply(t.Context(), 2, 3)
 		require.NoError(t, err, "Multiplier.Multiply should not return an error")
 		assert.Equal(t, 6, product, "Multiplier.Multiply should return the correct product")
 
@@ -282,7 +282,7 @@ func TestCreateLister(t *testing.T) {
 	adder, isOk := implementations[0].Value.(Adder)
 	require.True(t, isOk, "Expected Adder type")
 
-	result, err := adder.Add(context.Background(), 2, 3)
+	result, err := adder.Add(t.Context(), 2, 3)
 	require.NoError(t, err)
 	assert.Equal(t, 5, result)
 }
@@ -307,7 +307,7 @@ func TestDynamicList(t *testing.T) {
 	adder, isOk := implementations[0].Value.(Adder)
 	require.True(t, isOk, "Expected Adder type")
 
-	result, err := adder.Add(context.Background(), 2, 3)
+	result, err := adder.Add(t.Context(), 2, 3)
 	require.NoError(t, err)
 	assert.Equal(t, 5, result)
 }
@@ -323,11 +323,11 @@ func TestCreateInvoker(t *testing.T) {
 
 	// Create invoker for a function that takes dependencies
 	invoker := di.CreateInvoker(c, func(adder Adder, multiplier Multiplier) error {
-		sum, err := adder.Add(context.Background(), 2, 3)
+		sum, err := adder.Add(t.Context(), 2, 3)
 		require.NoError(t, err, "Adder.Add should not return an error")
 		assert.Equal(t, 5, sum, "Adder.Add should return the correct sum")
 
-		product, err := multiplier.Multiply(context.Background(), 2, 3)
+		product, err := multiplier.Multiply(t.Context(), 2, 3)
 		require.NoError(t, err, "Multiplier.Multiply should not return an error")
 		assert.Equal(t, 6, product, "Multiplier.Multiply should return the correct product")
 

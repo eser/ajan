@@ -1,7 +1,6 @@
 package middlewares_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -62,7 +61,7 @@ func TestAuthMiddleware(t *testing.T) { //nolint:funlen
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 
 			if tt.token != "" {

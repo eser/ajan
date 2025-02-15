@@ -28,7 +28,7 @@ func TestCryptoGetRandomBytes(t *testing.T) { //nolint:paralleltest
 		mockReader    *MockReader
 		expectedError bool
 	}{
-		{
+		{ //nolint:exhaustruct
 			name:       "Successful read",
 			mockReader: &MockReader{},
 		},

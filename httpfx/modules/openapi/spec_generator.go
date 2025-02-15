@@ -17,7 +17,7 @@ func GenerateOpenApiSpec(identity *ApiIdentity, routes *httpfx.Router) any {
 			Schemas:    make(openapi3.Schemas),
 			Extensions: make(map[string]any),
 		},
-		Paths: &openapi3.Paths{
+		Paths: &openapi3.Paths{ //nolint:exhaustruct
 			Extensions: make(map[string]any),
 		},
 		Extensions: make(map[string]any),
@@ -39,7 +39,7 @@ func GenerateOpenApiSpec(identity *ApiIdentity, routes *httpfx.Router) any {
 		for _, response := range route.Spec.Responses {
 			description := ""
 
-			operation.AddResponse(response.StatusCode, &openapi3.Response{
+			operation.AddResponse(response.StatusCode, &openapi3.Response{ //nolint:exhaustruct
 				Extensions: make(map[string]any),
 
 				Description: &description,

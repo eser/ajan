@@ -2,7 +2,6 @@ package logfx_test
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"log/slog"
 	"testing"
@@ -97,7 +96,7 @@ func TestHandler_Enabled(t *testing.T) {
 				Level: tt.level,
 			})
 
-			assert.Equal(t, tt.expected, handler.Enabled(context.Background(), 0))
+			assert.Equal(t, tt.expected, handler.Enabled(t.Context(), 0))
 		})
 	}
 }
@@ -153,7 +152,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 				PrettyMode: true,
 			})
 
-			err := handler.Handle(context.Background(), tt.record)
+			err := handler.Handle(t.Context(), tt.record)
 			require.NoError(t, err)
 
 			assert.Contains(t, writer.String(), tt.expected)
@@ -167,7 +166,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 			Level:      "info",
 			PrettyMode: true,
 		})
-		err := handler.Handle(context.Background(), slog.NewRecord(time.Time{}, slog.LevelInfo, "test", 0))
+		err := handler.Handle(t.Context(), slog.NewRecord(time.Time{}, slog.LevelInfo, "test", 0))
 		assert.EqualError(t, err, "failed to write log: failed to write")
 	})
 }
