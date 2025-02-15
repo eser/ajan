@@ -51,7 +51,7 @@ your fork, and then submit a pull request.
 
 ### Requirements
 
-- Golang 1.23 or higher (https://go.dev/)
+- Golang 1.24 or higher (https://go.dev/)
 
 ### Versioning
 

@@ -18,15 +18,12 @@ const (
 	SelfSignedKeyLength        = 2048
 )
 
-func CryptoGetRandomBytes(size int) ([]byte, error) {
+func CryptoGetRandomBytes(size int) []byte {
 	key := make([]byte, size)
 
-	_, err := rand.Read(key)
-	if err != nil {
-		return nil, fmt.Errorf("error on CryptoGetRandomBytes: %w", err)
-	}
+	rand.Read(key) //nolint:errcheck,gosec
 
-	return key, nil
+	return key
 }
 
 func GenerateSelfSignedCert() (tls.Certificate, error) {

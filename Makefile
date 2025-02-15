@@ -21,22 +21,21 @@ dep: # Download dependencies.
 	go mod download
 	go mod tidy
 
-.PHONY: dep-tools
-dep-tools: dep # Install tools.
-	@echo Installing tools from tools.go
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % go install %
-
-.PHONY: init
-init: dep-tools # Initialize the project.
+.PHONY: init-tools
+init-tools: # Initialize the tools.
 	command -v pre-commit >/dev/null || brew install pre-commit
 	command -v make >/dev/null || brew install make
 	command -v act >/dev/null || brew install act
 	[ -f .git/hooks/pre-commit ] || pre-commit install
-	command -v betteralign >/dev/null || go install github.com/dkorunic/betteralign/cmd/betteralign@latest
-	command -v gcov2lcov >/dev/null || go install github.com/jandelgado/gcov2lcov@latest
-	command -v govulncheck >/dev/null || go install golang.org/x/vuln/cmd/govulncheck@latest
-	command -v mockgen >/dev/null || go install go.uber.org/mock/mockgen@latest
-	command -v stringer >/dev/null || go install golang.org/x/tools/cmd/stringer@latest
+	go tool -n golangci-lint >/dev/null || go get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go tool -n betteralign >/dev/null || go get -tool github.com/dkorunic/betteralign/cmd/betteralign@latest
+	go tool -n gcov2lcov >/dev/null || go get -tool github.com/jandelgado/gcov2lcov@latest
+	go tool -n govulncheck >/dev/null || go get -tool golang.org/x/vuln/cmd/govulncheck@latest
+	go tool -n mockgen >/dev/null || go get -tool go.uber.org/mock/mockgen@latest
+	go tool -n stringer >/dev/null || go get -tool golang.org/x/tools/cmd/stringer@latest
+
+.PHONY: init
+init: init-tools dep # Initialize the project.
 
 .PHONY: build
 build: # Build the entire codebase.
@@ -82,17 +81,17 @@ test-ci: test-cov # Run the tests with coverage and check if it's above the thre
 
 .PHONY: lint
 lint: # Run the linting command.
-	golangci-lint run ./...
+	go tool golangci-lint run ./...
 
 .PHONY: check
 check: # Runs static analysis tools.
-	govulncheck ./...
-	betteralign ./...
+	go tool govulncheck ./...
+	go tool betteralign ./...
 	go vet ./...
 
 .PHONY: fix
 fix: # Fixes code formatting and alignment.
-	betteralign -apply ./...
+	go tool betteralign -apply ./...
 	go fmt ./...
 
 %:

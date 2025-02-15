@@ -2,26 +2,18 @@ package lib_test
 
 import (
 	"crypto/rand"
-	"errors"
 	"testing"
 
 	"github.com/eser/ajan/lib"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // MockReader is a mock implementation of io.Reader that simulates
 // a failure in the Read method.
-type MockReader struct {
-	fail bool
-}
+type MockReader struct{}
 
 // Read implements the io.Reader interface for MockReader.
 func (m *MockReader) Read(p []byte) (int, error) {
-	if m.fail {
-		return 0, errors.New("mock read error") //nolint:err113
-	}
-
 	// Simulate successful read
 	for i := range p {
 		p[i] = byte(i)
@@ -37,14 +29,8 @@ func TestCryptoGetRandomBytes(t *testing.T) { //nolint:paralleltest
 		expectedError bool
 	}{
 		{
-			name:          "Successful read",
-			mockReader:    &MockReader{fail: false},
-			expectedError: false,
-		},
-		{
-			name:          "Read error",
-			mockReader:    &MockReader{fail: true},
-			expectedError: true,
+			name:       "Successful read",
+			mockReader: &MockReader{},
 		},
 	}
 
@@ -55,20 +41,9 @@ func TestCryptoGetRandomBytes(t *testing.T) { //nolint:paralleltest
 				rand.Reader = originalRand
 			}() // Restore original rand.Reader
 
-			if tt.mockReader.fail {
-				rand.Reader = tt.mockReader
-			}
-
 			const size = 16
-			result, err := lib.CryptoGetRandomBytes(size)
+			result := lib.CryptoGetRandomBytes(size)
 
-			if tt.expectedError {
-				require.Error(t, err, "CryptoGetRandomBytes() error = nil, expectedError true")
-
-				return
-			}
-
-			require.NoError(t, err, "CryptoGetRandomBytes() error = %v, expectedError false", err)
 			assert.Len(t, result, size, "CryptoGetRandomBytes() = %v, want length %v", result, size)
 		})
 	}
