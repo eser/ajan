@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/eser/ajan/logfx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
 
-func LoggingInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
+func LoggingInterceptor(logger *logfx.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		startTime := time.Now()
 

@@ -35,20 +35,20 @@ These levels are compatible with OpenTelemetry Severity levels, allowing seamles
 
 ### NewLogger function
 
-Creates a new `slog.Logger` object based on the provided configuration.
+Creates a new `logfx.Logger` object based on the provided configuration.
 
 ```go
-// func NewLogger(w io.Writer, config *Config) (*slog.Logger, error)
+// func NewLogger(w io.Writer, config *Config) (*logfx.Logger, error)
 
 logger, err := logfx.NewLogger(os.Stdout, config)
 ```
 
 ### NewLoggerAsDefault function
 
-Creates a new `slog.Logger` object based on the provided configuration and makes it default slog instance.
+Creates a new `logfx.Logger` object based on the provided configuration and makes it default slog instance.
 
 ```go
-// func NewLoggerAsDefault(w io.Writer, config *Config) (*slog.Logger, error)
+// func NewLoggerAsDefault(w io.Writer, config *Config) (*logfx.Logger, error)
 
 logger, err := logfx.NewLoggerAsDefault(os.Stdout, config)
 ```

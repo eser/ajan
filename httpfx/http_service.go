@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/eser/ajan/lib"
+	"github.com/eser/ajan/logfx"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -19,7 +20,7 @@ type HttpService struct {
 	InnerMetrics *Metrics
 
 	Config *Config
-	logger *slog.Logger
+	logger *logfx.Logger
 }
 
 type MetricsProvider interface {
@@ -30,7 +31,7 @@ func NewHttpService(
 	config *Config,
 	router *Router,
 	metricsProvider MetricsProvider,
-	logger *slog.Logger,
+	logger *logfx.Logger,
 ) *HttpService {
 	server := &http.Server{ //nolint:exhaustruct
 		ReadHeaderTimeout: config.ReadHeaderTimeout,

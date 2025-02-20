@@ -3,9 +3,9 @@ package eventsfx
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
+	"github.com/eser/ajan/logfx"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -24,7 +24,7 @@ type EventBus struct {
 	Queue       chan Event
 
 	Config *Config
-	logger *slog.Logger
+	logger *logfx.Logger
 }
 
 var ErrEventTimeout = errors.New("event timeout")
@@ -36,7 +36,7 @@ type MetricsProvider interface {
 func NewEventBus(
 	config *Config,
 	metricsProvider MetricsProvider,
-	logger *slog.Logger,
+	logger *logfx.Logger,
 ) *EventBus {
 	return &EventBus{
 		InnerMetrics: NewMetrics(metricsProvider),

@@ -29,7 +29,7 @@ func Seal(c *Container) {
 }
 
 // Get retrieves a registered implementation for the given interface.
-func Get[I any](c *Container) (I, bool) { //nolint:ireturn
+func Get[I any](c *Container) (I, bool) {
 	interfaceType := reflect.TypeFor[I]()
 
 	impl, ok := c.Resolve(interfaceType)
@@ -43,7 +43,7 @@ func Get[I any](c *Container) (I, bool) { //nolint:ireturn
 }
 
 // MustGet retrieves a registered implementation or panics if not found.
-func MustGet[I any](c *Container) I { //nolint:ireturn
+func MustGet[I any](c *Container) I {
 	interfaceType := reflect.TypeFor[I]()
 
 	impl := c.MustResolve(interfaceType)

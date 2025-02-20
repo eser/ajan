@@ -17,6 +17,7 @@ linters:
     - stylecheck
     - tenv
     - varnamelen
+    - ireturn
 
 linters-settings:
   depguard:

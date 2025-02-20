@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/eser/ajan/logfx"
 )
 
 const DefaultDatasource = "default"
@@ -25,10 +27,10 @@ type Datasource interface {
 
 type Registry struct {
 	datasources map[string]Datasource
-	logger      *slog.Logger
+	logger      *logfx.Logger
 }
 
-func NewRegistry(logger *slog.Logger) *Registry {
+func NewRegistry(logger *logfx.Logger) *Registry {
 	datasources := make(map[string]Datasource)
 
 	return &Registry{

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/eser/ajan/logfx"
 )
 
 const DefaultBroker = "default"
@@ -19,10 +21,10 @@ type Broker interface {
 
 type Registry struct {
 	brokers map[string]Broker
-	logger  *slog.Logger
+	logger  *logfx.Logger
 }
 
-func NewRegistry(logger *slog.Logger) *Registry {
+func NewRegistry(logger *logfx.Logger) *Registry {
 	brokers := make(map[string]Broker)
 
 	return &Registry{
@@ -31,11 +33,11 @@ func NewRegistry(logger *slog.Logger) *Registry {
 	}
 }
 
-func (registry *Registry) GetDefault() Broker { //nolint:ireturn
+func (registry *Registry) GetDefault() Broker {
 	return registry.brokers[DefaultBroker]
 }
 
-func (registry *Registry) GetNamed(name string) Broker { //nolint:ireturn
+func (registry *Registry) GetNamed(name string) Broker {
 	if db, exists := registry.brokers[name]; exists {
 		return db
 	}

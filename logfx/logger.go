@@ -30,6 +30,10 @@ func NewLoggerAsDefault(w io.Writer, config *Config) (*Logger, error) {
 	return logger, nil
 }
 
+func NewLoggerFromSlog(slog *slog.Logger) *Logger {
+	return &Logger{Logger: slog}
+}
+
 // Trace logs at [LevelTrace].
 func (l *Logger) Trace(msg string, args ...any) {
 	l.Log(context.Background(), LevelTrace, msg, args...)

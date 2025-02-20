@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/eser/ajan/logfx"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -16,14 +17,14 @@ type GrpcService struct {
 	InnerServer  *grpc.Server
 	InnerMetrics *Metrics
 	Config       *Config
-	logger       *slog.Logger
+	logger       *logfx.Logger
 }
 
 type MetricsProvider interface {
 	GetRegistry() *prometheus.Registry
 }
 
-func NewGrpcService(config *Config, metricsProvider MetricsProvider, logger *slog.Logger) *GrpcService {
+func NewGrpcService(config *Config, metricsProvider MetricsProvider, logger *logfx.Logger) *GrpcService {
 	metrics := NewMetrics(metricsProvider)
 
 	server := grpc.NewServer(
