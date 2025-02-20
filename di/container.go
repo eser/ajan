@@ -53,7 +53,7 @@ func (c *Container) SetValueFor(interfaceType reflect.Type, value any) {
 	reflectionType := reflectionValue.Type()
 
 	if !reflectionType.AssignableTo(interfaceType) {
-		panic(fmt.Sprintf("Implementation type %s is not assignable to %s", reflectionType, interfaceType))
+		panic(fmt.Sprintf("Implementation type %q is not assignable to %q", reflectionType, interfaceType))
 	}
 
 	c.dependencies[interfaceType] = DependencyTarget{

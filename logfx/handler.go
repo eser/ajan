@@ -16,9 +16,7 @@ type Handler struct {
 }
 
 func NewHandler(w io.Writer, config *Config) (*Handler, error) {
-	var level slog.Level
-
-	err := level.UnmarshalText([]byte(config.Level))
+	level, err := ParseLevel(config.Level)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse log level: %w", err)
 	}
@@ -46,21 +44,12 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 	if h.InnerConfig.PrettyMode {
 		out := strings.Builder{}
 
-		out.WriteString(Colored(ColorDimGray, rec.Time.Format("15:04:05.000")))
+		timeStr := rec.Time.Format("15:04:05.000")
+
+		out.WriteString(Colored(ColorDimGray, timeStr))
 		out.WriteRune(' ')
 
-		switch rec.Level {
-		case slog.LevelDebug:
-			out.WriteString(Colored(ColorLightBlue, "DEBUG"))
-		case slog.LevelInfo:
-			out.WriteString(Colored(ColorGreen, "INFO"))
-		case slog.LevelWarn:
-			out.WriteString(Colored(ColorYellow, "WARN"))
-		case slog.LevelError:
-			out.WriteString(Colored(ColorRed, "ERROR"))
-		default:
-			out.WriteString(rec.Level.String())
-		}
+		out.WriteString(LevelEncoderColored(rec.Level))
 
 		out.WriteRune(' ')
 		out.WriteString(rec.Message)

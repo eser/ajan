@@ -52,7 +52,7 @@ func (registry *Registry) GetNamed(name string) Datasource { //nolint:ireturn
 func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
-		return fmt.Errorf("failed to determine dialect for %s: %w", name, err)
+		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)
 	}
 
 	registry.logger.Info(
@@ -77,7 +77,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 			slog.String("name", name),
 		)
 
-		return fmt.Errorf("failed to add connection for %s: %w", name, err)
+		return fmt.Errorf("failed to add connection for %q: %w", name, err)
 	}
 
 	registry.datasources[name] = db
@@ -93,7 +93,7 @@ func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) er
 
 		err := registry.AddConnection(ctx, nameLower, source.Provider, source.DSN)
 		if err != nil {
-			return fmt.Errorf("failed to add connection for %s: %w", nameLower, err)
+			return fmt.Errorf("failed to add connection for %q: %w", nameLower, err)
 		}
 	}
 

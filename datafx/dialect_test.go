@@ -49,7 +49,7 @@ func TestDetermineDialect(t *testing.T) { //nolint:funlen
 			dsn:         "",
 			want:        "",
 			wantErr:     datafx.ErrUnknownProvider,
-			errContains: "unknown provider: unknown",
+			errContains: "unknown provider - \"unknown\"",
 		},
 		{
 			name:        "postgres dsn",

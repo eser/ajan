@@ -67,7 +67,7 @@ func (bus *EventBus) PublishSync(event Event) (any, error) {
 	case result := <-replyChan:
 		return result, nil
 	case <-time.After(bus.Config.ReplyTimeout):
-		return nil, fmt.Errorf("%w: %s", ErrEventTimeout, event.Name)
+		return nil, fmt.Errorf("%w - %q", ErrEventTimeout, event.Name)
 	}
 }
 

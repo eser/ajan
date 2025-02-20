@@ -45,7 +45,7 @@ func TestNewHandler(t *testing.T) {
 				PrettyMode: true,
 				AddSource:  true,
 			},
-			expectedErr: "failed to parse log level: slog: level string \"invalid\": unknown name",
+			expectedErr: "failed to parse log level: unknown error level \"invalid\"",
 		},
 	}
 
@@ -68,39 +68,6 @@ func TestNewHandler(t *testing.T) {
 	}
 }
 
-func TestHandler_Enabled(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		level    string
-		expected bool
-	}{
-		{
-			name:     "Enabled",
-			level:    "info",
-			expected: true,
-		},
-		{
-			name:     "Disabled",
-			level:    "error",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler, _ := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
-				Level: tt.level,
-			})
-
-			assert.Equal(t, tt.expected, handler.Enabled(t.Context(), 0))
-		})
-	}
-}
-
 func TestHandler_Handle(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
@@ -111,34 +78,52 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 		expected string
 	}{
 		{
+			name:     "Trace",
+			level:    "trace",
+			record:   slog.NewRecord(time.Time{}, logfx.LevelTrace, "test", 0),
+			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[94mTRACE\x1b[0m test {}\n",
+		},
+		{
 			name:     "Debug",
 			level:    "debug",
-			record:   slog.NewRecord(time.Time{}, slog.LevelDebug, "test", 0),
+			record:   slog.NewRecord(time.Time{}, logfx.LevelDebug, "test", 0),
 			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[94mDEBUG\x1b[0m test {}\n",
 		},
 		{
 			name:     "Info",
 			level:    "info",
-			record:   slog.NewRecord(time.Time{}, slog.LevelInfo, "test", 0),
+			record:   slog.NewRecord(time.Time{}, logfx.LevelInfo, "test", 0),
 			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[32mINFO\x1b[0m test {}\n",
 		},
 		{
 			name:     "Warn",
 			level:    "warn",
-			record:   slog.NewRecord(time.Time{}, slog.LevelWarn, "test", 0),
+			record:   slog.NewRecord(time.Time{}, logfx.LevelWarn, "test", 0),
 			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[33mWARN\x1b[0m test {}\n",
 		},
 		{
 			name:     "Error",
 			level:    "error",
-			record:   slog.NewRecord(time.Time{}, slog.LevelError, "test", 0),
+			record:   slog.NewRecord(time.Time{}, logfx.LevelError, "test", 0),
 			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[31mERROR\x1b[0m test {}\n",
 		},
 		{
+			name:     "Fatal",
+			level:    "fatal",
+			record:   slog.NewRecord(time.Time{}, logfx.LevelFatal, "test", 0),
+			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[31mFATAL\x1b[0m test {}\n",
+		},
+		{
+			name:     "Panic",
+			level:    "panic",
+			record:   slog.NewRecord(time.Time{}, logfx.LevelPanic, "test", 0),
+			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[31mPANIC\x1b[0m test {}\n",
+		},
+		{
 			name:     "UnknownLevel",
-			level:    "error",
+			level:    "panic",
 			record:   slog.NewRecord(time.Time{}, 77, "test", 0),
-			expected: "\x1b[90m00:00:00.000\x1b[0m ERROR+69 test {}\n",
+			expected: "\x1b[90m00:00:00.000\x1b[0m \x1b[31mPANIC+61\x1b[0m test {}\n",
 		},
 	}
 

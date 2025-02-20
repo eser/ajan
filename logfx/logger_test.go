@@ -36,7 +36,7 @@ func TestRegisterLogger(t *testing.T) {
 				AddSource:  true,
 			},
 			wantErr:     true,
-			expectedErr: "failed to parse log level: slog: level string \"invalid\": unknown name",
+			expectedErr: "failed to parse log level: unknown error level \"invalid\"",
 		},
 	}
 

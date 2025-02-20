@@ -12,7 +12,7 @@ func (cl *ConfigManager) FromEnvFileDirect(filename string) ConfigResource {
 	return func(target *map[string]any) error {
 		err := envparser.TryParseFiles(target, filename)
 		if err != nil {
-			return fmt.Errorf("failed to parse env file: %w", err)
+			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
 		}
 
 		return nil
@@ -26,7 +26,7 @@ func (cl *ConfigManager) FromEnvFile(filename string) ConfigResource {
 
 		err := envparser.TryParseFiles(target, filenames...)
 		if err != nil {
-			return fmt.Errorf("failed to parse env file: %w", err)
+			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
 		}
 
 		return nil
@@ -45,7 +45,7 @@ func (cl *ConfigManager) FromJsonFileDirect(filename string) ConfigResource {
 	return func(target *map[string]any) error {
 		err := jsonparser.TryParseFiles(target, filename)
 		if err != nil {
-			return fmt.Errorf("failed to parse json file: %w", err)
+			return fmt.Errorf("failed to parse json file - %q: %w", filename, err)
 		}
 
 		return nil
@@ -59,7 +59,7 @@ func (cl *ConfigManager) FromJsonFile(filename string) ConfigResource {
 
 		err := jsonparser.TryParseFiles(target, filenames...)
 		if err != nil {
-			return fmt.Errorf("failed to parse json file: %w", err)
+			return fmt.Errorf("failed to parse json file - %q: %w", filename, err)
 		}
 
 		return nil

@@ -23,7 +23,7 @@ func DetermineDialect(provider string, dsn string) (Dialect, error) {
 		case "amqp":
 			return DialectAmqp, nil
 		default:
-			return "", fmt.Errorf("%w: %s", ErrUnknownProvider, provider)
+			return "", fmt.Errorf("%w - %q", ErrUnknownProvider, provider)
 		}
 	}
 
@@ -34,5 +34,5 @@ func DetermineDialect(provider string, dsn string) (Dialect, error) {
 	}
 
 	// Default to postgres if cannot determine
-	return "", fmt.Errorf("%w: %s", ErrUnableToDetermineDialect, dsn)
+	return "", fmt.Errorf("%w - %q", ErrUnableToDetermineDialect, dsn)
 }

@@ -26,6 +26,15 @@ func ReplacerGenerator(prettyMode bool) func([]string, slog.Attr) slog.Attr {
 			}
 		}
 
+		if attr.Key == slog.LevelKey {
+			level, levelOk := attr.Value.Any().(slog.Level)
+			if levelOk {
+				value := LevelEncoder(level)
+
+				attr.Value = slog.StringValue(value)
+			}
+		}
+
 		if attr.Value.Kind() == slog.KindAny {
 			if v, ok := attr.Value.Any().(error); ok {
 				attr.Value = fmtErr(v)
