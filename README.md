@@ -3,8 +3,7 @@
 [![codecov](https://codecov.io/gh/eser/ajan/branch/main/graph/badge.svg?token=w6s3ODtULz)](https://codecov.io/gh/eser/ajan)
 [![Build Pipeline](https://github.com/eser/ajan/actions/workflows/build.yml/badge.svg)](https://github.com/eser/ajan/actions/workflows/build.yml)
 
-`Ajan` project is designed to provide a foundation for accelerating development
-of your golang projects.
+`Ajan` project is designed to unlock Golang’s greatest strength—its standard library—by enabling you to harness it with maximum robustness and flexibility. Rather than reinventing the wheel, this project builds upon Golang’s core, providing you with a continuously updated, battle-tested foundation. At the same time, it offers flexible structures that let you configure and extend the standard library to meet your unique needs.
 
 ## 📂 Components
 

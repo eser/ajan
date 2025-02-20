@@ -3,9 +3,7 @@
 ## Overview
 
 The **logfx** package is a configurable logging solution leverages the `log/slog` of the standard library for structured
-logging. It includes pretty-printing options and a fx module for the `ajan/di` package. The package also has extensive
-tests to ensure reliability and correctness, covering configuration parsing, handler behavior and the custom error
-formatting logic.
+logging. It includes pretty-printing options and a fx module for the `ajan/di` package. The package supports OpenTelemetry-compatible severity levels and provides extensive test coverage to ensure reliability and correctness.
 
 The documentation below provides an overview of the package, its types, functions, and usage examples. For more detailed
 information, refer to the source code and tests.
@@ -21,6 +19,17 @@ type Config struct {
 	AddSource  bool   `conf:"ADD_SOURCE" default:"false"`
 }
 ```
+
+The supported log levels (in ascending order of severity) are:
+- `TRACE` - Detailed information for debugging
+- `DEBUG` - Debugging information
+- `INFO` - General operational information
+- `WARN` - Warning messages for potentially harmful situations
+- `ERROR` - Error messages for serious problems
+- `FATAL` - Critical errors causing program termination
+- `PANIC` - Critical errors causing panic
+
+These levels are compatible with OpenTelemetry Severity levels, allowing seamless integration with observability platforms.
 
 ## API
 
@@ -44,9 +53,9 @@ Creates a new `slog.Logger` object based on the provided configuration and makes
 logger, err := logfx.NewLoggerAsDefault(os.Stdout, config)
 ```
 
-### Colored function
+### Colored outputs
 
-Returns a ANSI-colored string for terminal output.
+Logs ANSI-colored strings.
 
 ```go
 // func Colored(color Color, message string) string
@@ -61,5 +70,9 @@ Returns a ANSI-colored string for terminal output.
 //	ColorCyan         ColorLightCyan
 //	ColorGray         ColorLightGray
 
-fmt.Println(logfx.Colored(logfx.ColorRed, "test"))
+logger.Fatal(
+  logfx.Colored(logfx.ColorLightYellow, "Hello, World!"),
+  slog.String("first_name", "Eser"),
+  slog.String("last_name", "Ozvataf"),
+)
 ```
