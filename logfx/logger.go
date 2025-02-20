@@ -6,20 +6,20 @@ import (
 	"log/slog"
 )
 
-type LogfxLogger struct {
+type Logger struct {
 	*slog.Logger
 }
 
-func NewLogger(w io.Writer, config *Config) (*LogfxLogger, error) {
+func NewLogger(w io.Writer, config *Config) (*Logger, error) {
 	handler, err := NewHandler(w, config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LogfxLogger{Logger: slog.New(handler)}, nil
+	return &Logger{Logger: slog.New(handler)}, nil
 }
 
-func NewLoggerAsDefault(w io.Writer, config *Config) (*LogfxLogger, error) {
+func NewLoggerAsDefault(w io.Writer, config *Config) (*Logger, error) {
 	logger, err := NewLogger(w, config)
 	if err != nil {
 		return nil, err
@@ -31,31 +31,31 @@ func NewLoggerAsDefault(w io.Writer, config *Config) (*LogfxLogger, error) {
 }
 
 // Trace logs at [LevelTrace].
-func (l *LogfxLogger) Trace(msg string, args ...any) {
+func (l *Logger) Trace(msg string, args ...any) {
 	l.Log(context.Background(), LevelTrace, msg, args...)
 }
 
 // TraceContext logs at [LevelTrace] with the given context.
-func (l *LogfxLogger) TraceContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) TraceContext(ctx context.Context, msg string, args ...any) {
 	l.Log(ctx, LevelTrace, msg, args...)
 }
 
 // Fatal logs at [LevelFatal].
-func (l *LogfxLogger) Fatal(msg string, args ...any) {
+func (l *Logger) Fatal(msg string, args ...any) {
 	l.Log(context.Background(), LevelFatal, msg, args...)
 }
 
 // FatalContext logs at [LevelFatal] with the given context.
-func (l *LogfxLogger) FatalContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) FatalContext(ctx context.Context, msg string, args ...any) {
 	l.Log(ctx, LevelFatal, msg, args...)
 }
 
 // Panic logs at [LevelPanic].
-func (l *LogfxLogger) Panic(msg string, args ...any) {
+func (l *Logger) Panic(msg string, args ...any) {
 	l.Log(context.Background(), LevelPanic, msg, args...)
 }
 
 // PanicContext logs at [LevelPanic] with the given context.
-func (l *LogfxLogger) PanicContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) PanicContext(ctx context.Context, msg string, args ...any) {
 	l.Log(ctx, LevelPanic, msg, args...)
 }
