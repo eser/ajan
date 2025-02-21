@@ -41,6 +41,7 @@ linters-settings:
           - github.com/prometheus/client_golang/prometheus
           - github.com/lib/pq
           - github.com/rabbitmq/amqp091-go
+          - github.com/redis/go-redis/v9
   revive:
     # enable-all-rules: true
     ignore-generated-header: true

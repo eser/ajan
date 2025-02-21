@@ -9,6 +9,7 @@
 
 |         Component         | Description |
 | ------------------------- | ----------- |
+| [cachefx](./cachefx/)     | .           |
 | [configfx](./configfx/)   | .           |
 | [datafx](./datafx/)       | .           |
 | [di](./di/)               | .           |

@@ -1,6 +1,7 @@
 package ajan
 
 import (
+	"github.com/eser/ajan/cachefx"
 	"github.com/eser/ajan/datafx"
 	"github.com/eser/ajan/grpcfx"
 	"github.com/eser/ajan/httpfx"
@@ -17,6 +18,7 @@ type BaseConfig struct {
 	// CorsStrictHeaders bool   `conf:"CORS_STRICT_HEADERS"`
 
 	Data  datafx.Config  `conf:"DATA"`
+	Cache cachefx.Config `conf:"CACHE"`
 	Queue queuefx.Config `conf:"QUEUE"`
 	Log   logfx.Config   `conf:"LOG"`
 	Grpc  grpcfx.Config  `conf:"GRPC"`
