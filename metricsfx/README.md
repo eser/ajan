@@ -2,7 +2,9 @@
 
 ## Overview
 
-The **metricsfx** package provides metrics collection and monitoring utilities using Prometheus. It integrates with other components to provide metrics for HTTP services, gRPC services, and custom metrics.
+The **metricsfx** package provides metrics collection and monitoring utilities
+using Prometheus. It integrates with other components to provide metrics for
+HTTP services, gRPC services, and custom metrics.
 
 ## Features
 
@@ -28,8 +30,8 @@ metricsProvider := metricsfx.NewMetricsProvider(registry)
 
 // Register custom metrics
 counter := prometheus.NewCounter(prometheus.CounterOpts{
-    Name: "my_counter",
-    Help: "Example counter",
+  Name: "my_counter",
+  Help: "Example counter",
 })
 metricsProvider.GetRegistry().MustRegister(counter)
 ```
@@ -46,6 +48,6 @@ router.Use(metricsfx.NewMetricsMiddleware(metricsProvider))
 ```go
 // Add metrics interceptor to your gRPC server
 grpcServer := grpc.NewServer(
-    grpc.UnaryInterceptor(metricsfx.NewMetricsInterceptor(metricsProvider)),
+  grpc.UnaryInterceptor(metricsfx.NewMetricsInterceptor(metricsProvider)),
 )
 ```

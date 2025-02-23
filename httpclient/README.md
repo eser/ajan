@@ -1,6 +1,8 @@
 # ajan/httpclient
 
-A resilient HTTP client that is 100% compatible with the standard `net/http` interfaces while providing additional features for improved reliability and fault tolerance.
+A resilient HTTP client that is 100% compatible with the standard `net/http`
+interfaces while providing additional features for improved reliability and
+fault tolerance.
 
 ## Features
 
@@ -22,7 +24,7 @@ client := httpclient.DefaultClient()
 // Make requests as you would with http.Client
 resp, err := client.Get("https://api.example.com")
 if err != nil {
-    // Handle error
+  // Handle error
 }
 defer resp.Body.Close()
 ```
@@ -32,18 +34,18 @@ defer resp.Body.Close()
 ```go
 // Configure circuit breaker
 cb := httpclient.NewCircuitBreaker(
-    5,              // Failure threshold
-    10*time.Second, // Reset timeout
-    2,              // Half-open success needed
+  5,              // Failure threshold
+  10*time.Second, // Reset timeout
+  2,              // Half-open success needed
 )
 
 // Configure retry strategy
 rs := httpclient.NewRetryStrategy(
-    3,                    // Max attempts
-    100*time.Millisecond, // Initial interval
-    10*time.Second,       // Max interval
-    2.0,                  // Multiplier
-    0.1,                  // Random factor
+  3,                    // Max attempts
+  100*time.Millisecond, // Initial interval
+  10*time.Second,       // Max interval
+  2.0,                  // Multiplier
+  0.1,                  // Random factor
 )
 
 // Create client with custom settings
@@ -58,12 +60,12 @@ defer cancel()
 
 req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.example.com", nil)
 if err != nil {
-    // Handle error
+  // Handle error
 }
 
 resp, err := client.Do(req)
 if err != nil {
-    // Handle error
+  // Handle error
 }
 defer resp.Body.Close()
 ```

@@ -61,16 +61,16 @@ di.RegisterFor[MyInterface](container, &MyImplementation{})
 
 // Register using a provider function
 di.RegisterFn(container, func() (MyInterface, error) {
-    return &MyImplementation{}, nil
+  return &MyImplementation{}, nil
 })
 
 // Register multiple dependencies
 err := di.RegisterFn(
-    container,
-    configfx.RegisterDependencies,
-    logfx.RegisterDependencies,
-    metricsfx.RegisterDependencies,
-    httpfx.RegisterDependencies,
+  container,
+  configfx.RegisterDependencies,
+  logfx.RegisterDependencies,
+  metricsfx.RegisterDependencies,
+  httpfx.RegisterDependencies,
 )
 ```
 
@@ -80,7 +80,7 @@ err := di.RegisterFn(
 // Get a dependency (with error checking)
 service, ok := di.Get[MyService](container)
 if !ok {
-    // Handle missing dependency
+  // Handle missing dependency
 }
 
 // Get a dependency (panic if not found)
@@ -103,11 +103,11 @@ implementations := di.DynamicList[MyInterface](container)
 ```go
 // Create an invoker function
 invoker := di.CreateInvoker(container, func(
-    service MyService,
-    repo Repository,
+  service MyService,
+  repo Repository,
 ) error {
-    // Use dependencies
-    return nil
+  // Use dependencies
+  return nil
 })
 
 // Execute the invoker
@@ -118,11 +118,11 @@ err := invoker()
 
 ```go
 err := di.DynamicInvoke(container, func(
-    service MyService,
-    repo Repository,
+  service MyService,
+  repo Repository,
 ) error {
-    // Use dependencies
-    return nil
+  // Use dependencies
+  return nil
 })
 ```
 
@@ -131,33 +131,33 @@ err := di.DynamicInvoke(container, func(
 ```go
 // Define an interface
 type Adder interface {
-    Add(ctx context.Context, x, y int) (int, error)
+  Add(ctx context.Context, x, y int) (int, error)
 }
 
 // Create an implementation
 type AdderImpl struct {
-    di.Implements[Adder] // Mark as implementation
+  di.Implements[Adder] // Mark as implementation
 }
 
 func (a AdderImpl) Add(ctx context.Context, x, y int) (int, error) {
-    return x + y, nil
+  return x + y, nil
 }
 
 // Register and use
 func main() {
-    container := di.NewContainer()
+  container := di.NewContainer()
 
-    // Register implementation
-    di.RegisterFor[Adder](container, AdderImpl{})
+  // Register implementation
+  di.RegisterFor[Adder](container, AdderImpl{})
 
-    // Use through dependency injection
-    err := di.DynamicInvoke(container, func(adder Adder) error {
-        result, err := adder.Add(context.Background(), 2, 3)
-        if err != nil {
-            return err
-        }
-        fmt.Printf("Result: %d\n", result)
-        return nil
-    })
+  // Use through dependency injection
+  err := di.DynamicInvoke(container, func(adder Adder) error {
+    result, err := adder.Add(context.Background(), 2, 3)
+    if err != nil {
+      return err
+    }
+    fmt.Printf("Result: %d\n", result)
+    return nil
+  })
 }
 ```

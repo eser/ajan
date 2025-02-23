@@ -2,12 +2,14 @@
 
 ## Overview
 
-The **configfx** package provides a flexible and powerful configuration loader for Go applications. It supports loading
-configuration from various sources, including environment files, JSON files, and system environment variables. The
+The **configfx** package provides a flexible and powerful configuration loader
+for Go applications. It supports loading configuration from various sources,
+including environment files, JSON files, and system environment variables. The
 package is designed to work seamlessly with the `ajan/di` package.
 
-The documentation below provides an overview of the package, its types, functions, and usage examples. For more detailed
-information, refer to the source code and tests.
+The documentation below provides an overview of the package, its types,
+functions, and usage examples. For more detailed information, refer to the
+source code and tests.
 
 ## API
 
