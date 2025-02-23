@@ -84,10 +84,14 @@ func LevelEncoderColored(l slog.Level) string {
 	}
 }
 
-func ParseLevel(s string) (*slog.Level, error) { //nolint:cyclop
+func ParseLevel(s string, errorOnEmpty bool) (*slog.Level, error) { //nolint:cyclop
 	var l slog.Level
 
 	var err error
+
+	if s == "" && !errorOnEmpty {
+		return &l, nil
+	}
 
 	name := s
 	offset := 0

@@ -64,6 +64,7 @@ repos:
             LICENSE|
             Makefile|
             README.md|
+            cachefx/README.md|
             configfx/README.md|
             datafx/README.md|
             di/README.md|

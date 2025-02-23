@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 func NewHandler(w io.Writer, config *Config) (*Handler, error) {
-	level, err := ParseLevel(config.Level)
+	level, err := ParseLevel(config.Level, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse log level: %w", err)
 	}
