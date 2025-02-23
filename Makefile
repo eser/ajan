@@ -25,7 +25,7 @@ init-tools: ## Initialize the tools.
 	go tool -n betteralign >/dev/null || go get -tool github.com/dkorunic/betteralign/cmd/betteralign@latest
 	go tool -n gcov2lcov >/dev/null || go get -tool github.com/jandelgado/gcov2lcov@latest
 	go tool -n govulncheck >/dev/null || go get -tool golang.org/x/vuln/cmd/govulncheck@latest
-	go tool -n mockgen >/dev/null || go get -tool go.uber.org/mock/mockgen@latest
+	go tool -n mockery >/dev/null || go get -tool github.com/vektra/mockery/v2@latest
 	go tool -n stringer >/dev/null || go get -tool golang.org/x/tools/cmd/stringer@latest
 
 .PHONY: init

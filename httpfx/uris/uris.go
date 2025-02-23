@@ -9,7 +9,6 @@
 package uris
 
 import (
-	"net/url"
 	"strings"
 	"unicode"
 )
@@ -26,16 +25,6 @@ func isValidWildcardName(s string) bool {
 	}
 
 	return true
-}
-
-func tryPathUnescape(path string) string {
-	u, err := url.PathUnescape(path)
-	if err != nil {
-		// Invalidly escaped path; use the original
-		return path
-	}
-
-	return u
 }
 
 // writeMatchingPath writes to b a path that matches the segments.

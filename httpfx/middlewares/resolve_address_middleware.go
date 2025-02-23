@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,8 @@ const (
 	ClientAddrIp     httpfx.ContextKey = "client-addr-ip"
 	ClientAddrOrigin httpfx.ContextKey = "client-addr-origin"
 )
+
+var ErrInvalidIPAddress = errors.New("invalid IP address")
 
 func ResolveAddressMiddleware() httpfx.Handler {
 	return func(ctx *httpfx.Context) httpfx.Result {
@@ -86,12 +89,15 @@ func DetectLocalNetwork(requestAddr string) (bool, error) {
 		return false, err
 	}
 
+	requestIpNet := net.ParseIP(requestIp)
+	if requestIpNet == nil {
+		return false, fmt.Errorf("%w - %q", ErrInvalidIPAddress, requestIp)
+	}
+
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return false, err //nolint:wrapcheck
 	}
-
-	requestIpNet := net.ParseIP(requestIp)
 
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)

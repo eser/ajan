@@ -1,11 +1,42 @@
-# ajan/configfx
+# ajan/cachefx
 
 ## Overview
 
-The **configfx** package is a flexible caching package that provides a unified interface for different caching backends. Currently, it supports Redis as a caching backend.
+The **cachefx** package is a flexible caching package that provides a unified interface for different caching backends. Currently, it supports Redis as a caching backend.
 
 The documentation below provides an overview of the package, its types, functions, and usage examples. For more detailed
 information, refer to the source code and tests.
+
+## Configuration
+
+Configuration struct for the cache:
+
+```go
+type Config struct {
+    Caches map[string]ConfigCache `conf:"CACHES"`
+}
+
+type ConfigCache struct {
+    Provider string `conf:"PROVIDER"`
+    DSN      string `conf:"DSN"`
+}
+```
+
+Example configuration:
+```go
+config := &cachefx.Config{
+    Caches: map[string]cachefx.ConfigCache{
+        "default": {
+            Provider: "redis",
+            DSN:      "redis://localhost:6379",
+        },
+        "session": {
+            Provider: "redis",
+            DSN:      "redis://localhost:6380",
+        },
+    },
+}
+```
 
 ## Features
 

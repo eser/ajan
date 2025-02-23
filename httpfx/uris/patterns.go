@@ -69,6 +69,21 @@ type Segment struct {
 	Multi bool // "..." wildcard
 }
 
+func nextSegment(path string) (string, string) {
+	if len(path) == 0 || path[0] != '/' {
+		return "", path
+	}
+
+	path = path[1:]
+	i := strings.IndexByte(path, '/')
+
+	if i < 0 {
+		return path, ""
+	}
+
+	return path[:i], path[i:]
+}
+
 // parsePattern parses a string into a Pattern.
 // The string's syntax is
 //
@@ -86,10 +101,12 @@ type Segment struct {
 // The "{$}" and "{name...}" wildcard must occur at the end of PATH.
 // PATH may end with a '/'.
 // Wildcard names in a path must be distinct.
-func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,cyclop
+func ParsePattern(s string) (*Pattern, error) { //nolint:funlen,gocognit,cyclop
 	if len(s) == 0 {
 		return nil, ErrPatternParsing.New("empty pattern")
 	}
+
+	var err error
 
 	off := 0 // offset into string
 
@@ -105,12 +122,25 @@ func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,c
 		method = ""
 	}
 
-	if method != "" && !IsValidMethod(method) {
-		return nil, ErrInvalidMethod.New().
-			WithAttribute(
-				slog.String("pattern", s),
-				slog.String("method", method),
-			)
+	if method != "" {
+		validMethods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+		isValid := false
+
+		for _, m := range validMethods {
+			if method == m {
+				isValid = true
+
+				break
+			}
+		}
+
+		if !isValid {
+			return nil, ErrInvalidMethod.New().
+				WithAttribute(
+					slog.String("pattern", s),
+					slog.String("method", method),
+				)
+		}
 	}
 
 	p := &Pattern{Str: s, Method: method} //nolint:exhaustruct
@@ -120,7 +150,6 @@ func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,c
 	}
 
 	i := strings.IndexByte(rest, '/')
-
 	if i < 0 {
 		return nil, ErrPatternParsing.New("host/path missing /").
 			WithAttribute(
@@ -142,6 +171,7 @@ func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,c
 				slog.String("host", p.Host),
 			)
 	}
+
 	// At this point, rest is the path.
 	off += i
 
@@ -160,79 +190,59 @@ func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,c
 	p.Path = rest
 	seenNames := make(map[string]bool) // remember wildcard names to catch dups
 
-	for len(rest) > 0 {
-		// Invariant: rest[0] == '/'.
-		rest = rest[1:]
-		off = len(s) - len(rest)
+	// Handle trailing slash
+	if strings.HasSuffix(rest, "/") {
+		rest = rest[:len(rest)-1]
 
-		if len(rest) == 0 {
-			// Trailing slash.
-			p.Segments = append(p.Segments, Segment{Wild: true, Multi: true}) //nolint:exhaustruct
+		defer func() {
+			if err == nil {
+				p.Segments = append(p.Segments, Segment{Wild: true, Multi: true}) //nolint:exhaustruct
+			}
+		}()
+	}
 
-			break
-		}
-
-		i := strings.IndexByte(rest, '/')
-
-		if i < 0 {
-			i = len(rest)
-		}
-
+	// Split the path into segments.
+	for rest != "" {
 		var seg string
-		seg, rest = rest[:i], rest[i:]
 
-		if i := strings.IndexByte(seg, '{'); i < 0 { //nolint:nestif
-			// Literal.
-			seg = tryPathUnescape(seg)
-			p.Segments = append(p.Segments, Segment{Str: seg}) //nolint:exhaustruct
-		} else {
-			// Wildcard.
-			if i != 0 {
-				return nil, ErrInvalidWildcard.New("bad wildcard segment (must start with '{')").
+		seg, rest = nextSegment(rest)
+		if seg == "" {
+			continue
+		}
+
+		// Special handling for {$}
+		if seg == "{$}" {
+			if rest != "" {
+				return nil, ErrInvalidWildcard.New("${} must be last").
 					WithAttribute(
 						slog.String("pattern", p.Str),
 						slog.String("method", p.Method),
-						slog.String("segment", seg),
-						slog.String("expected", "{"),
 					)
 			}
 
-			if seg[len(seg)-1] != '}' {
-				return nil, ErrInvalidWildcard.New("bad wildcard segment (must end with '}')").
-					WithAttribute(
-						slog.String("pattern", p.Str),
-						slog.String("method", p.Method),
-						slog.String("segment", seg),
-						slog.String("expected", "}"),
-					)
-			}
+			p.Segments = append(p.Segments, Segment{Str: "/"}) //nolint:exhaustruct
 
+			continue
+		}
+
+		// Check for wildcards.
+		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") { //nolint:nestif
 			name := seg[1 : len(seg)-1]
+			multi := false
 
-			if name == "$" {
-				if len(rest) != 0 {
-					return nil, ErrInvalidMethod.New("{$} wildcard not at end").
+			if strings.HasSuffix(name, "...") {
+				if rest != "" {
+					return nil, ErrInvalidWildcard.New("multi-wildcard must be last").
 						WithAttribute(
 							slog.String("pattern", p.Str),
 							slog.String("method", p.Method),
 							slog.String("segment", seg),
+							slog.String("name", name),
 						)
 				}
 
-				p.Segments = append(p.Segments, Segment{Str: "/"}) //nolint:exhaustruct
-
-				break
-			}
-
-			name, multi := strings.CutSuffix(name, "...")
-
-			if multi && len(rest) != 0 {
-				return nil, ErrInvalidWildcard.New("{...} wildcard not at end").
-					WithAttribute(
-						slog.String("pattern", p.Str),
-						slog.String("method", p.Method),
-						slog.String("segment", seg),
-					)
+				name = name[:len(name)-3]
+				multi = true
 			}
 
 			if name == "" {
@@ -265,6 +275,18 @@ func ParsePattern(s string) (_ *Pattern, err error) { //nolint:funlen,gocognit,c
 
 			seenNames[name] = true
 			p.Segments = append(p.Segments, Segment{Str: name, Wild: true, Multi: multi})
+		} else {
+			// Check for invalid wildcard positions
+			if strings.Contains(seg, "}") || strings.Contains(seg, "{") {
+				return nil, ErrInvalidWildcard.New("invalid wildcard position").
+					WithAttribute(
+						slog.String("pattern", p.Str),
+						slog.String("method", p.Method),
+						slog.String("segment", seg),
+					)
+			}
+
+			p.Segments = append(p.Segments, Segment{Str: seg}) //nolint:exhaustruct
 		}
 	}
 

@@ -17,55 +17,38 @@ dependency management capabilities.
 - Dependency listing
 - Support for dependency invocation
 
-## Basic Usage
+## Best Practices
+
+- Register dependencies at application startup
+- Seal the container before using it
+- Use interfaces for better testability
+- Prefer `RegisterFn` for complex initialization
+- Use `di.Implements[T]` to mark interface implementations
+- Handle errors from `RegisterFn` and dependency resolution
+
+## Container Lifecycle
+
+1. Create or use the default container
+2. Register all dependencies
+3. Seal the container to prevent modifications
+4. Resolve and use dependencies
+
+## Thread Safety
+
+The container is not thread-safe during registration. Ensure all registrations
+are complete and the container is sealed before using it concurrently.
+
+## API Reference
+
+### Container Creation
 
 ```go
-import (
-  ...
-  "github.com/eser/ajan/di"
-  ...
-)
-
 // Use the default container
 container := di.Default
 
-// Register dependencies
-err := di.RegisterFn(
-  container,
-  configfx.RegisterDependencies,
-  logfx.RegisterDependencies,
-  metricsfx.RegisterDependencies,
-  httpfx.RegisterDependencies,
-  eventsfx.RegisterDependencies,
-  // ... other dependencies
-)
-if err != nil {
-  panic(err)
-}
-
-// Create and run the application
-run := di.CreateInvoker(
-  container,
-  func(
-    httpService httpfx.HttpService,
-    // ... other dependencies
-  ) error {
-    err := httpService.Start()
-    if err != nil {
-      return err
-    }
-
-    return nil
-  },
-)
-
-// Seal the container to prevent further modifications
-di.Seal(container)
-
-err = run()
+// Or create a new container
+container := di.NewContainer()
 ```
-
-## API Reference
 
 ### Registration
 
@@ -80,6 +63,15 @@ di.RegisterFor[MyInterface](container, &MyImplementation{})
 di.RegisterFn(container, func() (MyInterface, error) {
     return &MyImplementation{}, nil
 })
+
+// Register multiple dependencies
+err := di.RegisterFn(
+    container,
+    configfx.RegisterDependencies,
+    logfx.RegisterDependencies,
+    metricsfx.RegisterDependencies,
+    httpfx.RegisterDependencies,
+)
 ```
 
 ### Resolution
@@ -169,24 +161,3 @@ func main() {
     })
 }
 ```
-
-## Container Lifecycle
-
-1. Create or use the default container
-2. Register all dependencies
-3. Seal the container to prevent modifications
-4. Resolve and use dependencies
-
-## Best Practices
-
-- Register dependencies at application startup
-- Seal the container before using it
-- Use interfaces for better testability
-- Prefer `RegisterFn` for complex initialization
-- Use `di.Implements[T]` to mark interface implementations
-- Handle errors from `RegisterFn` and dependency resolution
-
-## Thread Safety
-
-The container is not thread-safe during registration. Ensure all registrations
-are complete and the container is sealed before using it concurrently.

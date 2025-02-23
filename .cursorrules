@@ -1,0 +1,21 @@
+When working with this codebase, please follow these architectural principles and guidelines:
+
+1. Dependency Rules
+- No circular dependencies allowed
+
+1. Conventions
+- Use snake_case for file names.
+- Follow idiomatic Go conventions.
+
+1. Error Handling
+- Wrap external errors before returning them
+- Use meaningful error types and messages
+- Avoid panic as much as possible
+
+1. Testing
+- Use interfaces for mocking in tests
+- Test files should be next to their tested code with package names prefixed with _test
+- Use testify for assertions
+- Use mockery for generating mocks
+- Parallelize tests when possible
+- Use benchmarks when testing performance
