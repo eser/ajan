@@ -35,7 +35,13 @@ func NewResilientTransport(transport http.RoundTripper, cb *CircuitBreaker, rs *
 	}
 
 	if cb == nil {
-		cb = NewCircuitBreaker(DefaultFailureThreshold, DefaultResetTimeout, DefaultHalfOpenSuccess)
+		cb = NewCircuitBreaker(CircuitBreakerConfig{
+			Enabled:               true,
+			FailureThreshold:      DefaultFailureThreshold,
+			ResetTimeout:          DefaultResetTimeout,
+			HalfOpenSuccessNeeded: DefaultHalfOpenSuccess,
+			ServerErrorThreshold:  DefaultServerErrorThreshold,
+		})
 	}
 
 	if rs == nil {
@@ -62,7 +68,7 @@ func (t *ResilientTransport) handleRequest(req *http.Request) (*http.Response, e
 		return nil, fmt.Errorf("transport error: %w", err)
 	}
 
-	if resp.StatusCode >= DefaultServerErrorThreshold {
+	if resp.StatusCode >= t.circuitBreaker.Config.ServerErrorThreshold {
 		t.circuitBreaker.OnFailure()
 
 		if !t.circuitBreaker.IsAllowed() {
@@ -109,7 +115,7 @@ func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 	var resp *http.Response
 
-	for attempt := range t.retryStrategy.MaxAttempts {
+	for attempt := range t.retryStrategy.Config.MaxAttempts {
 		if attempt > 0 {
 			var err error
 
@@ -120,7 +126,7 @@ func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 		}
 
 		resp, lastErr = t.handleRequest(req)
-		if lastErr == nil && resp.StatusCode < DefaultServerErrorThreshold {
+		if lastErr == nil && resp.StatusCode < t.circuitBreaker.Config.ServerErrorThreshold {
 			return resp, nil
 		}
 	}

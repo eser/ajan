@@ -17,38 +17,26 @@ const (
 )
 
 type RetryStrategy struct {
-	MaxAttempts     uint
-	InitialInterval time.Duration
-	MaxInterval     time.Duration
-	Multiplier      float64
-	RandomFactor    float64
+	Config RetryConfig
 }
 
 // NewRetryStrategy creates a new retry strategy with the specified parameters.
-func NewRetryStrategy(
-	maxAttempts uint,
-	initialInterval, maxInterval time.Duration,
-	multiplier, randomFactor float64,
-) *RetryStrategy {
+func NewRetryStrategy(config RetryConfig) *RetryStrategy {
 	return &RetryStrategy{
-		MaxAttempts:     maxAttempts,
-		InitialInterval: initialInterval,
-		MaxInterval:     maxInterval,
-		Multiplier:      multiplier,
-		RandomFactor:    randomFactor,
+		Config: config,
 	}
 }
 
 func (r *RetryStrategy) NextBackoff(attempt uint) time.Duration {
-	if attempt >= r.MaxAttempts {
+	if attempt >= r.Config.MaxAttempts {
 		return 0
 	}
 
 	// Calculate exponential backoff
-	backoff := float64(r.InitialInterval) * math.Pow(r.Multiplier, float64(attempt))
+	backoff := float64(r.Config.InitialInterval) * math.Pow(r.Config.Multiplier, float64(attempt))
 
 	// Apply random factor
-	if r.RandomFactor > 0 {
+	if r.Config.RandomFactor > 0 {
 		// Use crypto/rand for secure random number generation
 		n, err := rand.Int(rand.Reader, big.NewInt(randomNumberRange))
 		if err != nil {
@@ -56,13 +44,13 @@ func (r *RetryStrategy) NextBackoff(attempt uint) time.Duration {
 			return time.Duration(backoff)
 		}
 
-		random := 1 + r.RandomFactor*(2*float64(n.Int64())/float64(randomNumberRange)-1)
+		random := 1 + r.Config.RandomFactor*(2*float64(n.Int64())/float64(randomNumberRange)-1)
 		backoff *= random
 	}
 
 	// Ensure we don't exceed max interval
-	if backoff > float64(r.MaxInterval) {
-		backoff = float64(r.MaxInterval)
+	if backoff > float64(r.Config.MaxInterval) {
+		backoff = float64(r.Config.MaxInterval)
 	}
 
 	return time.Duration(backoff)
@@ -70,10 +58,13 @@ func (r *RetryStrategy) NextBackoff(attempt uint) time.Duration {
 
 func DefaultRetryStrategy() *RetryStrategy {
 	return &RetryStrategy{
-		MaxAttempts:     DefaultMaxAttempts,
-		InitialInterval: DefaultInitialInterval,
-		MaxInterval:     DefaultMaxInterval,
-		Multiplier:      DefaultMultiplier,
-		RandomFactor:    DefaultRandomFactor,
+		Config: RetryConfig{
+			Enabled:         true,
+			MaxAttempts:     DefaultMaxAttempts,
+			InitialInterval: DefaultInitialInterval,
+			MaxInterval:     DefaultMaxInterval,
+			Multiplier:      DefaultMultiplier,
+			RandomFactor:    DefaultRandomFactor,
+		},
 	}
 }

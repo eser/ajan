@@ -16,21 +16,18 @@ const (
 type CircuitBreaker struct {
 	lastFailureTime time.Time
 
-	state                 CircuitState
-	failureThreshold      uint
-	failureCount          uint
-	resetTimeout          time.Duration
-	halfOpenSuccessNeeded uint
-	halfOpenSuccessCount  uint
-	mu                    sync.RWMutex
+	Config CircuitBreakerConfig
+
+	state                CircuitState
+	failureCount         uint
+	halfOpenSuccessCount uint
+	mu                   sync.RWMutex
 }
 
-func NewCircuitBreaker(failureThreshold uint, resetTimeout time.Duration, halfOpenSuccessNeeded uint) *CircuitBreaker {
+func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	return &CircuitBreaker{ //nolint:exhaustruct
-		state:                 StateClosed,
-		failureThreshold:      failureThreshold,
-		resetTimeout:          resetTimeout,
-		halfOpenSuccessNeeded: halfOpenSuccessNeeded,
+		Config: config,
+		state:  StateClosed,
 	}
 }
 
@@ -42,7 +39,7 @@ func (cb *CircuitBreaker) IsAllowed() bool {
 	case StateClosed:
 		return true
 	case StateOpen:
-		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
+		if time.Since(cb.lastFailureTime) > cb.Config.ResetTimeout {
 			cb.mu.RUnlock()
 			cb.mu.Lock()
 			cb.state = StateHalfOpen
@@ -67,7 +64,7 @@ func (cb *CircuitBreaker) OnSuccess() {
 
 	if cb.state == StateHalfOpen {
 		cb.halfOpenSuccessCount++
-		if cb.halfOpenSuccessCount >= cb.halfOpenSuccessNeeded {
+		if cb.halfOpenSuccessCount >= cb.Config.HalfOpenSuccessNeeded {
 			cb.state = StateClosed
 			cb.failureCount = 0
 		}
@@ -85,7 +82,7 @@ func (cb *CircuitBreaker) OnFailure() {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
-	if cb.state == StateHalfOpen || (cb.state == StateClosed && cb.failureCount >= cb.failureThreshold) {
+	if cb.state == StateHalfOpen || (cb.state == StateClosed && cb.failureCount >= cb.Config.FailureThreshold) {
 		cb.state = StateOpen
 	}
 }

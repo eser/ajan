@@ -53,7 +53,13 @@ func TestClientCircuitBreaker(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cb := httpclient.NewCircuitBreaker(3, time.Second, 1)
+	cb := httpclient.NewCircuitBreaker(httpclient.CircuitBreakerConfig{
+		Enabled:               true,
+		FailureThreshold:      3,
+		ResetTimeout:          1 * time.Second,
+		HalfOpenSuccessNeeded: 1,
+		ServerErrorThreshold:  500,
+	})
 	client := httpclient.NewClient(cb, nil)
 	ctx := t.Context()
 
@@ -95,7 +101,14 @@ func TestClientRetryMechanism(t *testing.T) {
 	}))
 	defer server.Close()
 
-	rs := httpclient.NewRetryStrategy(3, time.Millisecond, time.Second, 1.0, 0)
+	rs := httpclient.NewRetryStrategy(httpclient.RetryConfig{
+		Enabled:         true,
+		MaxAttempts:     3,
+		InitialInterval: time.Millisecond,
+		MaxInterval:     time.Second,
+		Multiplier:      1.0,
+		RandomFactor:    0,
+	})
 	client := httpclient.NewClient(nil, rs)
 
 	ctx := t.Context()

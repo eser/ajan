@@ -25,7 +25,13 @@ func NewClient(cb *CircuitBreaker, rs *RetryStrategy) *Client {
 // DefaultClient creates a new HTTP client with default circuit breaker and retry settings.
 func DefaultClient() *Client {
 	return NewClient(
-		NewCircuitBreaker(DefaultFailureThreshold, DefaultResetTimeout, DefaultHalfOpenSuccess),
+		NewCircuitBreaker(CircuitBreakerConfig{
+			Enabled:               true,
+			FailureThreshold:      DefaultFailureThreshold,
+			ResetTimeout:          DefaultResetTimeout,
+			HalfOpenSuccessNeeded: DefaultHalfOpenSuccess,
+			ServerErrorThreshold:  DefaultServerErrorThreshold,
+		}),
 		DefaultRetryStrategy(),
 	)
 }
