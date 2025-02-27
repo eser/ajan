@@ -38,7 +38,7 @@ func (dataSource *SqlDatasource) GetConnection() SqlExecutor { //nolint:ireturn
 }
 
 func (dataSource *SqlDatasource) UseUnitOfWork(ctx context.Context) (*UnitOfWork, error) {
-	uow, err := UseUnitOfWork(ctx, dataSource.connection)
+	uow, err := NewUnitOfWork(ctx, dataSource.connection)
 	if err != nil {
 		return &UnitOfWork{}, err
 	}

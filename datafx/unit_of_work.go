@@ -22,17 +22,13 @@ type UnitOfWork struct {
 	txScope TransactionFinalizer
 }
 
-// func NewUnitOfWork() *UnitOfWork {
-// 	return &UnitOfWork{}
-// }
-
 type TransactionStarter interface {
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 }
 
-func UseUnitOfWork(ctx context.Context, transactionStarter TransactionStarter) (*UnitOfWork, error) {
-	uow, ok := ctx.Value(ContextKeyUnitOfWork).(*UnitOfWork)
-	if ok {
+func NewUnitOfWork(ctx context.Context, transactionStarter TransactionStarter) (*UnitOfWork, error) {
+	uow, uowOk := ctx.Value(ContextKeyUnitOfWork).(*UnitOfWork)
+	if uowOk {
 		return uow, nil
 	}
 
