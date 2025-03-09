@@ -1,0 +1,35 @@
+services:
+  postgresdb:
+    image: postgres:17
+    restart: unless-stopped
+    volumes:
+      - ./volumes/postgresdb/data:/var/lib/postgresql/data
+    ports:
+       - 5432:5432
+    environment:
+      - POSTGRES_DB=userdb
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=user123
+    networks:
+      - ajan-net
+
+  app:
+    tty: true
+    stdin_open: true
+    # restart: unless-stopped
+    depends_on:
+      - postgresdb
+    build:
+      context: ./
+      target: runner-development
+    environment:
+      DATA__SOURCES__DEFAULT__PROVIDER: postgres
+      DATA__SOURCES__DEFAULT__DSN: postgres://user:user123@postgresdb:5432/userdb?sslmode=disable
+    ports:
+      - 8080:8080
+    networks:
+      - ajan-net
+
+networks:
+  ajan-net:
+    driver: bridge

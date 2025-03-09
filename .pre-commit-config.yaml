@@ -76,7 +76,8 @@ repos:
             logfx/README.md|
             metricsfx/README.md|
             queuefx/README.md|
-            results/README.md
+            results/README.md|
+            sampleapp/Dockerfile
           )$
       - id: run-tests
         name: run tests

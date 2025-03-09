@@ -1,0 +1,10 @@
+{
+  "data": {
+    "sources": {
+      "default": {
+        "provider": "postgres",
+        "dsn": "postgres://user:user123@localhost:5432/userdb?sslmode=disable"
+      }
+    }
+  }
+}
