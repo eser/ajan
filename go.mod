@@ -1,7 +1,6 @@
 module github.com/eser/ajan
 
 go 1.24.0
-
 require (
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/getkin/kin-openapi v0.131.0
@@ -13,7 +12,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	google.golang.org/grpc v1.71.0
 )
 
