@@ -16,6 +16,5 @@ When working with this codebase, please follow these architectural principles an
 - Use interfaces for mocking in tests
 - Test files should be next to their tested code with package names prefixed with _test
 - Use testify for assertions
-- Use mockery for generating mocks
 - Parallelize tests when possible
 - Use benchmarks when testing performance

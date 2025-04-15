@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	_ "github.com/lib/pq"
 )
 
 type SqlDatasource struct {
@@ -29,19 +27,16 @@ func NewSqlDatasource(ctx context.Context, dialect Dialect, dsn string) (*SqlDat
 	}, nil
 }
 
-func (dataSource *SqlDatasource) GetDialect() Dialect {
-	return dataSource.dialect
+func (datasource *SqlDatasource) GetDialect() Dialect {
+	return datasource.dialect
 }
 
-func (dataSource *SqlDatasource) GetConnection() SqlExecutor { //nolint:ireturn
-	return dataSource.connection
+func (datasource *SqlDatasource) GetConnection() SqlExecutor { //nolint:ireturn
+	return datasource.connection
 }
 
-func (dataSource *SqlDatasource) UseUnitOfWork(ctx context.Context) (*UnitOfWork, error) {
-	uow, err := NewUnitOfWork(ctx, dataSource.connection)
-	if err != nil {
-		return &UnitOfWork{}, err
-	}
+func (datasource *SqlDatasource) ExecuteUnitOfWork(ctx context.Context, fn func(uow *UnitOfWork) error) error {
+	uow := NewUnitOfWork(datasource.connection)
 
-	return uow, err
+	return uow.Execute(ctx, fn)
 }

@@ -45,7 +45,7 @@ func TestColored_ColorReset(t *testing.T) {
 }
 
 func BenchmarkColored(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		logfx.Colored(logfx.ColorGreen, "test message")
 	}
 }

@@ -22,7 +22,7 @@ type SqlExecutor interface {
 type Datasource interface {
 	GetDialect() Dialect
 	GetConnection() SqlExecutor
-	UseUnitOfWork(ctx context.Context) (*UnitOfWork, error)
+	ExecuteUnitOfWork(ctx context.Context, fn func(uow *UnitOfWork) error) error
 }
 
 type Registry struct {
@@ -44,11 +44,7 @@ func (registry *Registry) GetDefault() Datasource { //nolint:ireturn
 }
 
 func (registry *Registry) GetNamed(name string) Datasource { //nolint:ireturn
-	if db, exists := registry.datasources[name]; exists {
-		return db
-	}
-
-	return nil
+	return registry.datasources[name]
 }
 
 func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {

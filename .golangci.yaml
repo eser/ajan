@@ -40,7 +40,6 @@ linters-settings:
           - github.com/golang-jwt/jwt/v5
           - github.com/prometheus/client_golang/prometheus
           - github.com/prometheus/client_model/go
-          - github.com/lib/pq
           - github.com/rabbitmq/amqp091-go
           - github.com/redis/go-redis/v9
           - github.com/alicebob/miniredis/v2

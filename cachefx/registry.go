@@ -39,11 +39,7 @@ func (registry *Registry) GetDefault() Cache {
 }
 
 func (registry *Registry) GetNamed(name string) Cache {
-	if cache, exists := registry.caches[name]; exists {
-		return cache
-	}
-
-	return nil
+	return registry.caches[name]
 }
 
 func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {

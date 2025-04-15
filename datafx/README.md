@@ -67,7 +67,7 @@ if err != nil {
 conn := db.GetConnection()
 
 // Use Unit of Work for transaction management
-uow, err := db.UseUnitOfWork(ctx)
+uow, err := db.CreateUnitOfWork(ctx)
 if err != nil {
   log.Fatal(err)
 }

@@ -38,11 +38,7 @@ func (registry *Registry) GetDefault() Broker {
 }
 
 func (registry *Registry) GetNamed(name string) Broker {
-	if db, exists := registry.brokers[name]; exists {
-		return db
-	}
-
-	return nil
+	return registry.brokers[name]
 }
 
 func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {

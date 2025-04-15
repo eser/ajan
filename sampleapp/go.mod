@@ -2,7 +2,9 @@ module github.com/eser/ajan/sampleapp
 
 go 1.24.1
 
-require github.com/eser/ajan v0.6.20
+replace github.com/eser/ajan => ../
+
+require github.com/eser/ajan v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

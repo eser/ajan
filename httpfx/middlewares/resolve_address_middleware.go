@@ -138,7 +138,7 @@ func GetClientAddrs(req *http.Request) string {
 	var addrs []string
 
 	for _, addr := range requester {
-		for _, entry := range strings.Split(addr, ",") {
+		for entry := range strings.SplitSeq(addr, ",") {
 			addrs = append(addrs, strings.Trim(entry, " "))
 		}
 	}

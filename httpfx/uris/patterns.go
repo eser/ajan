@@ -11,6 +11,7 @@ package uris
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/eser/ajan/results"
@@ -124,17 +125,8 @@ func ParsePattern(s string) (*Pattern, error) { //nolint:funlen,gocognit,cyclop
 
 	if method != "" {
 		validMethods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-		isValid := false
 
-		for _, m := range validMethods {
-			if method == m {
-				isValid = true
-
-				break
-			}
-		}
-
-		if !isValid {
+		if !slices.Contains(validMethods, method) {
 			return nil, ErrInvalidMethod.New().
 				WithAttribute(
 					slog.String("pattern", s),
