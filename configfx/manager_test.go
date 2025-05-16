@@ -14,7 +14,8 @@ type TestConfig struct {
 
 type TestConfigNested struct {
 	TestConfig
-	Port int `conf:"port" default:"8080"`
+	Port     int    `conf:"port"      default:"8080"`
+	MaxRetry uint16 `conf:"max_retry" default:"10"`
 }
 
 func TestLoad(t *testing.T) {
@@ -31,6 +32,7 @@ func TestLoad(t *testing.T) {
 		if assert.NoError(t, err) {
 			assert.Equal(t, "localhost", config.Host)
 			assert.Equal(t, 8080, config.Port)
+			assert.Equal(t, uint16(10), config.MaxRetry)
 		}
 	})
 }
@@ -93,6 +95,16 @@ func TestLoadMeta(t *testing.T) { //nolint:funlen
 				IsRequired:      false,
 				HasDefaultValue: true,
 				DefaultValue:    "8080",
+
+				Children: nil,
+			},
+			{
+				Name:            "max_retry",
+				Field:           meta.Children[2].Field,
+				Type:            reflect.TypeFor[uint16](),
+				IsRequired:      false,
+				HasDefaultValue: true,
+				DefaultValue:    "10",
 
 				Children: nil,
 			},
