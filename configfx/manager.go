@@ -225,29 +225,41 @@ func reflectSetField(field reflect.Value, fieldType reflect.Type, value string) 
 	case reflect.TypeFor[string]():
 		finalValue = reflect.ValueOf(value)
 	case reflect.TypeFor[int]():
-		finalValue = reflect.ValueOf(value)
+		intValue, _ := strconv.Atoi(value)
+		finalValue = reflect.ValueOf(intValue)
 	case reflect.TypeFor[int8]():
-		finalValue = reflect.ValueOf(value)
+		intValue, _ := strconv.ParseInt(value, 10, 8)
+		finalValue = reflect.ValueOf(intValue)
 	case reflect.TypeFor[int16]():
-		finalValue = reflect.ValueOf(value)
+		intValue, _ := strconv.ParseInt(value, 10, 16)
+		finalValue = reflect.ValueOf(intValue)
 	case reflect.TypeFor[int32]():
-		finalValue = reflect.ValueOf(value)
+		intValue, _ := strconv.ParseInt(value, 10, 32)
+		finalValue = reflect.ValueOf(intValue)
 	case reflect.TypeFor[int64]():
-		finalValue = reflect.ValueOf(value)
+		intValue, _ := strconv.ParseInt(value, 10, 64)
+		finalValue = reflect.ValueOf(intValue)
 	case reflect.TypeFor[uint]():
-		finalValue = reflect.ValueOf(value)
+		uintValue, _ := strconv.ParseUint(value, 10, 64)
+		finalValue = reflect.ValueOf(uintValue)
 	case reflect.TypeFor[uint8]():
-		finalValue = reflect.ValueOf(value)
+		uintValue, _ := strconv.ParseUint(value, 10, 8)
+		finalValue = reflect.ValueOf(uintValue)
 	case reflect.TypeFor[uint16]():
-		finalValue = reflect.ValueOf(value)
+		uintValue, _ := strconv.ParseUint(value, 10, 16)
+		finalValue = reflect.ValueOf(uintValue)
 	case reflect.TypeFor[uint32]():
-		finalValue = reflect.ValueOf(value)
+		uintValue, _ := strconv.ParseUint(value, 10, 32)
+		finalValue = reflect.ValueOf(uintValue)
 	case reflect.TypeFor[uint64]():
-		finalValue = reflect.ValueOf(value)
+		uintValue, _ := strconv.ParseUint(value, 10, 64)
+		finalValue = reflect.ValueOf(uintValue)
 	case reflect.TypeFor[float32]():
-		finalValue = reflect.ValueOf(value)
+		floatValue, _ := strconv.ParseFloat(value, 32)
+		finalValue = reflect.ValueOf(floatValue)
 	case reflect.TypeFor[float64]():
-		finalValue = reflect.ValueOf(value)
+		floatValue, _ := strconv.ParseFloat(value, 64)
+		finalValue = reflect.ValueOf(floatValue)
 	case reflect.TypeFor[bool]():
 		boolValue, _ := strconv.ParseBool(value)
 		finalValue = reflect.ValueOf(boolValue)

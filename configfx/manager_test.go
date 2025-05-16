@@ -17,6 +17,24 @@ type TestConfigNested struct {
 	Port int `conf:"port" default:"8080"`
 }
 
+func TestLoad(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should load config", func(t *testing.T) {
+		t.Parallel()
+
+		config := TestConfigNested{} //nolint:exhaustruct
+
+		cl := configfx.NewConfigManager()
+		err := cl.Load(&config)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, "localhost", config.Host)
+			assert.Equal(t, 8080, config.Port)
+		}
+	})
+}
+
 func TestLoadMeta(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
