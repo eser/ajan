@@ -65,12 +65,12 @@ test-ci: test-cov ## Run the tests with coverage and check if it's above the thr
 	@echo "Current test coverage : $(ACTUAL_COVERAGE) %"
 
 	@if [ "$(shell echo "$(ACTUAL_COVERAGE) < $(TESTCOVERAGE_THRESHOLD)" | bc -l)" -eq 1 ]; then \
-    echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."; \
-    echo "Failed"; \
-    exit 1; \
-  else \
-    echo "OK"; \
-  fi
+		echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."; \
+		echo "Failed"; \
+		exit 1; \
+	else \
+		echo "OK"; \
+	fi
 
 .PHONY: lint
 lint: ## Run the linting command.
