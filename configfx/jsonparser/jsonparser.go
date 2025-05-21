@@ -69,13 +69,11 @@ func flattenJSON(input map[string]any, prefix string, out *map[string]any) {
 		mapValue, isMap := value.(map[string]any)
 
 		if isMap {
-			// Eğer değer bir map ise, recursive olarak çağırıyoruz
 			flattenJSON(mapValue, prefix+strings.ToUpper(key)+Separator, out)
 
 			continue
 		}
 
-		// Eğer değer map değilse, anahtarı ekliyoruz
 		(*out)[prefix+strings.ToUpper(key)] = fmt.Sprintf("%v", value)
 	}
 }

@@ -139,23 +139,23 @@ func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) { //nolint:varnamele
 	return result, nil
 }
 
-func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //nolint:funlen,cyclop
+func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //nolint:funlen,cyclop,gocognit
 	for _, child := range meta.Children {
-		key := prefix + child.Name
+		key := prefix + strings.ToUpper(child.Name)
 
-		if child.Type.Kind() == reflect.Map {
+		if child.Type.Kind() == reflect.Map { //nolint:nestif
 			// Create a new map
 			newMap := reflect.MakeMap(child.Type)
 
 			// Find all keys that start with our prefix
 			prefix := key + Separator
-			for key := range *target {
-				if !strings.HasPrefix(key, prefix) {
+			for targetKey := range *target {
+				if !strings.HasPrefix(targetKey, prefix) {
 					continue
 				}
 
 				// Extract the map key from the flattened key
-				mapKey := strings.TrimPrefix(key, prefix)
+				mapKey := strings.TrimPrefix(targetKey, prefix)
 				if idx := strings.Index(mapKey, Separator); idx != -1 {
 					mapKey = mapKey[:idx]
 				}
@@ -163,6 +163,14 @@ func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //
 				// Create and set the map value
 				valueType := child.Type.Elem()
 				mapValue := reflect.New(valueType).Elem()
+
+				if valueType.Kind() == reflect.String {
+					value, valueOk := (*target)[targetKey].(string)
+
+					if valueOk {
+						mapValue.SetString(value)
+					}
+				}
 
 				// Recursively set the fields of the map value
 				subMeta := ConfigItemMeta{

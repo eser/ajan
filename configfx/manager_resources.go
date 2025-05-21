@@ -65,3 +65,14 @@ func (cl *ConfigManager) FromJsonFile(filename string) ConfigResource {
 		return nil
 	}
 }
+
+func (cl *ConfigManager) FromJsonString(jsonStr string) ConfigResource {
+	return func(target *map[string]any) error {
+		err := jsonparser.ParseBytes([]byte(jsonStr), target)
+		if err != nil {
+			return fmt.Errorf("failed to parse json string: %w", err)
+		}
+
+		return nil
+	}
+}

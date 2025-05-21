@@ -16,6 +16,8 @@ type TestConfigNested struct {
 	TestConfig
 	Port     int    `conf:"port"      default:"8080"`
 	MaxRetry uint16 `conf:"max_retry" default:"10"`
+
+	Dictionary map[string]string `conf:"dict"`
 }
 
 func TestLoad(t *testing.T) {
@@ -33,6 +35,23 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "localhost", config.Host)
 			assert.Equal(t, 8080, config.Port)
 			assert.Equal(t, uint16(10), config.MaxRetry)
+		}
+	})
+
+	t.Run("should load config from string", func(t *testing.T) {
+		t.Parallel()
+
+		configStr := `{"host": "localhost", "port": 8080, "max_retry": 10, "dict": {"key": "value"}}`
+		config := TestConfigNested{} //nolint:exhaustruct
+
+		cl := configfx.NewConfigManager()
+		err := cl.Load(&config, cl.FromJsonString(configStr))
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, "localhost", config.Host)
+			assert.Equal(t, 8080, config.Port)
+			assert.Equal(t, uint16(10), config.MaxRetry)
+			assert.Equal(t, map[string]string{"KEY": "value"}, config.Dictionary)
 		}
 	})
 }
@@ -105,6 +124,16 @@ func TestLoadMeta(t *testing.T) { //nolint:funlen
 				IsRequired:      false,
 				HasDefaultValue: true,
 				DefaultValue:    "10",
+
+				Children: nil,
+			},
+			{
+				Name:            "dict",
+				Field:           meta.Children[3].Field,
+				Type:            reflect.TypeFor[map[string]string](),
+				IsRequired:      false,
+				HasDefaultValue: false,
+				DefaultValue:    "",
 
 				Children: nil,
 			},
