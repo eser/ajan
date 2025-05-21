@@ -29,9 +29,9 @@ type ConfigLoader interface {
 	Load(i any, resources ...ConfigResource) error
 	LoadDefaults(i any) error
 
-	FromEnvFileDirect(filename string) ConfigResource
-	FromEnvFile(filename string) ConfigResource
-	FromSystemEnv() ConfigResource
+	FromEnvFileDirect(filename string, keyCaseInsensitive bool) ConfigResource
+	FromEnvFile(filename string, keyCaseInsensitive bool) ConfigResource
+	FromSystemEnv(keyCaseInsensitive bool) ConfigResource
 
 	FromJsonFileDirect(filename string) ConfigResource
 	FromJsonFile(filename string) ConfigResource

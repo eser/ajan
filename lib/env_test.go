@@ -200,7 +200,7 @@ func TestEnvOverrideVariables(t *testing.T) {
 				t.Setenv(k, v)
 			}
 
-			lib.EnvOverrideVariables(&m)
+			lib.EnvOverrideVariables(&m, true)
 
 			for k, v := range tt.expectedArgs {
 				assert.Equal(t, v, m[k])

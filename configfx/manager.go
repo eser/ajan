@@ -76,8 +76,8 @@ func (cl *ConfigManager) LoadDefaults(i any) error {
 	return cl.Load(
 		i,
 		cl.FromJsonFile("config.json"),
-		cl.FromEnvFile(".env"),
-		cl.FromSystemEnv(),
+		cl.FromEnvFile(".env", true),
+		cl.FromSystemEnv(true),
 	)
 }
 
@@ -141,7 +141,7 @@ func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) { //nolint:varnamele
 
 func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //nolint:funlen,cyclop,gocognit
 	for _, child := range meta.Children {
-		key := prefix + strings.ToUpper(child.Name)
+		key := prefix + child.Name
 
 		if child.Type.Kind() == reflect.Map { //nolint:nestif
 			// Create a new map
@@ -150,15 +150,13 @@ func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //
 			// Find all keys that start with our prefix
 			prefix := key + Separator
 			for targetKey := range *target {
-				if !strings.HasPrefix(targetKey, prefix) {
+				// if !strings.HasPrefix(targetKey, prefix) {
+				if !strings.HasPrefix(strings.ToLower(targetKey), strings.ToLower(prefix)) {
 					continue
 				}
 
 				// Extract the map key from the flattened key
-				mapKey := strings.TrimPrefix(targetKey, prefix)
-				if idx := strings.Index(mapKey, Separator); idx != -1 {
-					mapKey = mapKey[:idx]
-				}
+				mapKey := targetKey[len(prefix):]
 
 				// Create and set the map value
 				valueType := child.Type.Elem()

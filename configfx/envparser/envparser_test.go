@@ -14,7 +14,7 @@ func TestTryParseFiles(t *testing.T) {
 		t.Parallel()
 
 		m := make(map[string]any)
-		err := envparser.TryParseFiles(&m, "./testdata/.env")
+		err := envparser.TryParseFiles(&m, true, "./testdata/.env")
 
 		if assert.NoError(t, err) {
 			assert.Equal(t, "env", m["TEST"])
@@ -25,7 +25,7 @@ func TestTryParseFiles(t *testing.T) {
 		t.Parallel()
 
 		m := make(map[string]any)
-		err := envparser.TryParseFiles(&m, "./testdata/.env", "./testdata/.env.development")
+		err := envparser.TryParseFiles(&m, true, "./testdata/.env", "./testdata/.env.development")
 
 		if assert.NoError(t, err) {
 			assert.Equal(t, "env-development", m["TEST"])

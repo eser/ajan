@@ -12,12 +12,17 @@ type TestConfig struct {
 	Host string `conf:"host" default:"localhost"`
 }
 
+type TestConfigNestedKV struct {
+	Name string `conf:"name"`
+}
+
 type TestConfigNested struct {
 	TestConfig
 	Port     int    `conf:"port"      default:"8080"`
 	MaxRetry uint16 `conf:"max_retry" default:"10"`
 
-	Dictionary map[string]string `conf:"dict"`
+	Dictionary map[string]string    `conf:"dict"`
+	Array      []TestConfigNestedKV `conf:"arr"`
 }
 
 func TestLoad(t *testing.T) {
@@ -41,17 +46,17 @@ func TestLoad(t *testing.T) {
 	t.Run("should load config from string", func(t *testing.T) {
 		t.Parallel()
 
-		configStr := `{"host": "localhost", "port": 8080, "max_retry": 10, "dict": {"key": "value"}}`
 		config := TestConfigNested{} //nolint:exhaustruct
 
 		cl := configfx.NewConfigManager()
-		err := cl.Load(&config, cl.FromJsonString(configStr))
+		err := cl.Load(&config, cl.FromJsonFile("testdata/config.json"), cl.FromEnvFile("testdata/.env", true))
 
 		if assert.NoError(t, err) {
 			assert.Equal(t, "localhost", config.Host)
-			assert.Equal(t, 8080, config.Port)
-			assert.Equal(t, uint16(10), config.MaxRetry)
-			assert.Equal(t, map[string]string{"KEY": "value"}, config.Dictionary)
+			assert.Equal(t, 8081, config.Port)
+			assert.Equal(t, uint16(20), config.MaxRetry)
+			assert.Equal(t, map[string]string{"key": "value", "key2": "value2", "key3": "value3"}, config.Dictionary)
+			// assert.Equal(t, []TestConfigNestedKV{{Name: "eser"}}, config.Array)
 		}
 	})
 }
@@ -131,6 +136,16 @@ func TestLoadMeta(t *testing.T) { //nolint:funlen
 				Name:            "dict",
 				Field:           meta.Children[3].Field,
 				Type:            reflect.TypeFor[map[string]string](),
+				IsRequired:      false,
+				HasDefaultValue: false,
+				DefaultValue:    "",
+
+				Children: nil,
+			},
+			{
+				Name:            "arr",
+				Field:           meta.Children[4].Field,
+				Type:            reflect.TypeFor[[]TestConfigNestedKV](),
 				IsRequired:      false,
 				HasDefaultValue: false,
 				DefaultValue:    "",

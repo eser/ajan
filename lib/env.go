@@ -33,9 +33,14 @@ func EnvAwareFilenames(env string, filename string) []string {
 	return filenames
 }
 
-func EnvOverrideVariables(m *map[string]any) {
+func EnvOverrideVariables(m *map[string]any, keyCaseInsensitive bool) {
 	for _, e := range os.Environ() {
 		pair := strings.SplitN(e, "=", 2) //nolint:mnd
-		(*m)[pair[0]] = pair[1]
+
+		if keyCaseInsensitive {
+			CaseInsensitiveSet(m, pair[0], pair[1])
+		} else {
+			(*m)[pair[0]] = pair[1]
+		}
 	}
 }

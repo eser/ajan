@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const Separator = "__"
@@ -64,16 +63,38 @@ func TryParseFiles(m *map[string]any, filenames ...string) error {
 	return nil
 }
 
-func flattenJSON(input map[string]any, prefix string, out *map[string]any) {
+func flattenJSON(input map[string]any, currentNode string, out *map[string]any) {
+	prefix := currentNode
+	if len(prefix) > 0 {
+		prefix += Separator
+	}
+
 	for key, value := range input {
 		mapValue, isMap := value.(map[string]any)
 
 		if isMap {
-			flattenJSON(mapValue, prefix+strings.ToUpper(key)+Separator, out)
+			if len(mapValue) > 0 {
+				flattenJSON(mapValue, prefix+key, out)
+			} else {
+				(*out)[prefix+key] = ""
+			}
 
 			continue
 		}
 
-		(*out)[prefix+strings.ToUpper(key)] = fmt.Sprintf("%v", value)
+		// if false {
+		arrValue, isArray := value.([]any)
+		if isArray {
+			for _, arrValue := range arrValue {
+				(*out)[prefix+key+Separator+fmt.Sprintf("%v", arrValue)] = ""
+			}
+
+			continue
+		}
+
+		(*out)[prefix+key] = fmt.Sprintf("%v", value)
+		// } else {
+		// 	(*out)[prefix+key] = value
+		// }
 	}
 }

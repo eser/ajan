@@ -8,9 +8,9 @@ import (
 	"github.com/eser/ajan/lib"
 )
 
-func (cl *ConfigManager) FromEnvFileDirect(filename string) ConfigResource {
+func (cl *ConfigManager) FromEnvFileDirect(filename string, keyCaseInsensitive bool) ConfigResource {
 	return func(target *map[string]any) error {
-		err := envparser.TryParseFiles(target, filename)
+		err := envparser.TryParseFiles(target, keyCaseInsensitive, filename)
 		if err != nil {
 			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
 		}
@@ -19,12 +19,12 @@ func (cl *ConfigManager) FromEnvFileDirect(filename string) ConfigResource {
 	}
 }
 
-func (cl *ConfigManager) FromEnvFile(filename string) ConfigResource {
+func (cl *ConfigManager) FromEnvFile(filename string, keyCaseInsensitive bool) ConfigResource {
 	return func(target *map[string]any) error {
 		env := lib.EnvGetCurrent()
 		filenames := lib.EnvAwareFilenames(env, filename)
 
-		err := envparser.TryParseFiles(target, filenames...)
+		err := envparser.TryParseFiles(target, keyCaseInsensitive, filenames...)
 		if err != nil {
 			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
 		}
@@ -33,9 +33,9 @@ func (cl *ConfigManager) FromEnvFile(filename string) ConfigResource {
 	}
 }
 
-func (cl *ConfigManager) FromSystemEnv() ConfigResource {
+func (cl *ConfigManager) FromSystemEnv(keyCaseInsensitive bool) ConfigResource {
 	return func(target *map[string]any) error {
-		lib.EnvOverrideVariables(target)
+		lib.EnvOverrideVariables(target, keyCaseInsensitive)
 
 		return nil
 	}

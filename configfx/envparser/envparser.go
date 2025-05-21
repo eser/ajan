@@ -36,7 +36,7 @@ var (
 	ErrUnterminatedQuotedValue = results.Define("ERRBCE0004", "unterminated quoted value") //nolint:gochecknoglobals
 )
 
-func ParseBytes(data []byte, out *map[string]any) error {
+func ParseBytes(data []byte, keyCaseInsensitive bool, out *map[string]any) error {
 	src := bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	cutset := src
 
@@ -57,7 +57,12 @@ func ParseBytes(data []byte, out *map[string]any) error {
 			return err
 		}
 
-		(*out)[key] = value
+		if keyCaseInsensitive {
+			lib.CaseInsensitiveSet(out, key, value)
+		} else {
+			(*out)[key] = value
+		}
+
 		cutset = left
 	}
 
@@ -305,7 +310,7 @@ func expandVariables(v string, m *map[string]any) string {
 	})
 }
 
-func Parse(m *map[string]any, r io.Reader) error {
+func Parse(m *map[string]any, keyCaseInsensitive bool, r io.Reader) error {
 	var buf bytes.Buffer
 
 	_, err := io.Copy(&buf, r)
@@ -313,10 +318,10 @@ func Parse(m *map[string]any, r io.Reader) error {
 		return fmt.Errorf("parsing error: %w", err)
 	}
 
-	return ParseBytes(buf.Bytes(), m)
+	return ParseBytes(buf.Bytes(), keyCaseInsensitive, m)
 }
 
-func tryParseFile(m *map[string]any, filename string) (err error) {
+func tryParseFile(m *map[string]any, keyCaseInsensitive bool, filename string) (err error) {
 	file, fileErr := os.Open(filepath.Clean(filename))
 	if fileErr != nil {
 		if os.IsNotExist(fileErr) {
@@ -330,12 +335,12 @@ func tryParseFile(m *map[string]any, filename string) (err error) {
 		err = file.Close()
 	}()
 
-	return Parse(m, file)
+	return Parse(m, keyCaseInsensitive, file)
 }
 
-func TryParseFiles(m *map[string]any, filenames ...string) error {
+func TryParseFiles(m *map[string]any, keyCaseInsensitive bool, filenames ...string) error {
 	for _, filename := range filenames {
-		err := tryParseFile(m, filename)
+		err := tryParseFile(m, keyCaseInsensitive, filename)
 		if err != nil {
 			return err
 		}
