@@ -16,12 +16,12 @@ Configuration struct for the cache:
 
 ```go
 type Config struct {
-  Caches map[string]ConfigCache `conf:"CACHES"`
+  Caches map[string]ConfigCache `conf:"caches"`
 }
 
 type ConfigCache struct {
-  Provider string `conf:"PROVIDER"`
-  DSN      string `conf:"DSN"`
+  Provider string `conf:"provider"`
+  DSN      string `conf:"dsn"`
 }
 ```
 

@@ -5,23 +5,23 @@ import (
 )
 
 type Config struct {
-	CircuitBreaker CircuitBreakerConfig `conf:"CIRCUIT_BREAKER"`
-	Retry          RetryConfig          `conf:"RETRY"`
+	CircuitBreaker CircuitBreakerConfig `conf:"circuit_breaker"`
+	Retry          RetryConfig          `conf:"retry"`
 }
 
 type CircuitBreakerConfig struct {
-	Enabled               bool          `conf:"ENABLED"                  default:"true"`
-	FailureThreshold      uint          `conf:"FAILURE_THRESHOLD"        default:"5"`
-	ResetTimeout          time.Duration `conf:"RESET_TIMEOUT"            default:"10s"`
-	HalfOpenSuccessNeeded uint          `conf:"HALF_OPEN_SUCCESS_NEEDED" default:"2"`
-	ServerErrorThreshold  int           `conf:"SERVER_ERROR_THRESHOLD"   default:"500"`
+	Enabled               bool          `conf:"enabled"                  default:"true"`
+	FailureThreshold      uint          `conf:"failure_threshold"        default:"5"`
+	ResetTimeout          time.Duration `conf:"reset_timeout"            default:"10s"`
+	HalfOpenSuccessNeeded uint          `conf:"half_open_success_needed" default:"2"`
+	ServerErrorThreshold  int           `conf:"server_error_threshold"   default:"500"`
 }
 
 type RetryConfig struct {
-	Enabled         bool          `conf:"ENABLED"          default:"true"`
-	MaxAttempts     uint          `conf:"MAX_ATTEMPTS"     default:"3"`
-	InitialInterval time.Duration `conf:"INITIAL_INTERVAL" default:"100ms"`
-	MaxInterval     time.Duration `conf:"MAX_INTERVAL"     default:"10s"`
-	Multiplier      float64       `conf:"MULTIPLIER"       default:"2"`
-	RandomFactor    float64       `conf:"RANDOM_FACTOR"    default:"0.1"`
+	Enabled         bool          `conf:"enabled"          default:"true"`
+	MaxAttempts     uint          `conf:"max_attempts"     default:"3"`
+	InitialInterval time.Duration `conf:"initial_interval" default:"100ms"`
+	MaxInterval     time.Duration `conf:"max_interval"     default:"10s"`
+	Multiplier      float64       `conf:"multiplier"       default:"2"`
+	RandomFactor    float64       `conf:"random_factor"    default:"0.1"`
 }

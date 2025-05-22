@@ -16,12 +16,12 @@ Configuration struct for the message queue:
 
 ```go
 type Config struct {
-  Brokers map[string]ConfigBroker `conf:"BROKERS"`
+  Brokers map[string]ConfigBroker `conf:"brokers"`
 }
 
 type ConfigBroker struct {
-  Provider string `conf:"PROVIDER"`
-  DSN      string `conf:"DSN"`
+  Provider string `conf:"provider"`
+  DSN      string `conf:"dsn"`
 }
 
 // Consumer configuration

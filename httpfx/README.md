@@ -14,23 +14,23 @@ Configuration struct for the HTTP service:
 
 ```go
 type Config struct {
-	Addr string `conf:"ADDR" default:":8080"`
+	Addr string `conf:"addr" default:":8080"`
 
-	CertString        string        `conf:"CERT_STRING"`
-	KeyString         string        `conf:"KEY_STRING"`
-	ReadHeaderTimeout time.Duration `conf:"READ_HEADER_TIMEOUT" default:"5s"`
-	ReadTimeout       time.Duration `conf:"READ_TIMEOUT"        default:"10s"`
-	WriteTimeout      time.Duration `conf:"WRITE_TIMEOUT"       default:"10s"`
-	IdleTimeout       time.Duration `conf:"IDLE_TIMEOUT"        default:"120s"`
+	CertString        string        `conf:"cert_string"`
+	KeyString         string        `conf:"key_string"`
+	ReadHeaderTimeout time.Duration `conf:"read_header_timeout" default:"5s"`
+	ReadTimeout       time.Duration `conf:"read_timeout"        default:"10s"`
+	WriteTimeout      time.Duration `conf:"write_timeout"       default:"10s"`
+	IdleTimeout       time.Duration `conf:"idle_timeout"        default:"120s"`
 
-	InitializationTimeout   time.Duration `conf:"INIT_TIMEOUT"     default:"25s"`
-	GracefulShutdownTimeout time.Duration `conf:"SHUTDOWN_TIMEOUT" default:"5s"`
+	InitializationTimeout   time.Duration `conf:"init_timeout"     default:"25s"`
+	GracefulShutdownTimeout time.Duration `conf:"shutdown_timeout" default:"5s"`
 
-	SelfSigned bool `conf:"SELF_SIGNED" default:"false"`
+	SelfSigned bool `conf:"self_signed" default:"false"`
 
-	HealthCheckEnabled bool `conf:"HEALTH_CHECK" default:"true"`
-	OpenApiEnabled     bool `conf:"OPENAPI"      default:"true"`
-	ProfilingEnabled   bool `conf:"PROFILING"    default:"false"`
+	HealthCheckEnabled bool `conf:"health_check" default:"true"`
+	OpenApiEnabled     bool `conf:"openapi"      default:"true"`
+	ProfilingEnabled   bool `conf:"profiling"    default:"false"`
 }
 ```
 

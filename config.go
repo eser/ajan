@@ -10,17 +10,17 @@ import (
 )
 
 type BaseConfig struct {
-	AppName string `conf:"NAME" default:"ajansvc"`
-	AppEnv  string `conf:"ENV"  default:"development"`
+	AppName string `conf:"name" default:"ajansvc"`
+	AppEnv  string `conf:"env"  default:"development"`
 
-	// JwtSignature      string `conf:"JWT_SIGNATURE"`
-	// CorsOrigin        string `conf:"CORS_ORIGIN"`
-	// CorsStrictHeaders bool   `conf:"CORS_STRICT_HEADERS"`
+	// JwtSignature      string `conf:"jwt_signature"`
+	// CorsOrigin        string `conf:"cors_origin"`
+	// CorsStrictHeaders bool   `conf:"cors_strict_headers"`
 
-	Data  datafx.Config  `conf:"DATA"`
-	Cache cachefx.Config `conf:"CACHE"`
-	Queue queuefx.Config `conf:"QUEUE"`
-	Log   logfx.Config   `conf:"LOG"`
-	Grpc  grpcfx.Config  `conf:"GRPC"`
-	Http  httpfx.Config  `conf:"HTTP"`
+	Data  datafx.Config  `conf:"data"`
+	Cache cachefx.Config `conf:"cache"`
+	Queue queuefx.Config `conf:"queue"`
+	Log   logfx.Config   `conf:"log"`
+	Grpc  grpcfx.Config  `conf:"grpc"`
+	Http  httpfx.Config  `conf:"http"`
 }

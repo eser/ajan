@@ -18,9 +18,9 @@ Configuration struct for the logger:
 
 ```go
 type Config struct {
-	Level      string `conf:"LEVEL"      default:"INFO"`
-	PrettyMode bool   `conf:"PRETTY"     default:"true"`
-	AddSource  bool   `conf:"ADD_SOURCE" default:"false"`
+	Level      string `conf:"level"      default:"INFO"`
+	PrettyMode bool   `conf:"pretty"     default:"true"`
+	AddSource  bool   `conf:"add_source" default:"false"`
 }
 ```
 
