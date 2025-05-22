@@ -157,6 +157,9 @@ func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //
 
 				// Extract the map key from the flattened key
 				mapKey := targetKey[len(prefix):]
+				if idx := strings.Index(mapKey, Separator); idx != -1 {
+					mapKey = mapKey[:idx]
+				}
 
 				// Create and set the map value
 				valueType := child.Type.Elem()
