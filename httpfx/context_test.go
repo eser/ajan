@@ -125,7 +125,7 @@ func TestContext_Results(t *testing.T) {
 			name: "error_result",
 			path: "/error",
 			handler: func(c *httpfx.Context) httpfx.Result {
-				return c.Results.Error(http.StatusBadRequest, []byte("bad request"))
+				return c.Results.Error(http.StatusBadRequest, httpfx.WithPlainText("bad request"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   "bad request",

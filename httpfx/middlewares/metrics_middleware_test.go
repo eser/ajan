@@ -46,7 +46,7 @@ func TestMetricsMiddleware(t *testing.T) {
 			method: http.MethodPost,
 			path:   "/error",
 			handler: func(c *httpfx.Context) httpfx.Result {
-				return c.Results.Error(http.StatusBadRequest, []byte("bad request"))
+				return c.Results.Error(http.StatusBadRequest, httpfx.WithPlainText("bad request"))
 			},
 			expectedStatus: http.StatusBadRequest,
 		},

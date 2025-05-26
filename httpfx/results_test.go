@@ -93,7 +93,7 @@ func TestResults_Unauthorized(t *testing.T) {
 
 	results := &httpfx.Results{}
 	body := []byte("Unauthorized access")
-	result := results.Unauthorized(body)
+	result := results.Unauthorized(httpfx.WithBody(body))
 
 	assert.Equal(t, http.StatusUnauthorized, result.StatusCode())
 	assert.Equal(t, body, result.Body())
@@ -114,7 +114,7 @@ func TestResults_Error(t *testing.T) {
 
 	results := &httpfx.Results{}
 	message := []byte("Custom error message")
-	result := results.Error(http.StatusInternalServerError, message)
+	result := results.Error(http.StatusInternalServerError, httpfx.WithBody(message))
 
 	assert.Equal(t, http.StatusInternalServerError, result.StatusCode())
 	assert.Equal(t, message, result.Body())
