@@ -18,15 +18,17 @@ const (
 
 type Process struct {
 	BaseCtx context.Context //nolint:containedctx
-	Logger  *logfx.Logger
 
 	Ctx    context.Context //nolint:containedctx
+	Logger *logfx.Logger
+
 	Cancel context.CancelFunc
 
 	Signal chan os.Signal
 
+	WaitGroups map[string]*sync.WaitGroup
+
 	ShutdownTimeout time.Duration
-	WaitGroup       sync.WaitGroup
 }
 
 func New(baseCtx context.Context, logger *logfx.Logger) *Process {
@@ -56,21 +58,23 @@ func New(baseCtx context.Context, logger *logfx.Logger) *Process {
 		Signal: sigChan,
 
 		ShutdownTimeout: DefaultShutdownTimeout,
-		WaitGroup:       sync.WaitGroup{},
+		WaitGroups:      map[string]*sync.WaitGroup{},
 	}
 }
 
-func (p *Process) StartGoroutine(name string, fn func(ctx context.Context) error) {
-	p.WaitGroup.Add(1)
+func (p *Process) StartGoroutine(name string, fn func(ctx context.Context, wg *sync.WaitGroup) error) {
+	wg := &sync.WaitGroup{}
+	p.WaitGroups[name] = wg
+	wg.Add(1)
 
 	go func() {
-		defer p.WaitGroup.Done()
+		defer wg.Done()
 
 		if p.Logger != nil {
 			p.Logger.DebugContext(p.Ctx, "Goroutine starting", "name", name)
 		}
 
-		err := fn(p.Ctx)
+		err := fn(p.Ctx, wg)
 
 		if err != nil &&
 			p.BaseCtx.Err() == nil &&
@@ -107,7 +111,10 @@ func (p *Process) Shutdown() {
 	// Wait for all managed goroutines to finish.
 	shutdownComplete := make(chan struct{})
 	go func() {
-		p.WaitGroup.Wait()
+		for _, wg := range p.WaitGroups {
+			wg.Wait()
+		}
+
 		close(shutdownComplete)
 	}()
 
