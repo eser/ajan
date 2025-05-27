@@ -62,7 +62,7 @@ func New(baseCtx context.Context, logger *logfx.Logger) *Process {
 	}
 }
 
-func (p *Process) StartGoroutine(name string, fn func(ctx context.Context, wg *sync.WaitGroup) error) {
+func (p *Process) StartGoroutine(name string, fn func(ctx context.Context) error) {
 	wg := &sync.WaitGroup{}
 	p.WaitGroups[name] = wg
 	wg.Add(1)
@@ -74,7 +74,7 @@ func (p *Process) StartGoroutine(name string, fn func(ctx context.Context, wg *s
 			p.Logger.DebugContext(p.Ctx, "Goroutine starting", "name", name)
 		}
 
-		err := fn(p.Ctx, wg)
+		err := fn(p.Ctx)
 
 		if err != nil &&
 			p.BaseCtx.Err() == nil &&
