@@ -276,7 +276,12 @@ func TestCreateLister(t *testing.T) {
 	// Ensure that lister returns the correct implementations
 	implementations := lister()
 	require.Len(t, implementations, 1, "Expected one Adder implementation")
-	assert.IsType(t, AdderImpl{}, implementations[0].Value, "Expected AdderImpl type") //nolint:exhaustruct
+	assert.IsType(
+		t,
+		AdderImpl{}, //nolint:exhaustruct
+		implementations[0].Value,
+		"Expected AdderImpl type",
+	)
 
 	// Verify the implementation works
 	adder, isOk := implementations[0].Value.(Adder)
@@ -301,7 +306,12 @@ func TestDynamicList(t *testing.T) {
 
 	// Ensure that dynamic list returns the correct implementations
 	require.Len(t, implementations, 1, "Expected one Adder implementation")
-	assert.IsType(t, AdderImpl{}, implementations[0].Value, "Expected AdderImpl type") //nolint:exhaustruct
+	assert.IsType(
+		t,
+		AdderImpl{}, //nolint:exhaustruct
+		implementations[0].Value,
+		"Expected AdderImpl type",
+	)
 
 	// Verify the implementation works
 	adder, isOk := implementations[0].Value.(Adder)

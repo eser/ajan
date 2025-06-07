@@ -24,7 +24,7 @@ func ParseBytes(data []byte, out *map[string]any) error {
 	return nil
 }
 
-func Parse(m *map[string]any, r io.Reader) error { //nolint:varnamelen
+func Parse(m *map[string]any, r io.Reader) error {
 	var buf bytes.Buffer
 
 	_, err := io.Copy(&buf, r)

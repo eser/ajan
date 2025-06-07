@@ -81,7 +81,8 @@ func TestAuthMiddleware(t *testing.T) { //nolint:funlen
 				assert.Equal(t, tt.expectedStatusCode, result.StatusCode())
 			}
 
-			if tt.expectedStatusCode == http.StatusOK || tt.expectedStatusCode == http.StatusNoContent {
+			if tt.expectedStatusCode == http.StatusOK ||
+				tt.expectedStatusCode == http.StatusNoContent {
 				claims, claimsOk := httpCtx.Request.Context().Value(middlewares.ContextKeyAuthClaims).(jwt.MapClaims)
 
 				assert.True(t, claimsOk, "Claims are missing in context")
@@ -89,7 +90,11 @@ func TestAuthMiddleware(t *testing.T) { //nolint:funlen
 				assert.NotNil(t, claims["exp"], "exp claim is missing")
 
 				if exp, ok := claims["exp"].(float64); ok {
-					assert.False(t, time.Unix(int64(exp), 0).Before(time.Now()), "exp claim is not valid")
+					assert.False(
+						t,
+						time.Unix(int64(exp), 0).Before(time.Now()),
+						"exp claim is not valid",
+					)
 				}
 			}
 		})

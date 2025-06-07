@@ -8,7 +8,7 @@ default: help
 .PHONY: help
 help: ## Shows help for each of the Makefile recipes.
 	@echo 'Commands:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-32s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: dep
 dep: ## Download dependencies.
@@ -19,24 +19,32 @@ dep: ## Download dependencies.
 init-tools: ## Initialize the tools.
 	command -v pre-commit >/dev/null || brew install pre-commit
 	command -v make >/dev/null || brew install make
-	command -v act >/dev/null || brew install act
 	[ -f .git/hooks/pre-commit ] || pre-commit install
-	go tool -n golangci-lint >/dev/null || go get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go tool -n betteralign >/dev/null || go get -tool github.com/dkorunic/betteralign/cmd/betteralign@latest
-	go tool -n gcov2lcov >/dev/null || go get -tool github.com/jandelgado/gcov2lcov@latest
-	go tool -n govulncheck >/dev/null || go get -tool golang.org/x/vuln/cmd/govulncheck@latest
+	command -v act >/dev/null || brew install act
+
+.PHONY: init-generators
+init-generators: ## Initializes generators.
+	go tool -n mockery > /dev/null || go get -tool github.com/vektra/mockery/v2@latest
 	go tool -n stringer >/dev/null || go get -tool golang.org/x/tools/cmd/stringer@latest
+	go tool -n gcov2lcov >/dev/null || go get -tool github.com/jandelgado/gcov2lcov@latest
+
+.PHONY: init-checkers
+init-checkers: ## Initializes checkers.
+	go tool -n golangci-lint >/dev/null || go get -tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	go tool -n betteralign >/dev/null || go get -tool github.com/dkorunic/betteralign/cmd/betteralign@latest
+	go tool -n govulncheck >/dev/null || go get -tool golang.org/x/vuln/cmd/govulncheck@latest
 
 .PHONY: init
-init: init-tools dep ## Initialize the project.
-
-.PHONY: build
-build: ## Build the entire codebase.
-	go build -v ./...
+init: init-tools init-generators init-checkers dep # Initializes the project.
+	# cp -n .env.example .env || true
 
 .PHONY: generate
 generate: ## Run auto-generated code generation.
 	go generate ./...
+
+.PHONY: build
+build: ## Build the entire codebase.
+	go build -v ./...
 
 .PHONY: clean
 clean: ## Clean the entire codebase.

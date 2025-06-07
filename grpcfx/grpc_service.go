@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/eser/ajan/logfx"
-	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -21,10 +21,14 @@ type GrpcService struct {
 }
 
 type MetricsProvider interface {
-	GetRegistry() *prometheus.Registry
+	GetMeterProvider() metric.MeterProvider
 }
 
-func NewGrpcService(config *Config, metricsProvider MetricsProvider, logger *logfx.Logger) *GrpcService {
+func NewGrpcService(
+	config *Config,
+	metricsProvider MetricsProvider,
+	logger *logfx.Logger,
+) *GrpcService {
 	metrics := NewMetrics(metricsProvider)
 
 	server := grpc.NewServer(

@@ -11,7 +11,7 @@ import (
 
 	"github.com/eser/ajan/lib"
 	"github.com/eser/ajan/logfx"
-	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type HttpService struct {
@@ -24,7 +24,7 @@ type HttpService struct {
 }
 
 type MetricsProvider interface {
-	GetRegistry() *prometheus.Registry
+	GetMeterProvider() metric.MeterProvider
 }
 
 func NewHttpService(
@@ -115,7 +115,8 @@ func (hs *HttpService) Start(ctx context.Context) (func(), error) {
 		newCtx, cancel := context.WithTimeout(ctx, hs.Config.GracefulShutdownTimeout)
 		defer cancel()
 
-		if err := hs.InnerServer.Shutdown(newCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := hs.InnerServer.Shutdown(newCtx); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
 			hs.logger.ErrorContext(ctx, "HttpService forced to shutdown", slog.Any("error", err))
 
 			return

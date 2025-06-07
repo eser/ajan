@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/eser/ajan/logfx"
-	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Event struct {
@@ -30,7 +30,7 @@ type EventBus struct {
 var ErrEventTimeout = errors.New("event timeout")
 
 type MetricsProvider interface {
-	GetRegistry() *prometheus.Registry
+	GetMeterProvider() metric.MeterProvider
 }
 
 func NewEventBus(

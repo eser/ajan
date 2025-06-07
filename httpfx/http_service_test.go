@@ -11,17 +11,31 @@ import (
 
 	"github.com/eser/ajan/httpfx"
 	"github.com/eser/ajan/logfx"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 type mockMetricsProvider struct {
-	registry *prometheus.Registry
+	meterProvider metric.MeterProvider
 }
 
-func (m *mockMetricsProvider) GetRegistry() *prometheus.Registry {
-	return m.registry
+func (m *mockMetricsProvider) GetMeterProvider() metric.MeterProvider {
+	return m.meterProvider
+}
+
+func newMockMetricsProvider() *mockMetricsProvider {
+	// Create a simple MeterProvider for testing
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(resource.Default()),
+		sdkmetric.WithReader(sdkmetric.NewManualReader()),
+	)
+
+	return &mockMetricsProvider{
+		meterProvider: meterProvider,
+	}
 }
 
 func TestNewHttpService(t *testing.T) { //nolint:funlen
@@ -72,9 +86,7 @@ func TestNewHttpService(t *testing.T) { //nolint:funlen
 			require.NoError(t, err)
 
 			router := httpfx.NewRouter("/")
-			metricsProvider := &mockMetricsProvider{
-				registry: prometheus.NewRegistry(),
-			}
+			metricsProvider := newMockMetricsProvider()
 
 			service := httpfx.NewHttpService(tt.config, router, metricsProvider, logger)
 			require.NotNil(t, service)
@@ -88,7 +100,11 @@ func TestNewHttpService(t *testing.T) { //nolint:funlen
 
 			if tt.expectTLS {
 				assert.NotNil(t, service.Server().TLSConfig)
-				assert.GreaterOrEqual(t, service.Server().TLSConfig.MinVersion, uint16(tls.VersionTLS12))
+				assert.GreaterOrEqual(
+					t,
+					service.Server().TLSConfig.MinVersion,
+					uint16(tls.VersionTLS12),
+				)
 			} else {
 				assert.Nil(t, service.Server().TLSConfig)
 			}
@@ -96,16 +112,14 @@ func TestNewHttpService(t *testing.T) { //nolint:funlen
 	}
 }
 
-func TestHttpService_Start(t *testing.T) {
+func TestHttpService_Start(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
 	logger, err := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
 	require.NoError(t, err)
 
 	router := httpfx.NewRouter("/")
-	metricsProvider := &mockMetricsProvider{
-		registry: prometheus.NewRegistry(),
-	}
+	metricsProvider := newMockMetricsProvider()
 
 	// Create a listener first to get a random available port
 	listener, err := net.Listen("tcp", ":0") //nolint:gosec
@@ -149,7 +163,12 @@ func TestHttpService_Start(t *testing.T) {
 
 	// Make a test request
 	ctx = t.Context()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/test", port), nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("http://localhost:%d/test", port),
+		nil,
+	)
 	require.NoError(t, err)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -163,7 +182,12 @@ func TestHttpService_Start(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify server has stopped
-	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/test", port), nil)
+	req2, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("http://localhost:%d/test", port),
+		nil,
+	)
 	require.NoError(t, err)
 	resp2, err := client.Do(req2)
 	require.Error(t, err)

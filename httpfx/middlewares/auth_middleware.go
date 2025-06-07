@@ -14,14 +14,19 @@ const (
 	ContextKeyAuthClaims httpfx.ContextKey = "claims"
 )
 
-var ErrInvalidSigningMethod = results.Define("ERRBHMA001", "Invalid signing method") //nolint:gochecknoglobals
+var ErrInvalidSigningMethod = results.Define( //nolint:gochecknoglobals
+	"ERRBHMA001",
+	"Invalid signing method",
+)
 
 func AuthMiddleware() httpfx.Handler {
 	return func(ctx *httpfx.Context) httpfx.Result {
 		tokenString, hasToken := getBearerToken(ctx)
 
 		if !hasToken {
-			return ctx.Results.Unauthorized(httpfx.WithPlainText("No suitable authorization header found"))
+			return ctx.Results.Unauthorized(
+				httpfx.WithPlainText("No suitable authorization header found"),
+			)
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {

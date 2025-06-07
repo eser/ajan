@@ -1,4 +1,9 @@
-When working with this codebase, please follow these architectural principles and guidelines:
+---
+description:
+globs:
+alwaysApply: true
+---
+Whh this codebase, please follow these architectural principles and guidelines:
 
 1. Dependency Rules
 - No circular dependencies allowed
@@ -9,7 +14,7 @@ When working with this codebase, please follow these architectural principles an
 
 1. Error Handling
 - Wrap external errors before returning them
-- Use meaningful error types and messages
+- Use meaningfutypes and messages
 - Avoid panic as much as possible
 
 1. Testing
@@ -18,3 +23,6 @@ When working with this codebase, please follow these architectural principles an
 - Use testify for assertions
 - Parallelize tests when possible
 - Use benchmarks when testing performance
+
+1. Linting
+- run `make lint` for triggering linters.

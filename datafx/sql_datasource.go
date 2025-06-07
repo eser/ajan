@@ -31,11 +31,14 @@ func (datasource *SqlDatasource) GetDialect() Dialect {
 	return datasource.dialect
 }
 
-func (datasource *SqlDatasource) GetConnection() SqlExecutor { //nolint:ireturn
+func (datasource *SqlDatasource) GetConnection() SqlExecutor {
 	return datasource.connection
 }
 
-func (datasource *SqlDatasource) ExecuteUnitOfWork(ctx context.Context, fn func(uow *UnitOfWork) error) error {
+func (datasource *SqlDatasource) ExecuteUnitOfWork(
+	ctx context.Context,
+	fn func(uow *UnitOfWork) error,
+) error {
 	uow := NewUnitOfWork(datasource.connection)
 
 	return uow.Execute(ctx, fn)

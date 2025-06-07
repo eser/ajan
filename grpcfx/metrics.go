@@ -1,34 +1,36 @@
 package grpcfx
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Metrics struct {
 	mp MetricsProvider
 
-	RequestsTotal   *prometheus.CounterVec
-	RequestDuration *prometheus.HistogramVec
+	RequestsTotal   metric.Int64Counter
+	RequestDuration metric.Float64Histogram
 }
 
 func NewMetrics(metricsProvider MetricsProvider) *Metrics {
-	requestsTotal := prometheus.NewCounterVec(
-		prometheus.CounterOpts{ //nolint:exhaustruct
-			Name: "grpc_requests_total",
-			Help: "Total number of gRPC requests",
-		},
-		[]string{"method", "code"},
-	)
+	meter := metricsProvider.GetMeterProvider().Meter("github.com/eser/ajan/grpcfx")
 
-	requestDuration := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{ //nolint:exhaustruct
-			Name: "grpc_request_duration_seconds",
-			Help: "gRPC request duration in seconds",
-		},
-		[]string{"method"},
+	requestsTotal, err := meter.Int64Counter(
+		"grpc_requests_total",
+		metric.WithDescription("Total number of gRPC requests"),
+		metric.WithUnit("{request}"),
 	)
+	if err != nil {
+		panic(err) // Handle error appropriately in your application
+	}
 
-	metricsProvider.GetRegistry().MustRegister(requestsTotal, requestDuration)
+	requestDuration, err := meter.Float64Histogram(
+		"grpc_request_duration_seconds",
+		metric.WithDescription("gRPC request duration in seconds"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		panic(err) // Handle error appropriately in your application
+	}
 
 	return &Metrics{
 		mp:              metricsProvider,

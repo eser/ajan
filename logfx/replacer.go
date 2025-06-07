@@ -18,7 +18,8 @@ type (
 func ReplacerGenerator(prettyMode bool) func([]string, slog.Attr) slog.Attr {
 	return func(groups []string, attr slog.Attr) slog.Attr {
 		if prettyMode {
-			if attr.Key == slog.TimeKey || attr.Key == slog.LevelKey || attr.Key == slog.MessageKey {
+			if attr.Key == slog.TimeKey || attr.Key == slog.LevelKey ||
+				attr.Key == slog.MessageKey {
 				return slog.Attr{
 					Key:   "",
 					Value: slog.Value{},
@@ -79,7 +80,7 @@ func TraceLines(frames StackTrace) []string {
 	// the bottom of the trace.
 	var (
 		skippedCounter int
-		skipping       bool = true
+		skipping       = true
 	)
 
 	for i := len(frames) - 1; i >= 0; i-- {

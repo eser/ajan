@@ -30,7 +30,10 @@ func TestErrorHandlerMiddleware(t *testing.T) {
 		{
 			name: "error_response",
 			handler: func(c *httpfx.Context) httpfx.Result {
-				return c.Results.Error(http.StatusInternalServerError, httpfx.WithPlainText("test error"))
+				return c.Results.Error(
+					http.StatusInternalServerError,
+					httpfx.WithPlainText("test error"),
+				)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody:   "test error",

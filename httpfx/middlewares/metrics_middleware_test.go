@@ -8,21 +8,24 @@ import (
 
 	"github.com/eser/ajan/httpfx"
 	"github.com/eser/ajan/httpfx/middlewares"
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 type mockMetricsProvider struct {
-	registry *prometheus.Registry
+	meterProvider metric.MeterProvider
 }
 
-func (m *mockMetricsProvider) GetRegistry() *prometheus.Registry {
-	return m.registry
+func (m *mockMetricsProvider) GetMeterProvider() metric.MeterProvider {
+	return m.meterProvider
 }
 
-func TestMetricsMiddleware(t *testing.T) {
+func TestMetricsMiddleware(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
 	tests := []struct {
@@ -56,9 +59,13 @@ func TestMetricsMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create metrics
-			registry := prometheus.NewRegistry()
-			metricsProvider := &mockMetricsProvider{registry: registry}
+			// Create metrics with manual reader for testing
+			reader := sdkmetric.NewManualReader()
+			meterProvider := sdkmetric.NewMeterProvider(
+				sdkmetric.WithResource(resource.Default()),
+				sdkmetric.WithReader(reader),
+			)
+			metricsProvider := &mockMetricsProvider{meterProvider: meterProvider}
 			metrics := httpfx.NewMetrics(metricsProvider)
 
 			// Create a router with the metrics middleware
@@ -76,13 +83,36 @@ func TestMetricsMiddleware(t *testing.T) {
 			// Verify the response status
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
-			// Verify metrics were recorded
-			metric := &dto.Metric{} //nolint:exhaustruct
-			err := metrics.RequestsTotal.WithLabelValues(tt.method, tt.path, strconv.Itoa(tt.expectedStatus)).Write(metric)
+			// Collect metrics to verify they were recorded
+			ctx := t.Context()
+
+			var rm metricdata.ResourceMetrics
+			err := reader.Collect(ctx, &rm)
 			require.NoError(t, err)
 
-			// The counter should have been incremented once
-			assert.InDelta(t, float64(1), metric.GetCounter().GetValue(), 0.0001)
+			// Verify we have scope metrics
+			require.Len(t, rm.ScopeMetrics, 1)
+
+			// Verify we have the counter metric
+			require.Len(t, rm.ScopeMetrics[0].Metrics, 1)
+			metric := rm.ScopeMetrics[0].Metrics[0]
+
+			assert.Equal(t, "http_requests_total", metric.Name)
+
+			// Verify the data points - should have one measurement
+			sumData, ok := metric.Data.(metricdata.Sum[int64])
+			require.True(t, ok, "expected Sum[int64] metric data")
+			require.Len(t, sumData.DataPoints, 1)
+			assert.Equal(t, int64(1), sumData.DataPoints[0].Value)
+
+			// Verify the attributes
+			attrs := sumData.DataPoints[0].Attributes
+			expectedAttrs := attribute.NewSet(
+				attribute.String("method", tt.method),
+				attribute.String("endpoint", tt.path),
+				attribute.String("status", strconv.Itoa(tt.expectedStatus)),
+			)
+			assert.Equal(t, expectedAttrs, attrs)
 		})
 	}
 }

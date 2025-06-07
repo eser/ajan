@@ -18,9 +18,18 @@ import (
 )
 
 var (
-	ErrPatternParsing  = results.Define("ERRBHUP001", "unable to parse pattern") //nolint:gochecknoglobals
-	ErrInvalidWildcard = results.Define("ERRBHUP002", "invalid wildcard")        //nolint:gochecknoglobals
-	ErrInvalidMethod   = results.Define("ERRBHUP003", "invalid method")          //nolint:gochecknoglobals
+	ErrPatternParsing = results.Define( //nolint:gochecknoglobals
+		"ERRBHUP001",
+		"unable to parse pattern",
+	)
+	ErrInvalidWildcard = results.Define( //nolint:gochecknoglobals
+		"ERRBHUP002",
+		"invalid wildcard",
+	)
+	ErrInvalidMethod = results.Define( //nolint:gochecknoglobals
+		"ERRBHUP003",
+		"invalid method",
+	)
 )
 
 // A pattern is something that can be matched against an HTTP request.
@@ -102,7 +111,7 @@ func nextSegment(path string) (string, string) {
 // The "{$}" and "{name...}" wildcard must occur at the end of PATH.
 // PATH may end with a '/'.
 // Wildcard names in a path must be distinct.
-func ParsePattern(s string) (*Pattern, error) { //nolint:funlen,gocognit,cyclop
+func ParsePattern(s string) (*Pattern, error) { //nolint:cyclop,gocognit,funlen
 	if len(s) == 0 {
 		return nil, ErrPatternParsing.New("empty pattern")
 	}
@@ -188,7 +197,10 @@ func ParsePattern(s string) (*Pattern, error) { //nolint:funlen,gocognit,cyclop
 
 		defer func() {
 			if err == nil {
-				p.Segments = append(p.Segments, Segment{Wild: true, Multi: true}) //nolint:exhaustruct
+				p.Segments = append(
+					p.Segments,
+					Segment{Wild: true, Multi: true}, //nolint:exhaustruct
+				)
 			}
 		}()
 	}

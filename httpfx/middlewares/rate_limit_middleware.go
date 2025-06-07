@@ -207,8 +207,12 @@ func RateLimitMiddleware(options ...RateLimitOption) httpfx.Handler {
 			headers.Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
 
 			errorResponse := map[string]any{
-				"error":      "Rate limit exceeded",
-				"message":    fmt.Sprintf("Too many requests. Limit: %d requests per %v", cfg.RequestsPerMinute, cfg.WindowSize),
+				"error": "Rate limit exceeded",
+				"message": fmt.Sprintf(
+					"Too many requests. Limit: %d requests per %v",
+					cfg.RequestsPerMinute,
+					cfg.WindowSize,
+				),
 				"retryAfter": int(time.Until(resetTime).Seconds()),
 			}
 

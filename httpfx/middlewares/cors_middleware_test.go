@@ -45,7 +45,11 @@ func TestCorsMiddleware(t *testing.T) { //nolint:funlen
 		result := middleware(ctx)
 		require.NotNil(t, result)
 
-		assert.Equal(t, "https://example.com", w.Header().Get(middlewares.AccessControlAllowOriginHeader))
+		assert.Equal(
+			t,
+			"https://example.com",
+			w.Header().Get(middlewares.AccessControlAllowOriginHeader),
+		)
 	})
 
 	t.Run("with_allow_credentials", func(t *testing.T) {
@@ -69,14 +73,22 @@ func TestCorsMiddleware(t *testing.T) { //nolint:funlen
 		allowedHeaders := []string{"X-Custom-Header", "Content-Type"}
 		middleware := middlewares.CorsMiddleware(middlewares.WithAllowHeaders(allowedHeaders))
 
-		req := httptest.NewRequest(http.MethodOptions, "/test", nil) // OPTIONS request often checks headers
+		req := httptest.NewRequest(
+			http.MethodOptions,
+			"/test",
+			nil,
+		) // OPTIONS request often checks headers
 		w := httptest.NewRecorder()
 		ctx := &httpfx.Context{Request: req, ResponseWriter: w, Results: httpfx.Results{}}
 
 		result := middleware(ctx)
 		require.NotNil(t, result)
 
-		assert.Equal(t, strings.Join(allowedHeaders, ", "), w.Header().Get(middlewares.AccessControlAllowHeadersHeader))
+		assert.Equal(
+			t,
+			strings.Join(allowedHeaders, ", "),
+			w.Header().Get(middlewares.AccessControlAllowHeadersHeader),
+		)
 	})
 
 	t.Run("with_allow_methods", func(t *testing.T) {
@@ -85,14 +97,22 @@ func TestCorsMiddleware(t *testing.T) { //nolint:funlen
 		allowedMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut}
 		middleware := middlewares.CorsMiddleware(middlewares.WithAllowMethods(allowedMethods))
 
-		req := httptest.NewRequest(http.MethodOptions, "/test", nil) // OPTIONS request often checks methods
+		req := httptest.NewRequest(
+			http.MethodOptions,
+			"/test",
+			nil,
+		) // OPTIONS request often checks methods
 		w := httptest.NewRecorder()
 		ctx := &httpfx.Context{Request: req, ResponseWriter: w, Results: httpfx.Results{}}
 
 		result := middleware(ctx)
 		require.NotNil(t, result)
 
-		assert.Equal(t, strings.Join(allowedMethods, ", "), w.Header().Get(middlewares.AccessControlAllowMethodsHeader))
+		assert.Equal(
+			t,
+			strings.Join(allowedMethods, ", "),
+			w.Header().Get(middlewares.AccessControlAllowMethodsHeader),
+		)
 	})
 
 	t.Run("with_multiple_options", func(t *testing.T) {
@@ -118,8 +138,16 @@ func TestCorsMiddleware(t *testing.T) { //nolint:funlen
 
 		assert.Equal(t, allowedOrigin, w.Header().Get(middlewares.AccessControlAllowOriginHeader))
 		assert.Equal(t, "true", w.Header().Get(middlewares.AccessControlAllowCredentialsHeader))
-		assert.Equal(t, strings.Join(allowedHeaders, ", "), w.Header().Get(middlewares.AccessControlAllowHeadersHeader))
-		assert.Equal(t, strings.Join(allowedMethods, ", "), w.Header().Get(middlewares.AccessControlAllowMethodsHeader))
+		assert.Equal(
+			t,
+			strings.Join(allowedHeaders, ", "),
+			w.Header().Get(middlewares.AccessControlAllowHeadersHeader),
+		)
+		assert.Equal(
+			t,
+			strings.Join(allowedMethods, ", "),
+			w.Header().Get(middlewares.AccessControlAllowMethodsHeader),
+		)
 	})
 
 	// Original test cases, adapted for default behavior check

@@ -48,7 +48,14 @@ func TestIsValidMethod(t *testing.T) {
 
 			result := uris.IsValidMethod(tt.method)
 
-			assert.Equal(t, tt.expected, result, "IsValidMethod() = %v, want %v", result, tt.expected)
+			assert.Equal(
+				t,
+				tt.expected,
+				result,
+				"IsValidMethod() = %v, want %v",
+				result,
+				tt.expected,
+			)
 		})
 	}
 }

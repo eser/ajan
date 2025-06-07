@@ -4,52 +4,35 @@ import (
 	"testing"
 
 	"github.com/eser/ajan/httpfx"
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 func TestNewMetrics(t *testing.T) {
 	t.Parallel()
 
-	registry := prometheus.NewRegistry()
-	provider := &mockMetricsProvider{registry: registry}
-
+	provider := newMockMetricsProvider()
 	metrics := httpfx.NewMetrics(provider)
 	require.NotNil(t, metrics)
 
-	// Increment the counter to ensure it's registered
-	metrics.RequestsTotal.WithLabelValues("GET", "/test", "200").Inc()
+	// Test that we can use the counter (basic smoke test)
+	ctx := t.Context()
+	attrs := metric.WithAttributes(
+		attribute.String("method", "GET"),
+		attribute.String("endpoint", "/test"),
+		attribute.String("status", "200"),
+	)
 
-	// Verify that metrics were registered
-	metricFamilies, err := registry.Gather()
-	require.NoError(t, err)
-
-	// Find our http_requests_total metric
-	var foundMetric *dto.MetricFamily
-
-	for _, mf := range metricFamilies {
-		if mf.GetName() == "http_requests_total" {
-			foundMetric = mf
-
-			break
-		}
-	}
-
-	require.NotNil(t, foundMetric, "http_requests_total metric not found")
-	assert.Equal(t, dto.MetricType_COUNTER, foundMetric.GetType())
-
-	// Verify the metric has the expected labels
-	expectedLabels := []string{"method", "endpoint", "status"}
-	metric := foundMetric.GetMetric()[0]
-
-	for _, label := range metric.GetLabel() {
-		assert.Contains(t, expectedLabels, label.GetName())
-	}
+	// This should not panic
+	metrics.RequestsTotal.Add(ctx, 1, attrs)
 }
 
-func TestMetrics_RequestsTotal(t *testing.T) {
+func TestMetrics_RequestsTotal(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
 	tests := []struct {
@@ -57,24 +40,28 @@ func TestMetrics_RequestsTotal(t *testing.T) {
 		method   string
 		endpoint string
 		status   string
+		count    int64
 	}{
 		{
 			name:     "successful_get",
 			method:   "GET",
 			endpoint: "/test",
 			status:   "200",
+			count:    1,
 		},
 		{
 			name:     "not_found",
 			method:   "GET",
 			endpoint: "/missing",
 			status:   "404",
+			count:    2,
 		},
 		{
 			name:     "bad_request",
 			method:   "POST",
 			endpoint: "/api",
 			status:   "400",
+			count:    3,
 		},
 	}
 
@@ -82,22 +69,47 @@ func TestMetrics_RequestsTotal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create a new registry and metrics for each test case
-			registry := prometheus.NewRegistry()
-			provider := &mockMetricsProvider{registry: registry}
+			// Create a new metrics provider with a manual reader for each test case
+			reader := sdkmetric.NewManualReader()
+			meterProvider := sdkmetric.NewMeterProvider(
+				sdkmetric.WithResource(resource.Default()),
+				sdkmetric.WithReader(reader),
+			)
+
+			provider := &mockMetricsProvider{meterProvider: meterProvider}
 			metrics := httpfx.NewMetrics(provider)
 			require.NotNil(t, metrics)
 
-			// Increment the counter
-			metrics.RequestsTotal.WithLabelValues(tt.method, tt.endpoint, tt.status).Inc()
+			// Add to the counter
+			ctx := t.Context()
+			attrs := metric.WithAttributes(
+				attribute.String("method", tt.method),
+				attribute.String("endpoint", tt.endpoint),
+				attribute.String("status", tt.status),
+			)
 
-			// Get the metric value
-			metric := &dto.Metric{} //nolint:exhaustruct
-			err := metrics.RequestsTotal.WithLabelValues(tt.method, tt.endpoint, tt.status).Write(metric)
+			metrics.RequestsTotal.Add(ctx, tt.count, attrs)
+
+			// Collect metrics to verify
+			var rm metricdata.ResourceMetrics
+			err := reader.Collect(ctx, &rm)
 			require.NoError(t, err)
 
-			// Verify the counter value
-			assert.InDelta(t, float64(1), metric.GetCounter().GetValue(), 0.0001)
+			// Verify we have scope metrics
+			require.Len(t, rm.ScopeMetrics, 1)
+
+			// Verify we have the counter metric
+			require.Len(t, rm.ScopeMetrics[0].Metrics, 1)
+			metric := rm.ScopeMetrics[0].Metrics[0]
+
+			assert.Equal(t, "http_requests_total", metric.Name)
+			assert.Equal(t, "Total number of HTTP requests", metric.Description)
+
+			// Verify the data points
+			sumData, ok := metric.Data.(metricdata.Sum[int64])
+			require.True(t, ok, "expected Sum[int64] metric data")
+			assert.Len(t, sumData.DataPoints, 1)
+			assert.Equal(t, tt.count, sumData.DataPoints[0].Value)
 		})
 	}
 }

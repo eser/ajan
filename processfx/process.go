@@ -42,7 +42,12 @@ func New(baseCtx context.Context, logger *logfx.Logger) *Process {
 	go func() {
 		sig := <-sigChan
 		if logger != nil {
-			logger.InfoContext(ctx, "Received OS signal, initiating shutdown...", "signal", sig.String())
+			logger.InfoContext(
+				ctx,
+				"Received OS signal, initiating shutdown...",
+				"signal",
+				sig.String(),
+			)
 		}
 
 		cancel()
@@ -126,7 +131,10 @@ func (p *Process) Shutdown() {
 
 	case <-shutdownCtx.Done():
 		if p.Logger != nil {
-			p.Logger.WarnContext(p.BaseCtx, "Graceful shutdown timed out. Some services may not have stopped.")
+			p.Logger.WarnContext(
+				p.BaseCtx,
+				"Graceful shutdown timed out. Some services may not have stopped.",
+			)
 		}
 	}
 

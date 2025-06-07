@@ -30,10 +30,22 @@ const (
 )
 
 var (
-	ErrZeroLengthString        = results.Define("ERRBCE0001", "zero length string")        //nolint:gochecknoglobals
-	ErrKeyNameNotFound         = results.Define("ERRBCE0002", "key name not found")        //nolint:gochecknoglobals
-	ErrUnexpectedChar          = results.Define("ERRBCE0003", "unexpected character")      //nolint:gochecknoglobals
-	ErrUnterminatedQuotedValue = results.Define("ERRBCE0004", "unterminated quoted value") //nolint:gochecknoglobals
+	ErrZeroLengthString = results.Define( //nolint:gochecknoglobals
+		"ERRBCE0001",
+		"zero length string",
+	)
+	ErrKeyNameNotFound = results.Define( //nolint:gochecknoglobals
+		"ERRBCE0002",
+		"key name not found",
+	)
+	ErrUnexpectedChar = results.Define( //nolint:gochecknoglobals
+		"ERRBCE0003",
+		"unexpected character",
+	)
+	ErrUnterminatedQuotedValue = results.Define( //nolint:gochecknoglobals
+		"ERRBCE0004",
+		"unterminated quoted value",
+	)
 )
 
 func ParseBytes(data []byte, keyCaseInsensitive bool, out *map[string]any) error {
@@ -95,7 +107,8 @@ func getStatementStart(src []byte) []byte {
 func extractKeyName(src []byte) (string, int, error) {
 	for i, char := range src {
 		rchar := rune(char)
-		if !unicode.IsSpace(rchar) && (unicode.IsLetter(rchar) || unicode.IsNumber(rchar) || char == '_' || char == '.') {
+		if !unicode.IsSpace(rchar) &&
+			(unicode.IsLetter(rchar) || unicode.IsNumber(rchar) || char == '_' || char == '.') {
 			continue
 		}
 

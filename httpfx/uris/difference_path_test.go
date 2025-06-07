@@ -18,26 +18,47 @@ func TestDifferencePath(t *testing.T) { //nolint:funlen
 	}{
 		{
 			name: "Both patterns have multi segments",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Multi: true}, {Multi: true}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Multi: true}, {Multi: true}}}, //nolint:exhaustruct
+			p1: &uris.Pattern{Segments: []uris.Segment{ //nolint:exhaustruct
+				{Multi: true}, //nolint:exhaustruct
+				{Multi: true}, //nolint:exhaustruct
+			}},
+			p2: &uris.Pattern{Segments: []uris.Segment{ //nolint:exhaustruct
+				{Multi: true}, //nolint:exhaustruct
+				{Multi: true}, //nolint:exhaustruct
+			}},
 			want: "/",
 		},
 		{
 			name: "p1 has multi, p2 doesn't, s2 ends in /",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Multi: true, Str: "foo"}, {Multi: true}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "bar"}, {Str: "/"}}},                 //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{
+					{Multi: true, Str: "foo"}, //nolint:exhaustruct
+					{Multi: true},             //nolint:exhaustruct
+				},
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "bar"}, {Str: "/"}}, //nolint:exhaustruct
+			},
 			want: "/",
 		},
 		{
 			name: "p1 has multi, p2 doesn't, s2 doesn't end in /",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Multi: true}, {Multi: true}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "bar"}, {Str: "baz"}}},   //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Multi: true}, {Multi: true}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "bar"}, {Str: "baz"}}, //nolint:exhaustruct
+			},
 			want: "/",
 		},
 		{
 			name: "p2 has multi, p1 doesn't",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}},   //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Multi: true}, {Multi: true}}}, //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Multi: true}, {Multi: true}}, //nolint:exhaustruct
+			},
 			want: "/foo/bar",
 		},
 		{
@@ -90,26 +111,50 @@ func TestDifferencePath(t *testing.T) { //nolint:funlen
 		},
 		{
 			name: "Both are literals, same",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}}, //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
 			want: "/foo/bar",
 		},
 		{
 			name: "Both are literals, different (should panic)",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "baz"}, {Str: "qux"}}}, //nolint:exhaustruct
-			want: "",                                                                  // This test should panic
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "baz"}, {Str: "qux"}}, //nolint:exhaustruct
+			},
+			want: "", // This test should panic
 		},
 		{
 			name: "p1 is longer than p2",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}, {Str: "baz"}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}},               //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{
+					{Str: "foo"}, //nolint:exhaustruct
+					{Str: "bar"}, //nolint:exhaustruct
+					{Str: "baz"}, //nolint:exhaustruct
+				},
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
 			want: "/foo/bar/baz",
 		},
 		{
 			name: "p2 is longer than p1",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}},               //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}, {Str: "baz"}}}, //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "foo"}, {Str: "bar"}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{
+					{Str: "foo"}, //nolint:exhaustruct
+					{Str: "bar"}, //nolint:exhaustruct
+					{Str: "baz"}, //nolint:exhaustruct
+				},
+			},
 			want: "/foo/bar/baz",
 		},
 		{
@@ -120,8 +165,12 @@ func TestDifferencePath(t *testing.T) { //nolint:funlen
 		},
 		{
 			name: "p1 has multi and it is only slah, and p2 is only slash",
-			p1:   &uris.Pattern{Segments: []uris.Segment{{Str: "/", Multi: true}}}, //nolint:exhaustruct
-			p2:   &uris.Pattern{Segments: []uris.Segment{{Str: "/"}}},              //nolint:exhaustruct
+			p1: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "/", Multi: true}}, //nolint:exhaustruct
+			},
+			p2: &uris.Pattern{ //nolint:exhaustruct
+				Segments: []uris.Segment{{Str: "/"}}, //nolint:exhaustruct
+			},
 			want: "//",
 		},
 	}

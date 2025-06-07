@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/eser/ajan/logfx"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
@@ -37,14 +39,18 @@ func MetricsInterceptor(metrics *Metrics) grpc.UnaryServerInterceptor {
 		duration := time.Since(startTime)
 		st, _ := status.FromError(err)
 
-		metrics.RequestsTotal.WithLabelValues(
-			info.FullMethod,
-			st.Code().String(),
-		).Inc()
+		// Record metrics with attributes
+		attrs := metric.WithAttributes(
+			attribute.String("method", info.FullMethod),
+			attribute.String("code", st.Code().String()),
+		)
 
-		metrics.RequestDuration.WithLabelValues(
-			info.FullMethod,
-		).Observe(duration.Seconds())
+		metrics.RequestsTotal.Add(ctx, 1, attrs)
+
+		durationAttrs := metric.WithAttributes(
+			attribute.String("method", info.FullMethod),
+		)
+		metrics.RequestDuration.Record(ctx, duration.Seconds(), durationAttrs)
 
 		return resp, err
 	}

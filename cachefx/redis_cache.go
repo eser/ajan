@@ -37,7 +37,12 @@ func (cache *RedisCache) GetDialect() Dialect {
 	return cache.dialect
 }
 
-func (cache *RedisCache) Set(ctx context.Context, key string, value any, expiration time.Duration) error {
+func (cache *RedisCache) Set(
+	ctx context.Context,
+	key string,
+	value any,
+	expiration time.Duration,
+) error {
 	err := cache.client.Set(ctx, key, value, expiration).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set cache key: %w", err)

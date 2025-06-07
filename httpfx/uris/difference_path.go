@@ -15,7 +15,7 @@ import (
 
 // DifferencePath returns a path that p1 matches and p2 doesn't.
 // It assumes there is such a path.
-func DifferencePath(p1, p2 *Pattern) string { //nolint:gocognit,cyclop
+func DifferencePath(p1, p2 *Pattern) string { //nolint:cyclop,gocognit
 	var b strings.Builder
 
 	var segs1, segs2 []Segment

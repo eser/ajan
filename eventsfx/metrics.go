@@ -1,25 +1,26 @@
 package eventsfx
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Metrics struct {
 	mp MetricsProvider
 
-	RequestsTotal *prometheus.CounterVec
+	RequestsTotal metric.Int64Counter
 }
 
-func NewMetrics(mp MetricsProvider) *Metrics { //nolint:varnamelen
-	requestsTotal := prometheus.NewCounterVec(
-		prometheus.CounterOpts{ //nolint:exhaustruct
-			Name: "event_dispatches_total",
-			Help: "Total number of event dispatches",
-		},
-		[]string{"event"},
-	)
+func NewMetrics(mp MetricsProvider) *Metrics {
+	meter := mp.GetMeterProvider().Meter("github.com/eser/ajan/eventsfx")
 
-	mp.GetRegistry().MustRegister(requestsTotal)
+	requestsTotal, err := meter.Int64Counter(
+		"event_dispatches_total",
+		metric.WithDescription("Total number of event dispatches"),
+		metric.WithUnit("{dispatch}"),
+	)
+	if err != nil {
+		panic(err) // Handle error appropriately in your application
+	}
 
 	return &Metrics{
 		mp:            mp,

@@ -49,13 +49,21 @@ func TestLoad(t *testing.T) {
 		config := TestConfigNested{} //nolint:exhaustruct
 
 		cl := configfx.NewConfigManager()
-		err := cl.Load(&config, cl.FromJsonFile("testdata/config.json"), cl.FromEnvFile("testdata/.env", true))
+		err := cl.Load(
+			&config,
+			cl.FromJsonFile("testdata/config.json"),
+			cl.FromEnvFile("testdata/.env", true),
+		)
 
 		if assert.NoError(t, err) {
 			assert.Equal(t, "localhost", config.Host)
 			assert.Equal(t, 8081, config.Port)
 			assert.Equal(t, uint16(20), config.MaxRetry)
-			assert.Equal(t, map[string]string{"key": "value", "key2": "value2", "key3": "value3"}, config.Dictionary)
+			assert.Equal(
+				t,
+				map[string]string{"key": "value", "key2": "value2", "key3": "value3"},
+				config.Dictionary,
+			)
 			// assert.Equal(t, []TestConfigNestedKV{{Name: "eser"}}, config.Array)
 		}
 	})

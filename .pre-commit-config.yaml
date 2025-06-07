@@ -58,9 +58,9 @@ repos:
         files: '[^a-z0-9_\.\/\[\]@]'
         exclude: |
           (?x)^(
+            .cursor/.*|
             .github/.*|
             .pre-commit-config.yaml|
-            .tool-versions|
             LICENSE|
             Makefile|
             README.md|
@@ -77,6 +77,7 @@ repos:
             metricsfx/README.md|
             queuefx/README.md|
             results/README.md|
+            types/README.md|
             sampleapp/Dockerfile
           )$
       - id: run-tests

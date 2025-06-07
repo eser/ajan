@@ -42,7 +42,12 @@ func (registry *Registry) GetNamed(name string) Cache {
 	return registry.caches[name]
 }
 
-func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {
+func (registry *Registry) AddConnection(
+	ctx context.Context,
+	name string,
+	provider string,
+	dsn string,
+) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
 		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)

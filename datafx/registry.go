@@ -39,15 +39,20 @@ func NewRegistry(logger *logfx.Logger) *Registry {
 	}
 }
 
-func (registry *Registry) GetDefault() Datasource { //nolint:ireturn
+func (registry *Registry) GetDefault() Datasource {
 	return registry.datasources[DefaultDatasource]
 }
 
-func (registry *Registry) GetNamed(name string) Datasource { //nolint:ireturn
+func (registry *Registry) GetNamed(name string) Datasource {
 	return registry.datasources[name]
 }
 
-func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {
+func (registry *Registry) AddConnection(
+	ctx context.Context,
+	name string,
+	provider string,
+	dsn string,
+) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
 		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)
@@ -66,7 +71,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 	// if dialect == DialectPostgresPgx {
 	// 	db, err = NewPgxDatasource(ctx, dialect, dsn)
 	// } else {
-	db, err := NewSqlDatasource(ctx, dialect, dsn) //nolint:varnamelen
+	db, err := NewSqlDatasource(ctx, dialect, dsn)
 	// }
 	if err != nil {
 		registry.logger.Error(

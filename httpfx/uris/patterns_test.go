@@ -182,7 +182,7 @@ func TestParsePattern(t *testing.T) { //nolint:funlen
 			assert.Equal(t, tt.wantHost, pattern.Host)
 			assert.Equal(t, tt.wantPath, pattern.Path)
 
-			require.Equal(t, len(tt.wantSegments), len(pattern.Segments))
+			require.Len(t, pattern.Segments, len(tt.wantSegments))
 
 			for i, want := range tt.wantSegments {
 				assert.Equal(t, want.str, pattern.Segments[i].Str)

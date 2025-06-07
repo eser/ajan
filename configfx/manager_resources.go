@@ -8,7 +8,10 @@ import (
 	"github.com/eser/ajan/lib"
 )
 
-func (cl *ConfigManager) FromEnvFileDirect(filename string, keyCaseInsensitive bool) ConfigResource {
+func (cl *ConfigManager) FromEnvFileDirect(
+	filename string,
+	keyCaseInsensitive bool,
+) ConfigResource {
 	return func(target *map[string]any) error {
 		err := envparser.TryParseFiles(target, keyCaseInsensitive, filename)
 		if err != nil {

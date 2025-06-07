@@ -20,7 +20,7 @@ func NewConfigManager() *ConfigManager {
 }
 
 func (cl *ConfigManager) LoadMeta(i any) (ConfigItemMeta, error) {
-	r := reflect.ValueOf(i).Elem() //nolint:varnamelen
+	r := reflect.ValueOf(i).Elem()
 
 	children, err := reflectMeta(r)
 	if err != nil {
@@ -81,7 +81,7 @@ func (cl *ConfigManager) LoadDefaults(i any) error {
 	)
 }
 
-func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) { //nolint:varnamelen
+func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) {
 	result := make([]ConfigItemMeta, 0)
 
 	if r.Kind() != reflect.Struct {
@@ -139,7 +139,11 @@ func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) { //nolint:varnamele
 	return result, nil
 }
 
-func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //nolint:funlen,cyclop,gocognit
+func reflectSet( //nolint:cyclop,gocognit,funlen
+	meta ConfigItemMeta,
+	prefix string,
+	target *map[string]any,
+) {
 	for _, child := range meta.Children {
 		key := prefix + child.Name
 
@@ -227,7 +231,11 @@ func reflectSet(meta ConfigItemMeta, prefix string, target *map[string]any) { //
 	}
 }
 
-func reflectSetField(field reflect.Value, fieldType reflect.Type, value string) { //nolint:funlen,cyclop
+func reflectSetField( //nolint:cyclop,funlen
+	field reflect.Value,
+	fieldType reflect.Type,
+	value string,
+) {
 	var finalValue reflect.Value
 
 	switch fieldType {

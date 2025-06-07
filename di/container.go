@@ -53,7 +53,13 @@ func (c *Container) SetValueFor(interfaceType reflect.Type, value any) {
 	reflectionType := reflectionValue.Type()
 
 	if !reflectionType.AssignableTo(interfaceType) {
-		panic(fmt.Sprintf("Implementation type %q is not assignable to %q", reflectionType, interfaceType))
+		panic(
+			fmt.Sprintf(
+				"Implementation type %q is not assignable to %q",
+				reflectionType,
+				interfaceType,
+			),
+		)
 	}
 
 	c.dependencies[interfaceType] = DependencyTarget{
@@ -138,7 +144,7 @@ func (c *Container) MustResolve(t reflect.Type) DependencyTarget {
 	return value
 }
 
-func (c *Container) CreateLister(t reflect.Type) func() []DependencyTarget { //nolint:varnamelen
+func (c *Container) CreateLister(t reflect.Type) func() []DependencyTarget {
 	if c.isSealed {
 		panic("Container is sealed")
 	}

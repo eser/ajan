@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var errTest = errors.New("test error")
+
 type mockError struct {
 	msg   string
 	stack []uintptr
@@ -87,24 +89,42 @@ func TestReplacerGenerator(t *testing.T) { //nolint:funlen
 			name:       "PrettyMode=false, Key=slog.TimeKey, Value=error",
 			prettyMode: false,
 			groups:     make([]string, 0),
-			attr:       slog.Attr{Key: slog.TimeKey, Value: slog.AnyValue(errors.New("test error"))}, //nolint:err113
-			expected:   slog.Attr{Key: slog.TimeKey, Value: slog.GroupValue(slog.String("msg", "test error"))},
+			attr: slog.Attr{
+				Key:   slog.TimeKey,
+				Value: slog.AnyValue(errTest),
+			},
+			expected: slog.Attr{
+				Key:   slog.TimeKey,
+				Value: slog.GroupValue(slog.String("msg", "test error")),
+			},
 		},
 		{
 			name:       "PrettyMode=false, Key=slog.TimeKey, Value=error with StackTracer",
 			prettyMode: false,
 			groups:     make([]string, 0),
-			attr:       slog.Attr{Key: slog.TimeKey, Value: slog.AnyValue(errors.New("test error"))}, //nolint:err113
-			expected:   slog.Attr{Key: slog.TimeKey, Value: slog.GroupValue(slog.String("msg", "test error"))},
+			attr: slog.Attr{
+				Key:   slog.TimeKey,
+				Value: slog.AnyValue(errTest),
+			},
+			expected: slog.Attr{
+				Key:   slog.TimeKey,
+				Value: slog.GroupValue(slog.String("msg", "test error")),
+			},
 		},
 		{
 			name:       "PrettyMode=false, Key=slog.TimeKey, Value=error with mockError",
 			prettyMode: false,
 			groups:     make([]string, 0),
-			attr:       slog.Attr{Key: slog.TimeKey, Value: slog.AnyValue(&mockError{msg: "test error"})}, //nolint:exhaustruct
-			expected: slog.Attr{
+			attr: slog.Attr{
 				Key:   slog.TimeKey,
-				Value: slog.GroupValue(slog.String("msg", "test error"), slog.Any("trace", make([]string, 0))),
+				Value: slog.AnyValue(&mockError{msg: "test error"}), //nolint:exhaustruct
+			},
+			expected: slog.Attr{
+				Key: slog.TimeKey,
+				Value: slog.GroupValue(
+					slog.String("msg", "test error"),
+					slog.Any("trace", make([]string, 0)),
+				),
 			},
 		},
 	}

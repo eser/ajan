@@ -113,7 +113,11 @@ func (m *Message) Nack(requeue bool) error {
 }
 
 // The consumer will automatically reconnect on connection failures.
-func (broker *AmqpBroker) Consume(ctx context.Context, queueName string, config ConsumerConfig) (<-chan Message, <-chan error) { //nolint:gocognit,cyclop,funlen,lll
+func (broker *AmqpBroker) Consume( //nolint:cyclop,gocognit,funlen
+	ctx context.Context,
+	queueName string,
+	config ConsumerConfig,
+) (<-chan Message, <-chan error) {
 	messages := make(chan Message)
 	errors := make(chan error)
 

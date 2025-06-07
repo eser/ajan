@@ -41,7 +41,12 @@ func (registry *Registry) GetNamed(name string) Broker {
 	return registry.brokers[name]
 }
 
-func (registry *Registry) AddConnection(ctx context.Context, name string, provider string, dsn string) error {
+func (registry *Registry) AddConnection(
+	ctx context.Context,
+	name string,
+	provider string,
+	dsn string,
+) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
 		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)
@@ -53,7 +58,7 @@ func (registry *Registry) AddConnection(ctx context.Context, name string, provid
 		slog.String("dialect", string(dialect)),
 	)
 
-	db, err := NewAmqpBroker(ctx, dialect, dsn) //nolint:varnamelen
+	db, err := NewAmqpBroker(ctx, dialect, dsn)
 	if err != nil {
 		registry.logger.Error(
 			"failed to open broker connection",

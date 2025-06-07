@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/eser/ajan/cachefx"
 	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +22,19 @@ func setupTestRegistry(t *testing.T) *cachefx.Registry {
 	return cachefx.NewRegistry(logger)
 }
 
+func setupTestRedisServer(t *testing.T) *miniredis.Miniredis {
+	t.Helper()
+
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		mr.Close()
+	})
+
+	return mr
+}
+
 func TestNewRegistry(t *testing.T) {
 	t.Parallel()
 
@@ -32,54 +46,98 @@ func TestRegistry_GetDefault(t *testing.T) {
 	t.Parallel()
 
 	registry := setupTestRegistry(t)
+	mr := setupTestRedisServer(t)
+
+	// Initially no default cache
 	assert.Nil(t, registry.GetDefault())
 
 	// Add a default cache
-	err := registry.AddConnection(t.Context(), cachefx.DefaultCache, "redis", "redis://localhost:6379")
-	require.Error(t, err) // Expected error since Redis is not running
+	err := registry.AddConnection(
+		t.Context(),
+		cachefx.DefaultCache,
+		"redis",
+		"redis://"+mr.Addr(),
+	)
+	require.NoError(t, err) // Should succeed with miniredis
 
-	// Even with error, default should still be nil
-	assert.Nil(t, registry.GetDefault())
+	// Now default should exist
+	assert.NotNil(t, registry.GetDefault())
+	assert.Equal(t, cachefx.DialectRedis, registry.GetDefault().GetDialect())
 }
 
 func TestRegistry_GetNamed(t *testing.T) {
 	t.Parallel()
 
 	registry := setupTestRegistry(t)
+	mr := setupTestRedisServer(t)
 
 	// Test non-existent cache
 	assert.Nil(t, registry.GetNamed("non-existent"))
 
 	// Add a named cache
-	err := registry.AddConnection(t.Context(), "test-cache", "redis", "redis://localhost:6379")
-	require.Error(t, err) // Expected error since Redis is not running
+	err := registry.AddConnection(t.Context(), "test-cache", "redis", "redis://"+mr.Addr())
+	require.NoError(t, err) // Should succeed with miniredis
 
-	// Even with error, named cache should still be nil
-	assert.Nil(t, registry.GetNamed("test-cache"))
+	// Named cache should now exist
+	namedCache := registry.GetNamed("test-cache")
+	assert.NotNil(t, namedCache)
+	assert.Equal(t, cachefx.DialectRedis, namedCache.GetDialect())
 }
 
 func TestRegistry_LoadFromConfig(t *testing.T) {
 	t.Parallel()
 
 	registry := setupTestRegistry(t)
+	mr1 := setupTestRedisServer(t)
+	mr2 := setupTestRedisServer(t)
 
 	config := &cachefx.Config{
 		Caches: map[string]cachefx.ConfigCache{
 			"default": {
 				Provider: "redis",
-				DSN:      "redis://localhost:6379",
+				DSN:      "redis://" + mr1.Addr(),
 			},
 			"secondary": {
 				Provider: "redis",
-				DSN:      "redis://localhost:6380",
+				DSN:      "redis://" + mr2.Addr(),
 			},
 		},
 	}
 
 	err := registry.LoadFromConfig(t.Context(), config)
-	require.Error(t, err) // Expected error since Redis is not running
+	require.NoError(t, err) // Should succeed with miniredis
 
-	// Verify no caches were added due to connection errors
-	assert.Nil(t, registry.GetDefault())
-	assert.Nil(t, registry.GetNamed("secondary"))
+	// Verify caches were added successfully
+	assert.NotNil(t, registry.GetDefault())
+	assert.NotNil(t, registry.GetNamed("secondary"))
+	assert.Equal(t, cachefx.DialectRedis, registry.GetDefault().GetDialect())
+	assert.Equal(t, cachefx.DialectRedis, registry.GetNamed("secondary").GetDialect())
+}
+
+func TestRegistry_AddConnection_InvalidDSN(t *testing.T) {
+	t.Parallel()
+
+	registry := setupTestRegistry(t)
+
+	// Test with invalid DSN
+	err := registry.AddConnection(t.Context(), "invalid", "redis", "invalid-dsn")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to add connection")
+
+	// Cache should not be added
+	assert.Nil(t, registry.GetNamed("invalid"))
+}
+
+func TestRegistry_AddConnection_ConnectionFailure(t *testing.T) {
+	t.Parallel()
+
+	registry := setupTestRegistry(t)
+
+	// Test with valid DSN but unreachable server
+	err := registry.AddConnection(t.Context(), "unreachable", "redis", "redis://localhost:9999")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to add connection")
+
+	// Cache should not be added
+	assert.Nil(t, registry.GetNamed("unreachable"))
 }

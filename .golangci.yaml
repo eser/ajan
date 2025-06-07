@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 3m
   issues-exit-code: 1
@@ -7,95 +9,80 @@ run:
 
 output:
   formats:
-    - format: colored-line-number
-  sort-results: true
+    tab:
+      print-linter-name: true
+      colors: true
+  sort-order:
+    - file
+    - severity
+    - linter
 
 linters:
-  enable-all: true
+  default: all
   disable:
     - godox
-    - stylecheck
-    - tenv
+    - tagliatelle
     - varnamelen
     - ireturn
 
-linters-settings:
-  depguard:
-    rules:
-      main:
-        deny:
-          - pkg: io/ioutil
-            desc: The io/ioutil package has been deprecated, see https://go.dev/doc/go1.16#ioutil
-        allow:
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: io/ioutil
+              desc: The io/ioutil package has been deprecated, see https://go.dev/doc/go1.16#ioutil
+          allow:
           - $gostd
+          - github.com/alicebob/miniredis/v2
+          - github.com/eser/ajan
+          - github.com/getkin/kin-openapi/openapi3
+          - github.com/go-faker/faker/v4
+          - github.com/golang-jwt/jwt/v5
+          - github.com/oklog/ulid/v2
+          - github.com/rabbitmq/amqp091-go
+          - github.com/redis/go-redis/v9
+          - github.com/stretchr/testify
+          - go.opentelemetry.io/otel
+          - go.opentelemetry.io/contrib
           - golang.org/x/net/http/httpguts
           - google.golang.org/grpc
           - google.golang.org/grpc/reflection
           - google.golang.org/grpc/status
-          - github.com/eser/ajan
-          - github.com/oklog/ulid/v2
-          - github.com/stretchr/testify
-          - github.com/go-faker/faker/v4
-          - github.com/getkin/kin-openapi/openapi3
-          - github.com/golang-jwt/jwt/v5
-          - github.com/prometheus/client_golang/prometheus
-          - github.com/prometheus/client_model/go
-          - github.com/rabbitmq/amqp091-go
-          - github.com/redis/go-redis/v9
-          - github.com/alicebob/miniredis/v2
-  revive:
-    # enable-all-rules: true
-    ignore-generated-header: true
-    severity: warning
-    rules:
-      - name: var-naming
-        disabled: true
-        arguments: []
-      # - name: exported
-      #   severity: warning
-      # - name: error-return
-      #   severity: warning
-      # - name: error-naming
-      #   severity: warning
-      # - name: if-return
-      #   severity: warning
-      # - name: var-naming
-      #   severity: warning
-      # - name: var-declaration
-      #   severity: warning
-      # - name: receiver-naming
-      #   severity: warning
-      # - name: errorf
-      #   severity: warning
-      # - name: empty-block
-      #   severity: warning
-      # - name: unused-parameter
-      #   severity: warning
-      # - name: unreachable-code
-      #   severity: warning
-      # - name: redefines-builtin-id
-      #   severity: warning
-      # - name: superfluous-else
-      #   severity: warning
-      # - name: unexported-return
-      #   severity: warning
-      # - name: indent-error-flow
-      #   severity: warning
-      # - name: blank-imports
-      #   severity: warning
-      # - name: range
-      #   severity: warning
-      # - name: time-naming
-      #   severity: warning
-      # - name: context-as-argument
-      #   severity: warning
-      # - name: context-keys-type
-      #   severity: warning
-      # - name: indent-error-flow
-      #   severity: warning
+    revive:
+      rules:
+        - name: "var-naming"
+          severity: warning
+          disabled: true
+          arguments:
+            - ["ID", "HTTP", "JSON", "URI", "URL", "SLA", "RFC"] # AllowList
+            - [] # DenyList
+            - - upper-case-const: false
+    varnamelen:
+      ignore-names:
+        - err
+      ignore-decls:
+        - ctx context.Context
+        - t testing.T
+        - i int
+        - n int
+        - const C
+        - T any
+        - w http.ResponseWriter
+        - r *http.Request
+        - w http.ResponseWriter
+  exclusions:
+    paths:
+      - ops
+      - tmp
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
 
 issues:
   fix: true
-  exclude-use-default: false
-  exclude-dirs:
-    - tmp
