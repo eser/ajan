@@ -230,11 +230,11 @@ func (c *RedisConnection) IsStreamingReady() bool {
 
 // Package level registration helper
 
-// RegisterRedisAdapter registers the Redis adapter with a manager.
-func RegisterRedisAdapter(manager *connfx.Manager) error {
+// RegisterRedisAdapter registers the Redis adapter with a registry.
+func RegisterRedisAdapter(registry *connfx.Registry) error {
 	factory := NewRedisConnectionFactory("redis")
 
-	if err := manager.RegisterAdapter(factory); err != nil {
+	if err := registry.RegisterFactory(factory); err != nil {
 		return fmt.Errorf("failed to register adapter (protocol=redis): %w", err)
 	}
 

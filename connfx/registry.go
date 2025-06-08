@@ -20,6 +20,8 @@ var (
 	ErrUnsupportedProtocol      = errors.New("unsupported protocol")
 	ErrFactoryAlreadyRegistered = errors.New("factory already registered")
 	ErrFailedToCloseConnections = errors.New("failed to close connections")
+	ErrProtocolMismatch         = errors.New("protocol mismatch")
+	ErrBehaviorNotSupported     = errors.New("behavior not supported")
 )
 
 const DefaultConnection = "default"

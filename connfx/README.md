@@ -9,7 +9,7 @@
 - **Behavior-Based Design**: Connections are categorized by behavior (stateful, stateless, streaming)
 - **Provider-Defined Behaviors**: Adapters determine their own supported behaviors (no user configuration needed)
 - **Multiple Behaviors per Provider**: Providers like Redis can support multiple behaviors simultaneously
-- **Self-Registering Adapters**: Adapters register themselves with the connection manager
+- **Self-Registering Adapters**: Adapters register themselves with the connection registry
 - **Extensible Architecture**: Easy to add new connection types without modifying core code
 - **Health Checks**: Built-in health monitoring for all connections
 - **Context Support**: Full context.Context support for cancellation and timeouts
@@ -27,7 +27,7 @@
 
 ## Quick Start
 
-### Basic Usage with Adapter Registration
+### Basic Usage with Registry
 
 ```go
 package main
@@ -54,14 +54,14 @@ func main() {
         log.Fatal(err)
     }
 
-    // Initialize connfx
-    connfx.Initialize(logger)
+    // Create connection registry
+    registry := connfx.NewRegistry(logger)
 
     // Register adapters - they define their own behaviors
-    if err := connfx.RegisterAdapter(adapters.NewSQLConnectionFactory("sqlite")); err != nil {
+    if err := adapters.RegisterSQLiteAdapter(registry); err != nil {
         log.Fatal(err)
     }
-    if err := connfx.RegisterAdapter(adapters.NewHTTPConnectionFactory("http")); err != nil {
+    if err := adapters.RegisterHTTPAdapter(registry); err != nil {
         log.Fatal(err)
     }
 
@@ -80,19 +80,19 @@ func main() {
     }
 
     ctx := context.Background()
-    if err := connfx.LoadConfig(ctx, config); err != nil {
+    if err := registry.LoadFromConfig(ctx, config); err != nil {
         log.Fatal(err)
     }
 
     // Use connections
-    dbConn, err := connfx.GetConnection("default")
-    if err != nil {
-        log.Fatal(err)
+    dbConn := registry.GetNamed("default")
+    if dbConn == nil {
+        log.Fatal("Database connection not found")
     }
 
-    apiConn, err := connfx.GetConnection("api")
-    if err != nil {
-        log.Fatal(err)
+    apiConn := registry.GetNamed("api")
+    if apiConn == nil {
+        log.Fatal("API connection not found")
     }
 
     // Check behaviors determined by providers
@@ -116,29 +116,34 @@ func main() {
 }
 ```
 
-### Manager Instance (Recommended for DI)
+### Service Integration Pattern
 
 ```go
 func NewService(logger *logfx.Logger) *Service {
-    manager := connfx.NewManager(logger)
+    registry := connfx.NewRegistry(logger)
 
     // Register required adapters
-    adapters.RegisterSQLiteAdapter(manager)
-    adapters.RegisterHTTPAdapter(manager)
-    adapters.RegisterRedisAdapter(manager) // Supports both stateful + streaming
+    adapters.RegisterSQLiteAdapter(registry)
+    adapters.RegisterHTTPAdapter(registry)
+    adapters.RegisterRedisAdapter(registry) // Supports both stateful + streaming
 
     // Load config
-    manager.LoadFromConfig(ctx, config)
+    registry.LoadFromConfig(ctx, config)
 
     return &Service{
-        connManager: manager,
+        connRegistry: registry,
     }
 }
 
 func (s *Service) DoSomething(ctx context.Context) error {
-    conn, err := s.connManager.GetConnectionByProtocol("primary", "postgres")
-    if err != nil {
-        return err
+    conn := s.connRegistry.GetNamed("primary")
+    if conn == nil {
+        return errors.New("connection not found")
+    }
+
+    // Verify protocol if needed
+    if conn.GetProtocol() != "postgres" {
+        return errors.New("expected postgres connection")
     }
 
     // Use connection...
@@ -190,9 +195,9 @@ func (f *CustomConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBeh
 }
 
 // Register the adapter
-func RegisterCustomAdapter(manager *connfx.Manager) error {
+func RegisterCustomAdapter(registry *connfx.Registry) error {
     factory := &CustomConnectionFactory{}
-    return manager.RegisterAdapter(factory)
+    return registry.RegisterFactory(factory)
 }
 ```
 
@@ -238,54 +243,55 @@ connections:
 
 ## Working with Connections
 
+### Basic Connection Retrieval
+
+```go
+// Get default connection
+defaultConn := registry.GetDefault()
+if defaultConn == nil {
+    return errors.New("default connection not available")
+}
+
+// Get named connection
+dbConn := registry.GetNamed("primary_db")
+if dbConn == nil {
+    return errors.New("database connection not found")
+}
+
+// Check connection properties
+fmt.Printf("Connection: %s, Protocol: %s, Behaviors: %v\n",
+    dbConn.GetName(), dbConn.GetProtocol(), dbConn.GetBehaviors())
+```
+
 ### Filtering by Behavior
 
 ```go
 // Get all stateful connections (databases, Redis for key-value, etc.)
-statefulConns := connfx.Default().GetStatefulConnections()
+statefulConns := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 
 // Get all stateless connections (APIs, etc.)
-statelessConns := connfx.Default().GetStatelessConnections()
+statelessConns := registry.GetByBehavior(connfx.ConnectionBehaviorStateless)
 
 // Get all streaming connections (queues, Redis for pub/sub, etc.)
-streamingConns := connfx.Default().GetStreamingConnections()
+streamingConns := registry.GetByBehavior(connfx.ConnectionBehaviorStreaming)
 
 // Redis appears in both stateful and streaming lists!
+for _, conn := range statefulConns {
+    fmt.Printf("Stateful connection: %s (%s)\n", conn.GetName(), conn.GetProtocol())
+}
 ```
 
 ### Filtering by Protocol
 
 ```go
-// Get all PostgreSQL connections
-postgresConns := connfx.Default().GetConnectionsByProtocol("postgres")
+// Get all Postgres connections
+postgresConns := registry.GetByProtocol("postgres")
 
 // Get all Redis connections (support multiple behaviors)
-redisConns := connfx.Default().GetConnectionsByProtocol("redis")
+redisConns := registry.GetByProtocol("redis")
 for _, conn := range redisConns {
-    fmt.Printf("Redis connection supports: %v\n", conn.GetBehaviors())
-    // Output: Redis connection supports: [stateful streaming]
-}
-```
-
-### Type-Safe Retrieval
-
-```go
-// Get connection and verify protocol
-dbConn, err := connfx.Default().GetConnectionByProtocol("primary", "postgres")
-if err != nil {
-    return err
-}
-
-// Get connection and verify it supports a specific behavior
-cacheConn, err := connfx.Default().GetConnectionByBehavior("cache", connfx.ConnectionBehaviorStateful)
-if err != nil {
-    return err // Will succeed for Redis since it supports stateful
-}
-
-// Redis supports streaming too
-streamConn, err := connfx.Default().GetConnectionByBehavior("cache", connfx.ConnectionBehaviorStreaming)
-if err != nil {
-    return err // Will also succeed for Redis
+    fmt.Printf("Redis connection %s supports: %v\n", conn.GetName(), conn.GetBehaviors())
+    // Output: Redis connection cache supports: [stateful streaming]
 }
 ```
 
@@ -297,9 +303,9 @@ The `GetTypedConnection` generic function provides type-safe extraction of raw c
 import "database/sql"
 
 // Get connection
-conn, err := connfx.GetConnection("database")
-if err != nil {
-    return err
+conn := registry.GetNamed("database")
+if conn == nil {
+    return errors.New("database connection not found")
 }
 
 // Extract typed connection safely
@@ -316,9 +322,9 @@ if err != nil {
 defer rows.Close()
 
 // Works with any connection type
-httpConn, err := connfx.GetConnection("api")
-if err != nil {
-    return err
+httpConn := registry.GetNamed("api")
+if httpConn == nil {
+    return errors.New("API connection not found")
 }
 
 client, err := connfx.GetTypedConnection[*http.Client](httpConn)
@@ -333,17 +339,17 @@ resp, err := client.Get("https://api.example.com/data")
 
 ```go
 // Get and extract in one pattern
-func getDatabase(name string) (*sql.DB, error) {
-    conn, err := connfx.GetConnection(name)
-    if err != nil {
-        return nil, err
+func getDatabase(registry *connfx.Registry, name string) (*sql.DB, error) {
+    conn := registry.GetNamed(name)
+    if conn == nil {
+        return nil, fmt.Errorf("connection %q not found", name)
     }
 
     return connfx.GetTypedConnection[*sql.DB](conn)
 }
 
 // Usage
-db, err := getDatabase("primary")
+db, err := getDatabase(registry, "primary")
 if err != nil {
     return err
 }
@@ -354,16 +360,18 @@ if err != nil {
 
 ```go
 // Check all connections
-statuses := connfx.HealthCheck(ctx)
+statuses := registry.HealthCheck(ctx)
 for name, status := range statuses {
-    conn, _ := connfx.GetConnection(name)
-    fmt.Printf("Connection %s (%s/%v): %s (latency: %v)\n",
-        name, conn.GetProtocol(), conn.GetBehaviors(),
-        status.State, status.Latency)
+    conn := registry.GetNamed(name)
+    if conn != nil {
+        fmt.Printf("Connection %s (%s/%v): %s (latency: %v)\n",
+            name, conn.GetProtocol(), conn.GetBehaviors(),
+            status.State, status.Latency)
+    }
 }
 
 // Check specific connection
-status, err := connfx.Default().HealthCheckNamed(ctx, "primary")
+status, err := registry.HealthCheckNamed(ctx, "primary")
 if err != nil {
     log.Printf("Health check failed: %v", err)
 } else {
@@ -374,17 +382,17 @@ if err != nil {
 ## Available Adapters
 
 ### SQL Databases (Stateful)
-- PostgreSQL: `adapters.RegisterPostgreSQLAdapter(manager)` → `[stateful]`
-- MySQL: `adapters.RegisterMySQLAdapter(manager)` → `[stateful]`
-- SQLite: `adapters.RegisterSQLiteAdapter(manager)` → `[stateful]`
+- Postgres: `adapters.RegisterPostgresAdapter(registry)` → `[stateful]`
+- MySQL: `adapters.RegisterMySQLAdapter(registry)` → `[stateful]`
+- SQLite: `adapters.RegisterSQLiteAdapter(registry)` → `[stateful]`
 
 ### HTTP APIs (Stateless)
-- HTTP: `adapters.RegisterHTTPAdapter(manager)` → `[stateless]`
-- HTTPS: `adapters.RegisterHTTPSAdapter(manager)` → `[stateless]`
-- GraphQL: `adapters.RegisterGraphQLAdapter(manager)` → `[stateless]`
+- HTTP: `adapters.RegisterHTTPAdapter(registry)` → `[stateless]`
+- HTTPS: `adapters.RegisterHTTPSAdapter(registry)` → `[stateless]`
+- GraphQL: `adapters.RegisterGraphQLAdapter(registry)` → `[stateless]`
 
 ### Multiple Behavior Providers
-- Redis: `adapters.RegisterRedisAdapter(manager)` → `[stateful, streaming]`
+- Redis: `adapters.RegisterRedisAdapter(registry)` → `[stateful, streaming]`
 
 ## Integration Examples
 
@@ -392,7 +400,7 @@ if err != nil {
 
 ```go
 // datafx can get SQL connections by behavior
-statefulConns := connfx.GetStatefulConnections()
+statefulConns := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 for _, conn := range statefulConns {
     if conn.GetProtocol() == "postgres" {
         db, err := connfx.GetTypedConnection[*sql.DB](conn)
@@ -409,7 +417,7 @@ for _, conn := range statefulConns {
 
 ```go
 // queuefx can get streaming connections
-streamingConns := connfx.GetStreamingConnections()
+streamingConns := registry.GetByBehavior(connfx.ConnectionBehaviorStreaming)
 for _, conn := range streamingConns {
     switch conn.GetProtocol() {
     case "redis":
@@ -436,9 +444,9 @@ for _, conn := range streamingConns {
 
 ```go
 // Use Redis for both caching (stateful) and pub/sub (streaming)
-redisConn, err := connfx.GetConnection("cache")
-if err != nil {
-    return err
+redisConn := registry.GetNamed("cache")
+if redisConn == nil {
+    return errors.New("cache connection not found")
 }
 
 // Check what behaviors this Redis connection supports
@@ -470,24 +478,81 @@ if hasStreaming(behaviors) {
 }
 ```
 
+## API Reference
+
+### Registry
+
+```go
+type Registry struct {
+    // ... internal fields
+}
+
+// Core methods for connection retrieval
+func (r *Registry) GetDefault() Connection
+func (r *Registry) GetNamed(name string) Connection
+
+// Behavior and protocol filtering
+func (r *Registry) GetByBehavior(behavior ConnectionBehavior) []Connection
+func (r *Registry) GetByProtocol(protocol string) []Connection
+
+// Connection management
+func (r *Registry) AddConnection(ctx context.Context, config ConnectionConfig) error
+func (r *Registry) RemoveConnection(ctx context.Context, name string) error
+func (r *Registry) LoadFromConfig(ctx context.Context, config *Config) error
+
+// Health monitoring
+func (r *Registry) HealthCheck(ctx context.Context) map[string]*HealthStatus
+func (r *Registry) HealthCheckNamed(ctx context.Context, name string) (*HealthStatus, error)
+
+// Administrative methods
+func (r *Registry) ListConnections() []string
+func (r *Registry) ListRegisteredProtocols() []string
+func (r *Registry) Close(ctx context.Context) error
+
+// Adapter registration
+func (r *Registry) RegisterFactory(factory ConnectionFactory) error
+```
+
+### Connection Interface
+
+```go
+type Connection interface {
+    GetName() string
+    GetBehaviors() []ConnectionBehavior
+    GetProtocol() string
+    GetState() ConnectionState
+    HealthCheck(ctx context.Context) *HealthStatus
+    Close(ctx context.Context) error
+    GetRawConnection() any
+}
+```
+
+### Type-Safe Connection Extraction
+
+```go
+func GetTypedConnection[T any](conn Connection) (T, error)
+```
+
 ## Error Handling
 
 ```go
-conn, err := connfx.GetConnection("nonexistent")
-if errors.Is(err, connfx.ErrConnectionNotFound) {
+// Check for nil connections
+conn := registry.GetNamed("nonexistent")
+if conn == nil {
     // Handle missing connection
+    return errors.New("connection not found")
 }
 
 // Adapter registration errors
-err := manager.RegisterAdapter(factory)
+err := registry.RegisterFactory(factory)
 if errors.Is(err, connfx.ErrFactoryAlreadyRegistered) {
     // Handle duplicate registration
 }
 
-// Behavior checking
-_, err = manager.GetConnectionByBehavior("http_conn", connfx.ConnectionBehaviorStateful)
-if err != nil {
-    // HTTP connections don't support stateful behavior
+// Type extraction errors
+db, err := connfx.GetTypedConnection[*sql.DB](conn)
+if errors.Is(err, connfx.ErrInvalidType) {
+    // Handle type mismatch
 }
 ```
 
@@ -496,11 +561,11 @@ if err != nil {
 1. **Register Adapters Early**: Register all needed adapters during application startup
 2. **Let Providers Define Behaviors**: Don't specify behaviors in config - let adapters define them
 3. **Use Behavior Filtering**: Filter connections by behavior for generic operations
-4. **Protocol Validation**: Use protocol-specific getters when you need specific connection types
+4. **Check for Nil**: Always check if `GetNamed()` returns nil before using connections
 5. **Type-Safe Extraction**: Use `GetTypedConnection[T]()` instead of manual type assertions for better error handling
 6. **Multi-Behavior Awareness**: Remember that some providers (like Redis) support multiple behaviors
 7. **Health Monitoring**: Regularly check connection health for monitoring
-8. **Graceful Shutdown**: Call `connfx.Default().Close(ctx)` during shutdown
+8. **Graceful Shutdown**: Call `registry.Close(ctx)` during shutdown
 9. **Configuration**: Use configuration files for connection management
 10. **Adapter Separation**: Keep adapters in separate packages for modularity
 
@@ -512,6 +577,7 @@ if err != nil {
 - **Provider Autonomy**: Adapters define their own supported behaviors
 - **Extensibility**: Anyone can create and register custom adapters with any behavior combination
 - **Non-Opinionated**: Core module doesn't make assumptions about specific technologies
+- **Simplified API**: Focus on essential operations with clear, predictable behavior
 
 ## Thread Safety
 

@@ -17,9 +17,9 @@ SampleApp is a complete example application that demonstrates how to build a pro
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - Docker and Docker Compose (for containerized setup)
-- PostgreSQL database (for database examples)
+- Postgres database (for database examples)
 
 ### Running Locally
 

@@ -264,33 +264,33 @@ func (c *SQLConnection) Stats() sql.DBStats {
 
 // Package level registration helpers
 
-// RegisterPostgreSQLAdapter registers the PostgreSQL adapter with a manager.
-func RegisterPostgreSQLAdapter(manager *connfx.Manager) error {
+// RegisterPostgresAdapter registers the Postgres adapter with a registry.
+func RegisterPostgresAdapter(registry *connfx.Registry) error {
 	factory := NewSQLConnectionFactory("postgres")
 
-	if err := manager.RegisterAdapter(factory); err != nil {
+	if err := registry.RegisterFactory(factory); err != nil {
 		return fmt.Errorf("failed to register adapter (protocol=postgres): %w", err)
 	}
 
 	return nil
 }
 
-// RegisterMySQLAdapter registers the MySQL adapter with a manager.
-func RegisterMySQLAdapter(manager *connfx.Manager) error {
+// RegisterMySQLAdapter registers the MySQL adapter with a registry.
+func RegisterMySQLAdapter(registry *connfx.Registry) error {
 	factory := NewSQLConnectionFactory("mysql")
 
-	if err := manager.RegisterAdapter(factory); err != nil {
+	if err := registry.RegisterFactory(factory); err != nil {
 		return fmt.Errorf("failed to register adapter (protocol=mysql): %w", err)
 	}
 
 	return nil
 }
 
-// RegisterSQLiteAdapter registers the SQLite adapter with a manager.
-func RegisterSQLiteAdapter(manager *connfx.Manager) error {
+// RegisterSQLiteAdapter registers the SQLite adapter with a registry.
+func RegisterSQLiteAdapter(registry *connfx.Registry) error {
 	factory := NewSQLConnectionFactory("sqlite")
 
-	if err := manager.RegisterAdapter(factory); err != nil {
+	if err := registry.RegisterFactory(factory); err != nil {
 		return fmt.Errorf("failed to register adapter (protocol=sqlite): %w", err)
 	}
 

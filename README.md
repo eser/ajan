@@ -12,7 +12,7 @@
 | [cachefx](./cachefx/)     | Flexible caching solution with support for Redis and other backends |
 | [configfx](./configfx/)   | Configuration management with support for multiple sources including environment variables and files |
 | [connfx](./connfx/)       | Connection management and registry for databases, caches, and external services |
-| [datafx](./datafx/)       | Database access layer supporting PostgreSQL, MySQL, and SQLite |
+| [datafx](./datafx/)       | Database access layer supporting Postgres, MySQL, and SQLite |
 | [di](./di/)               | Lightweight yet powerful dependency injection container |
 | [eventsfx](./eventsfx/)   | Event handling and pub/sub system |
 | [grpcfx](./grpcfx/)       | gRPC service integration and utilities |

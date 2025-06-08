@@ -28,20 +28,20 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 	t.Run("factory_behaviors", func(t *testing.T) {
 		t.Parallel()
 
-		manager := connfx.NewManager(logger)
+		registry := connfx.NewRegistry(logger)
 
 		// Register Redis adapter (supports both stateful and streaming)
-		err := adapters.RegisterRedisAdapter(manager)
+		err := adapters.RegisterRedisAdapter(registry)
 		require.NoError(t, err)
 
 		// Register other adapters for comparison
-		err = adapters.RegisterSQLiteAdapter(manager)
+		err = adapters.RegisterSQLiteAdapter(registry)
 		require.NoError(t, err)
 
-		err = adapters.RegisterHTTPAdapter(manager)
+		err = adapters.RegisterHTTPAdapter(registry)
 		require.NoError(t, err)
 
-		protocols := manager.ListRegisteredProtocols()
+		protocols := registry.ListRegisteredProtocols()
 		assert.Contains(t, protocols, "redis")
 		assert.Contains(t, protocols, "sqlite")
 		assert.Contains(t, protocols, "http")
@@ -53,14 +53,14 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 	t.Run("behavior_filtering_with_multiple_behaviors", func(t *testing.T) {
 		t.Parallel()
 
-		manager := connfx.NewManager(logger)
+		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		err := adapters.RegisterRedisAdapter(manager)
+		err := adapters.RegisterRedisAdapter(registry)
 		require.NoError(t, err)
-		err = adapters.RegisterSQLiteAdapter(manager)
+		err = adapters.RegisterSQLiteAdapter(registry)
 		require.NoError(t, err)
-		err = adapters.RegisterHTTPAdapter(manager)
+		err = adapters.RegisterHTTPAdapter(registry)
 		require.NoError(t, err)
 
 		// Add SQLite connection (stateful only)
@@ -71,14 +71,14 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 				Database: ":memory:",
 			},
 		)
-		err = manager.AddConnection(ctx, sqlConfig)
+		err = registry.AddConnection(ctx, sqlConfig)
 		require.NoError(t, err)
 
 		// Note: We can't test Redis connection without a Redis server,
 		// but we can demonstrate the concept with SQL and HTTP
 
 		// Test behavior filtering
-		statefulConnections := manager.GetStatefulConnections()
+		statefulConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 		assert.Len(t, statefulConnections, 1)
 		assert.Equal(t, "database", statefulConnections[0].GetName())
 		assert.Contains(t, statefulConnections[0].GetBehaviors(), connfx.ConnectionBehaviorStateful)
@@ -91,30 +91,21 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		assert.NotContains(t, behaviors, connfx.ConnectionBehaviorStreaming)
 
 		// Test behavior-specific connection retrieval
-		statefulConn, err := manager.GetConnectionByBehavior(
-			"database",
-			connfx.ConnectionBehaviorStateful,
-		)
-		require.NoError(t, err)
+		statefulConn := registry.GetNamed("database")
 		assert.Equal(t, "database", statefulConn.GetName())
-
-		// Test that getting a stateless behavior from SQL connection fails
-		_, err = manager.GetConnectionByBehavior("database", connfx.ConnectionBehaviorStateless)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, connfx.ErrBehaviorNotSupported)
 	})
 
 	t.Run("demonstrate_redis_multiple_behaviors", func(t *testing.T) {
 		t.Parallel()
 
-		manager := connfx.NewManager(logger)
+		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		err := adapters.RegisterRedisAdapter(manager)
+		err := adapters.RegisterRedisAdapter(registry)
 		require.NoError(t, err)
-		err = adapters.RegisterSQLiteAdapter(manager)
+		err = adapters.RegisterSQLiteAdapter(registry)
 		require.NoError(t, err)
-		err = adapters.RegisterHTTPAdapter(manager)
+		err = adapters.RegisterHTTPAdapter(registry)
 		require.NoError(t, err)
 
 		// Create a Redis connection config (won't actually connect)
@@ -129,13 +120,13 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 
 		// This will fail because no Redis server is running, but that's expected
 		// We're demonstrating the configuration and behavior setup
-		err = manager.AddConnection(ctx, redisConfig)
+		err = registry.AddConnection(ctx, redisConfig)
 
 		// The connection will fail, but we can show what behaviors it would support
 		t.Logf("Redis connection attempt failed as expected (no server): %v", err)
 
 		// The factory still exists and reports its behaviors
-		protocols := manager.ListRegisteredProtocols()
+		protocols := registry.ListRegisteredProtocols()
 		assert.Contains(t, protocols, "redis")
 
 		// Show that if Redis was connected, it would support both behaviors

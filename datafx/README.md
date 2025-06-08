@@ -4,7 +4,7 @@
 
 **datafx** package is a flexible database access package that provides a
 unified interface for different SQL database backends. Currently, it supports
-PostgreSQL, MySQL, and SQLite as database backends.
+Postgres, MySQL, and SQLite as database backends.
 
 The documentation below provides an overview of the package, its types,
 functions, and usage examples. For more detailed information, refer to the
@@ -44,7 +44,7 @@ config := &datafx.Config{
 
 ## Features
 
-- Multiple SQL database backend support (PostgreSQL, MySQL, SQLite)
+- Multiple SQL database backend support (Postgres, MySQL, SQLite)
 - Configurable database dialects
 - Managing multiple database instances
 - Unit of Work pattern for transaction management
@@ -57,7 +57,7 @@ config := &datafx.Config{
 ```go
 import "github.com/eser/ajan/datafx"
 
-// Create a new PostgreSQL database instance
+// Create a new Postgres database instance
 db, err := datafx.NewSQLDatasource(ctx, datafx.DialectPostgres, "postgres://localhost:5432/mydb")
 if err != nil {
   log.Fatal(err)
@@ -81,7 +81,7 @@ err = uow.Execute(func(tx *sql.Tx) error {
 
 ### Supported Dialects
 
-- PostgreSQL (`postgres://`)
+- Postgres (`postgres://`)
 - MySQL (`mysql://`)
 - SQLite (`sqlite://`)
 

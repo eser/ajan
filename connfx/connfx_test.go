@@ -24,14 +24,14 @@ func newMockLogger() *logfx.Logger {
 	return logfx.NewLoggerFromSlog(slogger)
 }
 
-func TestManager_SQLiteConnection(t *testing.T) {
+func TestRegistry_SQLiteConnection(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -42,27 +42,26 @@ func TestManager_SQLiteConnection(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = manager.AddConnection(ctx, config)
+	err = registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
-	// Get the connection
-	conn, err := manager.GetConnection("test")
-	require.NoError(t, err)
-	assert.NotNil(t, conn)
+	// Test GetNamed method
+	connNamed := registry.GetNamed("test")
+	require.NotNil(t, connNamed)
 
 	// Test connection properties
-	assert.Equal(t, "test", conn.GetName())
-	assert.Contains(t, conn.GetBehaviors(), connfx.ConnectionBehaviorStateful)
-	assert.Equal(t, "sqlite", conn.GetProtocol())
-	assert.Equal(t, connfx.ConnectionStateConnected, conn.GetState())
+	assert.Equal(t, "test", connNamed.GetName())
+	assert.Contains(t, connNamed.GetBehaviors(), connfx.ConnectionBehaviorStateful)
+	assert.Equal(t, "sqlite", connNamed.GetProtocol())
+	assert.Equal(t, connfx.ConnectionStateConnected, connNamed.GetState())
 
 	// Test health check
-	status := conn.HealthCheck(ctx)
+	status := connNamed.HealthCheck(ctx)
 	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
 	assert.NotZero(t, status.Timestamp)
 
 	// Test type-safe connection extraction (should be *sql.DB)
-	db, err := connfx.GetTypedConnection[*sql.DB](conn)
+	db, err := connfx.GetTypedConnection[*sql.DB](connNamed)
 	require.NoError(t, err)
 	assert.NotNil(t, db)
 
@@ -71,18 +70,52 @@ func TestManager_SQLiteConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	// Close connection
-	err = conn.Close(ctx)
+	err = connNamed.Close(ctx)
 	require.NoError(t, err)
 }
 
-func TestManager_LoadFromConfig(t *testing.T) {
+func TestRegistry_GetDefaultConnection(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+
+	// Add default connection
+	config := connfx.NewConnectionConfig(
+		"default",
+		connfx.ConnectionConfigData{ //nolint:exhaustruct
+			Protocol: "sqlite",
+			Database: ":memory:",
+		},
+	)
+
+	err = registry.AddConnection(ctx, config)
+	require.NoError(t, err)
+
+	// Test GetDefault method
+	defaultConn := registry.GetDefault()
+	require.NotNil(t, defaultConn)
+	assert.Equal(t, "default", defaultConn.GetName())
+
+	// Test GetDefaultConnection method
+	defaultConnWithErr := registry.GetDefault()
+	assert.Equal(t, defaultConn, defaultConnWithErr)
+}
+
+func TestRegistry_LoadFromConfig(t *testing.T) {
+	t.Parallel()
+
+	logger := newMockLogger()
+	registry := connfx.NewRegistry(logger)
+
+	// Register SQLite adapter
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -96,27 +129,26 @@ func TestManager_LoadFromConfig(t *testing.T) {
 		},
 	}
 
-	err = manager.LoadFromConfig(ctx, config)
+	err = registry.LoadFromConfig(ctx, config)
 	require.NoError(t, err)
 
 	// Verify connection was loaded
-	connections := manager.ListConnections()
+	connections := registry.ListConnections()
 	assert.Contains(t, connections, "default")
 
 	// Get the connection
-	conn, err := manager.GetConnection("default")
-	require.NoError(t, err)
+	conn := registry.GetNamed("default")
 	assert.NotNil(t, conn)
 }
 
-func TestManager_HealthCheck(t *testing.T) {
+func TestRegistry_HealthCheck(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -130,34 +162,34 @@ func TestManager_HealthCheck(t *testing.T) {
 		},
 	)
 
-	err = manager.AddConnection(ctx, config)
+	err = registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Test health check for all connections
-	statuses := manager.HealthCheck(ctx)
+	statuses := registry.HealthCheck(ctx)
 	assert.Len(t, statuses, 1)
 	assert.Contains(t, statuses, "sql_test")
 	assert.Equal(t, connfx.ConnectionStateConnected, statuses["sql_test"].State)
 
 	// Test named health check
-	status, err := manager.HealthCheckNamed(ctx, "sql_test")
+	status, err := registry.HealthCheckNamed(ctx, "sql_test")
 	require.NoError(t, err)
 	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
 
 	// Test health check for non-existent connection
-	_, err = manager.HealthCheckNamed(ctx, "nonexistent")
+	_, err = registry.HealthCheckNamed(ctx, "nonexistent")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, connfx.ErrConnectionNotFound)
 }
 
-func TestManager_RemoveConnection(t *testing.T) {
+func TestRegistry_RemoveConnection(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -168,34 +200,34 @@ func TestManager_RemoveConnection(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = manager.AddConnection(ctx, config)
+	err = registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Verify connection exists
-	connections := manager.ListConnections()
+	connections := registry.ListConnections()
 	assert.Contains(t, connections, "test")
 
 	// Remove connection
-	err = manager.RemoveConnection(ctx, "test")
+	err = registry.RemoveConnection(ctx, "test")
 	require.NoError(t, err)
 
 	// Verify connection is removed
-	connections = manager.ListConnections()
+	connections = registry.ListConnections()
 	assert.NotContains(t, connections, "test")
 
 	// Try to get removed connection
-	_, err = manager.GetConnection("test")
-	assert.Error(t, err)
+	connRemoved := registry.GetNamed("test")
+	assert.Nil(t, connRemoved)
 }
 
-func TestManager_Close(t *testing.T) {
+func TestRegistry_Close(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -206,15 +238,15 @@ func TestManager_Close(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = manager.AddConnection(ctx, config)
+	err = registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Close all connections
-	err = manager.Close(ctx)
+	err = registry.Close(ctx)
 	require.NoError(t, err)
 
 	// Verify all connections are removed
-	connections := manager.ListConnections()
+	connections := registry.ListConnections()
 	assert.Empty(t, connections)
 }
 
@@ -314,16 +346,16 @@ func TestConnectionBehaviors(t *testing.T) {
 	}
 }
 
-func TestManager_BehaviorFiltering(t *testing.T) {
+func TestRegistry_BehaviorFiltering(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register adapters
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
-	err = adapters.RegisterHTTPAdapter(manager)
+	err = adapters.RegisterHTTPAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -333,52 +365,43 @@ func TestManager_BehaviorFiltering(t *testing.T) {
 		Protocol: "sqlite",
 		Database: ":memory:",
 	})
-	err = manager.AddConnection(ctx, sqlConfig)
+	err = registry.AddConnection(ctx, sqlConfig)
 	require.NoError(t, err)
 
-	// Add a stateless connection (HTTP) - skip this test as it requires network
-	// httpConfig := connfx.NewConnectionConfig("api", connfx.ConnectionConfigData{
-	// 	Protocol: "http",
-	// 	Behavior: "stateless",
-	// 	URL:      "https://httpbin.org/status/200",
-	// })
-	// err = manager.AddConnection(ctx, httpConfig)
-	// require.NoError(t, err)
-
 	// Test behavior filtering
-	statefulConnections := manager.GetStatefulConnections()
+	statefulConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 	assert.Len(t, statefulConnections, 1)
 	assert.Equal(t, "db", statefulConnections[0].GetName())
 
-	statelessConnections := manager.GetStatelessConnections()
+	statelessConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateless)
 	assert.Empty(t, statelessConnections) // No HTTP connection added
 
 	// Test protocol filtering
-	sqliteConnections := manager.GetConnectionsByProtocol("sqlite")
+	sqliteConnections := registry.GetByProtocol("sqlite")
 	assert.Len(t, sqliteConnections, 1)
 	assert.Equal(t, "db", sqliteConnections[0].GetName())
 }
 
-func TestManager_AdapterRegistration(t *testing.T) {
+func TestRegistry_AdapterRegistration(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Test registering adapters
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
-	err = adapters.RegisterHTTPAdapter(manager)
+	err = adapters.RegisterHTTPAdapter(registry)
 	require.NoError(t, err)
 
 	// Test duplicate registration fails
-	err = adapters.RegisterSQLiteAdapter(manager)
+	err = adapters.RegisterSQLiteAdapter(registry)
 	require.Error(t, err)
 	require.ErrorIs(t, err, connfx.ErrFactoryAlreadyRegistered)
 
 	// Test listing protocols
-	protocols := manager.ListRegisteredProtocols()
+	protocols := registry.ListRegisteredProtocols()
 	assert.Contains(t, protocols, "sqlite")
 	assert.Contains(t, protocols, "http")
 }
@@ -387,10 +410,10 @@ func TestGetTypedConnection(t *testing.T) {
 	t.Parallel()
 
 	logger := newMockLogger()
-	manager := connfx.NewManager(logger)
+	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(manager)
+	err := adapters.RegisterSQLiteAdapter(registry)
 	require.NoError(t, err)
 
 	ctx := t.Context()
@@ -400,12 +423,11 @@ func TestGetTypedConnection(t *testing.T) {
 		Protocol: "sqlite",
 		Database: ":memory:",
 	})
-	err = manager.AddConnection(ctx, config)
+	err = registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Get connection
-	conn, err := manager.GetConnection("db")
-	require.NoError(t, err)
+	conn := registry.GetNamed("db")
 	require.NotNil(t, conn)
 
 	// Test successful type extraction
@@ -426,4 +448,32 @@ func TestGetTypedConnection(t *testing.T) {
 	_, err = connfx.GetTypedConnection[*sql.DB](nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, connfx.ErrConnectionIsNil)
+}
+
+func TestRegistry_ErrorHandling(t *testing.T) {
+	t.Parallel()
+
+	logger := newMockLogger()
+	registry := connfx.NewRegistry(logger)
+
+	ctx := t.Context()
+
+	// Test getting non-existent connection
+	conn := registry.GetNamed("nonexistent")
+	assert.Nil(t, conn)
+
+	// Test adding connection without registered factory
+	config := connfx.NewConnectionConfig("test", connfx.ConnectionConfigData{ //nolint:exhaustruct
+		Protocol: "unsupported",
+		Database: "test.db",
+	})
+
+	err := registry.AddConnection(ctx, config)
+	require.Error(t, err)
+	require.ErrorIs(t, err, connfx.ErrUnsupportedProtocol)
+
+	// Test removing non-existent connection
+	err = registry.RemoveConnection(ctx, "nonexistent")
+	require.Error(t, err)
+	require.ErrorIs(t, err, connfx.ErrConnectionNotFound)
 }
