@@ -5,6 +5,7 @@ import (
 
 	"github.com/eser/ajan/configfx/envparser"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTryParseFiles(t *testing.T) {
@@ -16,9 +17,8 @@ func TestTryParseFiles(t *testing.T) {
 		m := make(map[string]any)
 		err := envparser.TryParseFiles(&m, true, "./testdata/.env")
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "env", m["TEST"])
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "env", m["TEST"])
 	})
 
 	t.Run("should parse multiple .env files", func(t *testing.T) {
@@ -27,8 +27,7 @@ func TestTryParseFiles(t *testing.T) {
 		m := make(map[string]any)
 		err := envparser.TryParseFiles(&m, true, "./testdata/.env", "./testdata/.env.development")
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "env-development", m["TEST"])
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "env-development", m["TEST"])
 	})
 }

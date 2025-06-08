@@ -10,7 +10,7 @@ type Client struct {
 	transport *ResilientTransport
 }
 
-// NewClient creates a new HTTP client with the specified circuit breaker and retry strategy.
+// NewClient creates a new http client with the specified circuit breaker and retry strategy.
 func NewClient(cb *CircuitBreaker, rs *RetryStrategy) *Client {
 	transport := NewResilientTransport(nil, cb, rs)
 
@@ -22,7 +22,7 @@ func NewClient(cb *CircuitBreaker, rs *RetryStrategy) *Client {
 	}
 }
 
-// DefaultClient creates a new HTTP client with default circuit breaker and retry settings.
+// DefaultClient creates a new http client with default circuit breaker and retry settings.
 func DefaultClient() *Client {
 	return NewClient(
 		NewCircuitBreaker(CircuitBreakerConfig{

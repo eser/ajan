@@ -23,8 +23,12 @@ func (r Result) Unwrap() error {
 	return r.InnerError
 }
 
+func (r Result) IsSuccess() bool {
+	return r.Definition.Kind == ResultKindSuccess
+}
+
 func (r Result) IsError() bool {
-	return r.InnerError != nil
+	return r.Definition.Kind == ResultKindError
 }
 
 func (r Result) String() string {

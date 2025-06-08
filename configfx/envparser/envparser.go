@@ -8,9 +8,9 @@ package envparser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,7 +18,6 @@ import (
 	"unicode"
 
 	"github.com/eser/ajan/lib"
-	"github.com/eser/ajan/results"
 )
 
 const (
@@ -30,23 +29,13 @@ const (
 )
 
 var (
-	ErrZeroLengthString = results.Define( //nolint:gochecknoglobals
-		"ERRBCE0001",
-		"zero length string",
-	)
-	ErrKeyNameNotFound = results.Define( //nolint:gochecknoglobals
-		"ERRBCE0002",
-		"key name not found",
-	)
-	ErrUnexpectedChar = results.Define( //nolint:gochecknoglobals
-		"ERRBCE0003",
-		"unexpected character",
-	)
-	ErrUnterminatedQuotedValue = results.Define( //nolint:gochecknoglobals
-		"ERRBCE0004",
-		"unterminated quoted value",
-	)
+	ErrZeroLengthString        = errors.New("zero length string")
+	ErrKeyNameNotFound         = errors.New("key name not found")
+	ErrUnexpectedChar          = errors.New("unexpected character")
+	ErrUnterminatedQuotedValue = errors.New("unterminated quoted value")
 )
+
+var ErrParsingError = errors.New("parsing error")
 
 func ParseBytes(data []byte, keyCaseInsensitive bool, out *map[string]any) error {
 	src := bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
@@ -118,11 +107,19 @@ func extractKeyName(src []byte) (string, int, error) {
 			return key, i + 1, nil
 		}
 
-		return "", 0, ErrUnexpectedChar.New().
-			WithAttribute(slog.String("char", string(char)), slog.String("src", string(src)))
+		return "", 0, fmt.Errorf(
+			"%w (char=%q, src=%q)",
+			ErrUnexpectedChar,
+			char,
+			src,
+		)
 	}
 
-	return "", 0, ErrKeyNameNotFound.New()
+	return "", 0, fmt.Errorf(
+		"%w (src=%q)",
+		ErrKeyNameNotFound,
+		src,
+	)
 }
 
 func trimExportPrefix(src []byte) []byte {
@@ -141,7 +138,11 @@ func locateKeyName(src []byte) (string, []byte, error) {
 	}
 
 	if len(newSrc) == 0 {
-		return "", nil, ErrZeroLengthString.New()
+		return "", nil, fmt.Errorf(
+			"%w (src=%q)",
+			ErrZeroLengthString,
+			newSrc,
+		)
 	}
 
 	key = lib.StringsTrimTrailingSpace(key)
@@ -220,8 +221,11 @@ func extractQuotedVarValue(src []byte, vars *map[string]any, quote byte) (string
 		valEndIndex = len(src)
 	}
 
-	return "", nil, ErrUnterminatedQuotedValue.New().
-		WithAttribute(slog.String("src", string(src[:valEndIndex])))
+	return "", nil, fmt.Errorf(
+		"%w (src=%q)",
+		ErrUnterminatedQuotedValue,
+		src[:valEndIndex],
+	)
 }
 
 // extractVarValue extracts variable value and returns rest of slice.
@@ -328,7 +332,7 @@ func Parse(m *map[string]any, keyCaseInsensitive bool, r io.Reader) error {
 
 	_, err := io.Copy(&buf, r)
 	if err != nil {
-		return fmt.Errorf("parsing error: %w", err)
+		return fmt.Errorf("%w: %w", ErrParsingError, err)
 	}
 
 	return ParseBytes(buf.Bytes(), keyCaseInsensitive, m)
@@ -341,7 +345,7 @@ func tryParseFile(m *map[string]any, keyCaseInsensitive bool, filename string) (
 			return nil
 		}
 
-		return fmt.Errorf("parsing error: %w", fileErr)
+		return fmt.Errorf("%w: %w", ErrParsingError, fileErr)
 	}
 
 	defer func() {

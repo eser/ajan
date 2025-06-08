@@ -1,40 +1,49 @@
 package grpcfx
 
 import (
-	"go.opentelemetry.io/otel/metric"
+	"errors"
+	"fmt"
+
+	"github.com/eser/ajan/metricsfx"
 )
 
-type Metrics struct {
-	mp MetricsProvider
+var (
+	ErrFailedToBuildGRPCRequestsCounter = errors.New(
+		"failed to build gRPC requests counter",
+	)
+	ErrFailedToBuildGRPCRequestDurationHistogram = errors.New(
+		"failed to build gRPC request duration histogram",
+	)
+)
 
-	RequestsTotal   metric.Int64Counter
-	RequestDuration metric.Float64Histogram
+// Metrics holds gRPC-specific metrics using the simplified MetricsBuilder approach.
+type Metrics struct {
+	RequestsTotal   *metricsfx.CounterMetric
+	RequestDuration *metricsfx.HistogramMetric
 }
 
-func NewMetrics(metricsProvider MetricsProvider) *Metrics {
-	meter := metricsProvider.GetMeterProvider().Meter("github.com/eser/ajan/grpcfx")
+// NewMetrics creates gRPC metrics using the simplified MetricsBuilder.
+func NewMetrics(provider *metricsfx.MetricsProvider) (*Metrics, error) {
+	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/grpcfx", "1.0.0")
 
-	requestsTotal, err := meter.Int64Counter(
+	requestsTotal, err := builder.Counter(
 		"grpc_requests_total",
-		metric.WithDescription("Total number of gRPC requests"),
-		metric.WithUnit("{request}"),
-	)
+		"Total number of gRPC requests",
+	).WithUnit("{request}").Build()
 	if err != nil {
-		panic(err) // Handle error appropriately in your application
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildGRPCRequestsCounter, err)
 	}
 
-	requestDuration, err := meter.Float64Histogram(
+	requestDuration, err := builder.Histogram(
 		"grpc_request_duration_seconds",
-		metric.WithDescription("gRPC request duration in seconds"),
-		metric.WithUnit("s"),
-	)
+		"gRPC request duration in seconds",
+	).WithDurationBuckets().Build()
 	if err != nil {
-		panic(err) // Handle error appropriately in your application
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildGRPCRequestDurationHistogram, err)
 	}
 
 	return &Metrics{
-		mp:              metricsProvider,
 		RequestsTotal:   requestsTotal,
 		RequestDuration: requestDuration,
-	}
+	}, nil
 }

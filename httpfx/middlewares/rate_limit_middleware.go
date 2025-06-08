@@ -216,7 +216,7 @@ func RateLimitMiddleware(options ...RateLimitOption) httpfx.Handler {
 				"retryAfter": int(time.Until(resetTime).Seconds()),
 			}
 
-			result := ctx.Results.Json(errorResponse)
+			result := ctx.Results.JSON(errorResponse)
 			result.InnerStatusCode = http.StatusTooManyRequests
 
 			return result

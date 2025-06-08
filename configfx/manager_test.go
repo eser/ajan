@@ -6,6 +6,7 @@ import (
 
 	"github.com/eser/ajan/configfx"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestConfig struct {
@@ -36,11 +37,10 @@ func TestLoad(t *testing.T) {
 		cl := configfx.NewConfigManager()
 		err := cl.Load(&config)
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "localhost", config.Host)
-			assert.Equal(t, 8080, config.Port)
-			assert.Equal(t, uint16(10), config.MaxRetry)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "localhost", config.Host)
+		assert.Equal(t, 8080, config.Port)
+		assert.Equal(t, uint16(10), config.MaxRetry)
 	})
 
 	t.Run("should load config from string", func(t *testing.T) {
@@ -51,21 +51,20 @@ func TestLoad(t *testing.T) {
 		cl := configfx.NewConfigManager()
 		err := cl.Load(
 			&config,
-			cl.FromJsonFile("testdata/config.json"),
+			cl.FromJSONFile("testdata/config.json"),
 			cl.FromEnvFile("testdata/.env", true),
 		)
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "localhost", config.Host)
-			assert.Equal(t, 8081, config.Port)
-			assert.Equal(t, uint16(20), config.MaxRetry)
-			assert.Equal(
-				t,
-				map[string]string{"key": "value", "key2": "value2", "key3": "value3"},
-				config.Dictionary,
-			)
-			// assert.Equal(t, []TestConfigNestedKV{{Name: "eser"}}, config.Array)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "localhost", config.Host)
+		assert.Equal(t, 8081, config.Port)
+		assert.Equal(t, uint16(20), config.MaxRetry)
+		assert.Equal(
+			t,
+			map[string]string{"key": "value", "key2": "value2", "key3": "value3"},
+			config.Dictionary,
+		)
+		// assert.Equal(t, []TestConfigNestedKV{{Name: "eser"}}, config.Array)
 	})
 }
 
@@ -93,12 +92,11 @@ func TestLoadMeta(t *testing.T) { //nolint:funlen
 			},
 		}
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "root", meta.Name)
-			assert.Nil(t, meta.Type)
+		require.NoError(t, err)
+		assert.Equal(t, "root", meta.Name)
+		assert.Nil(t, meta.Type)
 
-			assert.ElementsMatch(t, expected, meta.Children)
-		}
+		assert.ElementsMatch(t, expected, meta.Children)
 	})
 
 	t.Run("should get config meta from nested definition", func(t *testing.T) {
@@ -162,11 +160,10 @@ func TestLoadMeta(t *testing.T) { //nolint:funlen
 			},
 		}
 
-		if assert.NoError(t, err) {
-			assert.Equal(t, "root", meta.Name)
-			assert.Nil(t, meta.Type)
+		require.NoError(t, err)
+		assert.Equal(t, "root", meta.Name)
+		assert.Nil(t, meta.Type)
 
-			assert.ElementsMatch(t, expected, meta.Children)
-		}
+		assert.ElementsMatch(t, expected, meta.Children)
 	})
 }

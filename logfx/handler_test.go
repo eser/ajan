@@ -25,7 +25,7 @@ func TestNewHandler(t *testing.T) {
 		name        string
 		writer      *bytes.Buffer
 		config      *logfx.Config
-		expectedErr string
+		expectedErr error
 	}{
 		{
 			name:   "ValidConfig",
@@ -35,7 +35,7 @@ func TestNewHandler(t *testing.T) {
 				PrettyMode: true,
 				AddSource:  true,
 			},
-			expectedErr: "",
+			expectedErr: nil,
 		},
 		{
 			name:   "InvalidLogLevel",
@@ -45,7 +45,7 @@ func TestNewHandler(t *testing.T) {
 				PrettyMode: true,
 				AddSource:  true,
 			},
-			expectedErr: "failed to parse log level: unknown error level \"invalid\"",
+			expectedErr: logfx.ErrFailedToParseLogLevel,
 		},
 	}
 
@@ -55,8 +55,9 @@ func TestNewHandler(t *testing.T) {
 
 			handler, err := logfx.NewHandler(tt.writer, tt.config)
 
-			if tt.expectedErr != "" {
-				require.EqualError(t, err, tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, handler)
 
 				return

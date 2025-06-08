@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-var ErrInvalidIPAddress = errors.New("invalid IP address")
+var (
+	ErrInvalidIPAddress      = errors.New("invalid IP address")
+	ErrFailedToSplitHostPort = errors.New("failed to split host and port")
+)
 
 func SplitHostPort(addr string) (string, string, error) {
 	if !strings.ContainsRune(addr, ':') {
@@ -16,25 +19,25 @@ func SplitHostPort(addr string) (string, string, error) {
 
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to split host and port: %w", err)
+		return "", "", fmt.Errorf("%w (addr=%q): %w", ErrFailedToSplitHostPort, addr, err)
 	}
 
 	return host, port, nil
 }
 
 func DetectLocalNetwork(requestAddr string) (bool, error) {
-	var requestIp string
+	var requestIP string
 
 	requestAddrs := strings.SplitN(requestAddr, ",", 2) //nolint:mnd
 
-	requestIp, _, err := SplitHostPort(requestAddrs[0])
+	requestIP, _, err := SplitHostPort(requestAddrs[0])
 	if err != nil {
 		return false, err
 	}
 
-	requestIpNet := net.ParseIP(requestIp)
-	if requestIpNet == nil {
-		return false, fmt.Errorf("%w - %q", ErrInvalidIPAddress, requestIp)
+	requestIPNet := net.ParseIP(requestIP)
+	if requestIPNet == nil {
+		return false, fmt.Errorf("%w (request_ip=%q)", ErrInvalidIPAddress, requestIP)
 	}
 
 	addrs, err := net.InterfaceAddrs()
@@ -48,11 +51,11 @@ func DetectLocalNetwork(requestAddr string) (bool, error) {
 			continue
 		}
 
-		if !ipNet.Contains(requestIpNet) {
+		if !ipNet.Contains(requestIPNet) {
 			continue
 		}
 
-		if requestIpNet.IsLoopback() {
+		if requestIPNet.IsLoopback() {
 			return true, nil
 		}
 	}

@@ -11,34 +11,27 @@ import (
 
 	"github.com/eser/ajan/httpfx"
 	"github.com/eser/ajan/logfx"
+	"github.com/eser/ajan/metricsfx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/metric"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-type mockMetricsProvider struct {
-	meterProvider metric.MeterProvider
+func setupTestMetricsProvider(t *testing.T) *metricsfx.MetricsProvider {
+	t.Helper()
+
+	provider := metricsfx.NewMetricsProvider()
+
+	t.Cleanup(func() {
+		err := provider.Shutdown(t.Context())
+		if err != nil {
+			t.Logf("Error shutting down metrics provider: %v", err)
+		}
+	})
+
+	return provider
 }
 
-func (m *mockMetricsProvider) GetMeterProvider() metric.MeterProvider {
-	return m.meterProvider
-}
-
-func newMockMetricsProvider() *mockMetricsProvider {
-	// Create a simple MeterProvider for testing
-	meterProvider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithResource(resource.Default()),
-		sdkmetric.WithReader(sdkmetric.NewManualReader()),
-	)
-
-	return &mockMetricsProvider{
-		meterProvider: meterProvider,
-	}
-}
-
-func TestNewHttpService(t *testing.T) { //nolint:funlen
+func TestNewHTTPService(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
 	tests := []struct {
@@ -86,9 +79,10 @@ func TestNewHttpService(t *testing.T) { //nolint:funlen
 			require.NoError(t, err)
 
 			router := httpfx.NewRouter("/")
-			metricsProvider := newMockMetricsProvider()
+			metricsProvider := setupTestMetricsProvider(t)
 
-			service := httpfx.NewHttpService(tt.config, router, metricsProvider, logger)
+			service, err := httpfx.NewHTTPService(tt.config, router, metricsProvider, logger)
+			require.NoError(t, err)
 			require.NotNil(t, service)
 
 			assert.NotNil(t, service.Server())
@@ -112,14 +106,14 @@ func TestNewHttpService(t *testing.T) { //nolint:funlen
 	}
 }
 
-func TestHttpService_Start(t *testing.T) { //nolint:funlen
+func TestHTTPService_Start(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
 	logger, err := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
 	require.NoError(t, err)
 
 	router := httpfx.NewRouter("/")
-	metricsProvider := newMockMetricsProvider()
+	metricsProvider := setupTestMetricsProvider(t)
 
 	// Create a listener first to get a random available port
 	listener, err := net.Listen("tcp", ":0") //nolint:gosec
@@ -138,7 +132,8 @@ func TestHttpService_Start(t *testing.T) { //nolint:funlen
 		GracefulShutdownTimeout: time.Second * 5,
 	}
 
-	service := httpfx.NewHttpService(config, router, metricsProvider, logger)
+	service, err := httpfx.NewHTTPService(config, router, metricsProvider, logger)
+	require.NoError(t, err)
 	require.NotNil(t, service)
 
 	ctx := t.Context()

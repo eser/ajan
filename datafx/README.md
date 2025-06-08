@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **datafx** package is a flexible database access package that provides a
+**datafx** package is a flexible database access package that provides a
 unified interface for different SQL database backends. Currently, it supports
 PostgreSQL, MySQL, and SQLite as database backends.
 
@@ -58,7 +58,7 @@ config := &datafx.Config{
 import "github.com/eser/ajan/datafx"
 
 // Create a new PostgreSQL database instance
-db, err := datafx.NewSqlDatasource(ctx, datafx.DialectPostgres, "postgres://localhost:5432/mydb")
+db, err := datafx.NewSQLDatasource(ctx, datafx.DialectPostgres, "postgres://localhost:5432/mydb")
 if err != nil {
   log.Fatal(err)
 }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **grpcfx** package provides a framework for building gRPC services with
+**grpcfx** package provides a framework for building gRPC services with
 support for reflection, graceful shutdown, and integration with the dependency
 injection system.
 
@@ -42,13 +42,13 @@ config := &grpcfx.Config{
 
 ## API
 
-### GrpcService
+### GRPCService
 
 The main component for gRPC service handling:
 
 ```go
 // Create a new gRPC service
-service := grpcfx.NewGrpcService(config)
+service := grpcfx.NewGRPCService(config)
 
 // Register your gRPC service implementations
 pb.RegisterYourServiceServer(service.GetServer(), &YourServiceImpl{})

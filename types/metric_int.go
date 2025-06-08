@@ -1,13 +1,10 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
 )
-
-var ErrFailedToParseFloat = errors.New("failed to parse float")
 
 type MetricInt int64
 
@@ -52,7 +49,7 @@ func parseMetricIntString(input string) (int64, error) {
 
 	n, err := strconv.ParseFloat(base, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%w (%q): %w", ErrFailedToParseFloat, base, err)
+		return 0, fmt.Errorf("%w (base=%q): %w", ErrFailedToParseFloat, base, err)
 	}
 
 	// FIXME(@eser) this is a hack to round the number to the nearest integer

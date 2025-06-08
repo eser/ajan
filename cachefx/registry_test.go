@@ -122,7 +122,7 @@ func TestRegistry_AddConnection_InvalidDSN(t *testing.T) {
 	// Test with invalid DSN
 	err := registry.AddConnection(t.Context(), "invalid", "redis", "invalid-dsn")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to add connection")
+	require.ErrorIs(t, err, cachefx.ErrFailedToAddConnection)
 
 	// Cache should not be added
 	assert.Nil(t, registry.GetNamed("invalid"))
@@ -136,7 +136,7 @@ func TestRegistry_AddConnection_ConnectionFailure(t *testing.T) {
 	// Test with valid DSN but unreachable server
 	err := registry.AddConnection(t.Context(), "unreachable", "redis", "redis://localhost:9999")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to add connection")
+	require.ErrorIs(t, err, cachefx.ErrFailedToAddConnection)
 
 	// Cache should not be added
 	assert.Nil(t, registry.GetNamed("unreachable"))

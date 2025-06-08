@@ -9,6 +9,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var (
+	ErrFailedToParseRedisURL  = errors.New("failed to parse Redis URL")
+	ErrFailedToConnectToRedis = errors.New("failed to connect to Redis")
+	ErrFailedToSetCacheKey    = errors.New("failed to set cache key")
+	ErrFailedToGetCacheKey    = errors.New("failed to get cache key")
+	ErrFailedToDeleteCacheKey = errors.New("failed to delete cache key")
+)
+
 type RedisCache struct {
 	client  *redis.Client
 	dialect Dialect
@@ -17,14 +25,14 @@ type RedisCache struct {
 func NewRedisCache(ctx context.Context, dialect Dialect, dsn string) (*RedisCache, error) {
 	opt, err := redis.ParseURL(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToParseRedisURL, err)
 	}
 
 	client := redis.NewClient(opt)
 
 	// Test the connection
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToConnectToRedis, err)
 	}
 
 	return &RedisCache{
@@ -45,7 +53,7 @@ func (cache *RedisCache) Set(
 ) error {
 	err := cache.client.Set(ctx, key, value, expiration).Err()
 	if err != nil {
-		return fmt.Errorf("failed to set cache key: %w", err)
+		return fmt.Errorf("%w: %w", ErrFailedToSetCacheKey, err)
 	}
 
 	return nil
@@ -58,7 +66,7 @@ func (cache *RedisCache) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to get cache key: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrFailedToGetCacheKey, err)
 	}
 
 	return val, nil
@@ -67,7 +75,7 @@ func (cache *RedisCache) Get(ctx context.Context, key string) (string, error) {
 func (cache *RedisCache) Delete(ctx context.Context, key string) error {
 	err := cache.client.Del(ctx, key).Err()
 	if err != nil {
-		return fmt.Errorf("failed to delete cache key: %w", err)
+		return fmt.Errorf("%w: %w", ErrFailedToDeleteCacheKey, err)
 	}
 
 	return nil

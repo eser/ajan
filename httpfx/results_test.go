@@ -42,7 +42,7 @@ func TestResults_PlainText(t *testing.T) {
 	assert.Equal(t, body, result.Body())
 }
 
-func TestResults_Json(t *testing.T) {
+func TestResults_JSON(t *testing.T) {
 	t.Parallel()
 
 	type testStruct struct {
@@ -56,7 +56,7 @@ func TestResults_Json(t *testing.T) {
 		Value: 42,
 	}
 
-	result := results.Json(data)
+	result := results.JSON(data)
 	assert.Equal(t, http.StatusOK, result.StatusCode())
 
 	// Verify JSON encoding
@@ -75,7 +75,7 @@ func TestResults_Redirect(t *testing.T) {
 
 	assert.Equal(t, http.StatusTemporaryRedirect, result.StatusCode())
 	assert.Empty(t, result.Body())
-	assert.Equal(t, uri, result.RedirectToUri())
+	assert.Equal(t, uri, result.RedirectToURI())
 }
 
 func TestResults_NotFound(t *testing.T) {

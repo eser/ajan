@@ -1,29 +1,34 @@
 package eventsfx
 
 import (
-	"go.opentelemetry.io/otel/metric"
+	"errors"
+	"fmt"
+
+	"github.com/eser/ajan/metricsfx"
 )
 
-type Metrics struct {
-	mp MetricsProvider
+var ErrFailedToBuildEventDispatchesCounter = errors.New(
+	"failed to build event dispatches counter",
+)
 
-	RequestsTotal metric.Int64Counter
+// Metrics holds event-specific metrics using the simplified MetricsBuilder approach.
+type Metrics struct {
+	EventDispatchesTotal *metricsfx.CounterMetric
 }
 
-func NewMetrics(mp MetricsProvider) *Metrics {
-	meter := mp.GetMeterProvider().Meter("github.com/eser/ajan/eventsfx")
+// NewMetrics creates event metrics using the simplified MetricsBuilder.
+func NewMetrics(provider *metricsfx.MetricsProvider) (*Metrics, error) {
+	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/eventsfx", "1.0.0")
 
-	requestsTotal, err := meter.Int64Counter(
+	eventDispatchesTotal, err := builder.Counter(
 		"event_dispatches_total",
-		metric.WithDescription("Total number of event dispatches"),
-		metric.WithUnit("{dispatch}"),
-	)
+		"Total number of event dispatches",
+	).WithUnit("{dispatch}").Build()
 	if err != nil {
-		panic(err) // Handle error appropriately in your application
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildEventDispatchesCounter, err)
 	}
 
 	return &Metrics{
-		mp:            mp,
-		RequestsTotal: requestsTotal,
-	}
+		EventDispatchesTotal: eventDispatchesTotal,
+	}, nil
 }

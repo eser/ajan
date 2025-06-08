@@ -33,6 +33,6 @@ type ConfigLoader interface {
 	FromEnvFile(filename string, keyCaseInsensitive bool) ConfigResource
 	FromSystemEnv(keyCaseInsensitive bool) ConfigResource
 
-	FromJsonFileDirect(filename string) ConfigResource
-	FromJsonFile(filename string) ConfigResource
+	FromJSONFileDirect(filename string) ConfigResource
+	FromJSONFile(filename string) ConfigResource
 }

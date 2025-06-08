@@ -5,7 +5,7 @@ import (
 )
 
 type Result struct { //nolint:errname
-	InnerRedirectToUri string
+	InnerRedirectToURI string
 	results.Result
 
 	InnerBody []byte
@@ -21,8 +21,8 @@ func (r Result) Body() []byte {
 	return r.InnerBody
 }
 
-func (r Result) RedirectToUri() string {
-	return r.InnerRedirectToUri
+func (r Result) RedirectToURI() string {
+	return r.InnerRedirectToURI
 }
 
 func (r Result) WithStatusCode(statusCode int) Result {

@@ -5,18 +5,21 @@ import (
 )
 
 type Definition struct {
+	Kind    ResultKind
 	Code    string
 	Message string
 
 	Attributes []slog.Attr
 }
 
-func Define(code string, message string, attributes ...slog.Attr) *Definition {
+func Define(kind ResultKind, code string, message string, attributes ...slog.Attr) *Definition {
 	if attributes == nil {
 		attributes = make([]slog.Attr, 0)
 	}
 
 	return &Definition{
+		Kind: kind,
+
 		Code:    code,
 		Message: message,
 

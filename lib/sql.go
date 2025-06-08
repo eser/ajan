@@ -1,36 +1,38 @@
 package lib
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
-type NullString struct { //nolint:recvcheck
-	String string
-	Valid  bool
+var ErrUnexpectedNullStringType = errors.New("unexpected type for NullString")
+
+type NullString struct {
+	sql.NullString
 }
 
 func (ns *NullString) Scan(value any) error {
-	if value == nil {
+	switch value := value.(type) {
+	case string:
+		ns.String = value
+		ns.Valid = true
+	case []byte:
+		ns.String = string(value)
+		ns.Valid = true
+	case nil:
 		ns.String = ""
 		ns.Valid = false
-
-		return nil
+	default:
+		return fmt.Errorf("%w: %T", ErrUnexpectedNullStringType, value)
 	}
-
-	str, ok := value.(string)
-	if !ok {
-		return fmt.Errorf("NullString: unexpected type %T", value) //nolint:err113
-	}
-
-	ns.String = str
-	ns.Valid = true
 
 	return nil
 }
 
-func (ns NullString) Value() (driver.Value, error) {
+func (ns *NullString) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil //nolint:nilnil
 	}
@@ -38,7 +40,7 @@ func (ns NullString) Value() (driver.Value, error) {
 	return ns.String, nil
 }
 
-func (ns NullString) MarshalJSON() ([]byte, error) {
+func (ns *NullString) MarshalJSON() ([]byte, error) {
 	if !ns.Valid {
 		return []byte("null"), nil
 	}

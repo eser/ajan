@@ -2,11 +2,12 @@ package middlewares
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/eser/ajan/httpfx"
-	"github.com/eser/ajan/results"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -14,10 +15,7 @@ const (
 	ContextKeyAuthClaims httpfx.ContextKey = "claims"
 )
 
-var ErrInvalidSigningMethod = results.Define( //nolint:gochecknoglobals
-	"ERRBHMA001",
-	"Invalid signing method",
-)
+var ErrInvalidSigningMethod = errors.New("invalid signing method")
 
 func AuthMiddleware() httpfx.Handler {
 	return func(ctx *httpfx.Context) httpfx.Result {
@@ -31,7 +29,11 @@ func AuthMiddleware() httpfx.Handler {
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, ErrInvalidSigningMethod.New()
+				return nil, fmt.Errorf(
+					"%w (method=%s)",
+					ErrInvalidSigningMethod,
+					token.Method.Alg(),
+				)
 			}
 
 			return []byte("secret"), nil

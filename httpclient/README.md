@@ -1,8 +1,10 @@
 # ajan/httpclient
 
-A resilient HTTP client that is 100% compatible with the standard `net/http`
-interfaces while providing additional features for improved reliability and
-fault tolerance.
+## Overview
+
+**httpclient** is a resilient HTTP client that is 100% compatible with the
+standard `net/http` interfaces while providing additional features for
+improved reliability and fault tolerance.
 
 ## Features
 

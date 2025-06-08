@@ -20,6 +20,6 @@ type Config struct {
 	SelfSigned bool `conf:"self_signed" default:"false"`
 
 	HealthCheckEnabled bool `conf:"health_check" default:"true"`
-	OpenApiEnabled     bool `conf:"openapi"      default:"true"`
+	OpenAPIEnabled     bool `conf:"openapi"      default:"true"`
 	ProfilingEnabled   bool `conf:"profiling"    default:"false"`
 }

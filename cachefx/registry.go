@@ -2,12 +2,18 @@ package cachefx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/eser/ajan/logfx"
+)
+
+var (
+	ErrFailedToDetermineDialect = errors.New("failed to determine dialect")
+	ErrFailedToAddConnection    = errors.New("failed to add connection")
 )
 
 const DefaultCache = "default"
@@ -50,7 +56,7 @@ func (registry *Registry) AddConnection(
 ) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
-		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)
+		return fmt.Errorf("%w (name=%q): %w", ErrFailedToDetermineDialect, name, err)
 	}
 
 	registry.logger.Info(
@@ -67,7 +73,7 @@ func (registry *Registry) AddConnection(
 			slog.String("name", name),
 		)
 
-		return fmt.Errorf("failed to add connection for %q: %w", name, err)
+		return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, name, err)
 	}
 
 	registry.caches[name] = cache
@@ -83,7 +89,7 @@ func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) er
 
 		err := registry.AddConnection(ctx, nameLower, source.Provider, source.DSN)
 		if err != nil {
-			return fmt.Errorf("failed to add connection for %q: %w", nameLower, err)
+			return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, nameLower, err)
 		}
 	}
 

@@ -14,8 +14,8 @@ var (
 	errTest       = errors.New("test")
 	errTestNested = fmt.Errorf("testNested: %w", errTest)
 
-	resultOk  = results.Define("0001", "OK")    //nolint:gochecknoglobals
-	resultErr = results.Define("0002", "Error") //nolint:gochecknoglobals
+	resultOk  = results.Define(results.ResultKindSuccess, "0001", "OK")  //nolint:gochecknoglobals
+	resultErr = results.Define(results.ResultKindError, "0002", "Error") //nolint:gochecknoglobals
 )
 
 func TestDefine(t *testing.T) {

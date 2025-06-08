@@ -3,6 +3,21 @@ package httpfx
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/eser/ajan/results"
+)
+
+var (
+	okResult = results.Define( //nolint:gochecknoglobals
+		results.ResultKindSuccess,
+		"OK",
+		"OK",
+	)
+	errResult = results.Define( //nolint:gochecknoglobals
+		results.ResultKindError,
+		"ERR",
+		"Error",
+	)
 )
 
 // Result Options.
@@ -20,7 +35,7 @@ func WithPlainText(body string) ResultOption {
 	}
 }
 
-func WithJson(body any) ResultOption {
+func WithJSON(body any) ResultOption {
 	return func(result *Result) {
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -38,9 +53,12 @@ func WithJson(body any) ResultOption {
 type Results struct{}
 
 func (r *Results) Ok(options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusNoContent,
-		InnerBody:       make([]byte, 0),
+	result := Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusNoContent,
+		InnerRedirectToURI: "",
+		InnerBody:          make([]byte, 0),
 	}
 
 	for _, option := range options {
@@ -51,9 +69,12 @@ func (r *Results) Ok(options ...ResultOption) Result {
 }
 
 func (r *Results) Accepted(options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusAccepted,
-		InnerBody:       make([]byte, 0),
+	result := Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusAccepted,
+		InnerRedirectToURI: "",
+		InnerBody:          make([]byte, 0),
 	}
 
 	for _, option := range options {
@@ -64,9 +85,12 @@ func (r *Results) Accepted(options ...ResultOption) Result {
 }
 
 func (r *Results) NotFound(options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusNotFound,
-		InnerBody:       []byte("Not Found"),
+	result := Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusNotFound,
+		InnerRedirectToURI: "",
+		InnerBody:          []byte("Not Found"),
 	}
 
 	for _, option := range options {
@@ -77,9 +101,12 @@ func (r *Results) NotFound(options ...ResultOption) Result {
 }
 
 func (r *Results) Unauthorized(options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusUnauthorized,
-		InnerBody:       make([]byte, 0),
+	result := Result{
+		Result: errResult.New(),
+
+		InnerStatusCode:    http.StatusUnauthorized,
+		InnerRedirectToURI: "",
+		InnerBody:          make([]byte, 0),
 	}
 
 	for _, option := range options {
@@ -90,9 +117,12 @@ func (r *Results) Unauthorized(options ...ResultOption) Result {
 }
 
 func (r *Results) BadRequest(options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusBadRequest,
-		InnerBody:       []byte("Bad Request"),
+	result := Result{
+		Result: errResult.New(),
+
+		InnerStatusCode:    http.StatusBadRequest,
+		InnerRedirectToURI: "",
+		InnerBody:          []byte("Bad Request"),
 	}
 
 	for _, option := range options {
@@ -103,9 +133,12 @@ func (r *Results) BadRequest(options ...ResultOption) Result {
 }
 
 func (r *Results) Error(statusCode int, options ...ResultOption) Result {
-	result := Result{ //nolint:exhaustruct
-		InnerStatusCode: statusCode,
-		InnerBody:       make([]byte, 0),
+	result := Result{
+		Result: errResult.New(),
+
+		InnerStatusCode:    statusCode,
+		InnerRedirectToURI: "",
+		InnerBody:          make([]byte, 0),
 	}
 
 	for _, option := range options {
@@ -117,47 +150,64 @@ func (r *Results) Error(statusCode int, options ...ResultOption) Result {
 
 // Results Without Options.
 func (r *Results) Bytes(body []byte) Result {
-	return Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusOK,
-		InnerBody:       body,
+	return Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusOK,
+		InnerRedirectToURI: "",
+		InnerBody:          body,
 	}
 }
 
 func (r *Results) PlainText(body []byte) Result {
-	return Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusOK,
-		InnerBody:       body,
+	return Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusOK,
+		InnerRedirectToURI: "",
+		InnerBody:          body,
 	}
 }
 
-func (r *Results) Json(body any) Result {
+func (r *Results) JSON(body any) Result {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		// TODO(@eser) Log error
-		return Result{ //nolint:exhaustruct
-			InnerStatusCode: http.StatusInternalServerError,
-			InnerBody:       []byte("Failed to encode JSON"),
+		return Result{
+			Result: errResult.New(),
+
+			InnerStatusCode:    http.StatusInternalServerError,
+			InnerRedirectToURI: "",
+			InnerBody:          []byte("Failed to encode JSON"),
 		}
 	}
 
-	return Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusOK,
-		InnerBody:       encoded,
+	return Result{
+		Result: okResult.New(),
+
+		InnerStatusCode:    http.StatusOK,
+		InnerRedirectToURI: "",
+		InnerBody:          encoded,
 	}
 }
 
 func (r *Results) Redirect(uri string) Result {
-	return Result{ //nolint:exhaustruct
+	return Result{
+		Result: okResult.New(),
+
 		InnerStatusCode:    http.StatusTemporaryRedirect,
+		InnerRedirectToURI: uri,
 		InnerBody:          make([]byte, 0),
-		InnerRedirectToUri: uri,
 	}
 }
 
 func (r *Results) Abort() Result {
 	// TODO(@eser) implement this
-	return Result{ //nolint:exhaustruct
-		InnerStatusCode: http.StatusNotImplemented,
-		InnerBody:       []byte("Not Implemented"),
+	return Result{
+		Result: errResult.New(),
+
+		InnerStatusCode:    http.StatusNotImplemented,
+		InnerRedirectToURI: "",
+		InnerBody:          []byte("Not Implemented"),
 	}
 }

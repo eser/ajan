@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **metricsfx** package provides metrics collection and monitoring utilities
+**metricsfx** package provides metrics collection and monitoring utilities
 using OpenTelemetry. It integrates with other components to provide metrics for
 HTTP services, gRPC services, and native Go runtime metrics.
 
@@ -16,12 +16,178 @@ HTTP services, gRPC services, and native Go runtime metrics.
 - Multiple exporter support (OTLP, Prometheus, StatsD, etc.)
 - Integration with dependency injection
 - Vendor-neutral observability
+- **🆕 Simplified Metrics Builder** - Fluent interface for creating metrics with minimal boilerplate
 
-## API
+## Quick Start with MetricsBuilder
+
+The **MetricsBuilder** provides a clean, fluent interface for creating metrics without boilerplate:
+
+### Simple Example
+
+```go
+// Create a metrics provider
+provider := metricsfx.NewMetricsProvider()
+defer provider.Shutdown(context.Background())
+
+// Create a metrics builder
+builder := metricsfx.NewMetricsBuilder(provider, "my-service", "1.0.0")
+
+// Create metrics with fluent interface
+counter, err := builder.Counter(
+    "requests_total",
+    "Total number of requests",
+).WithUnit("requests").Build()
+
+gauge, err := builder.Gauge(
+    "connections_active",
+    "Number of active connections",
+).Build()
+
+histogram, err := builder.Histogram(
+    "request_duration_seconds",
+    "Request processing time",
+).WithDurationBuckets().Build()
+
+// Use metrics easily
+ctx := context.Background()
+counter.Inc(ctx, metricsfx.WorkerAttrs("worker-1")...)
+gauge.Set(ctx, 42)
+histogram.RecordDuration(ctx, 250*time.Millisecond)
+```
+
+### Complex Example: Worker Metrics
+
+Before (lots of boilerplate):
+```go
+// 200+ lines of initialization code...
+meter := otel.Meter("bfo.workers", metric.WithInstrumentationVersion("1.0.0"))
+
+workerTicksTotal, err := meter.Int64Counter(
+    "bfo_worker_ticks_total",
+    metric.WithDescription("Total number of worker ticks executed"),
+    metric.WithUnit("1"),
+)
+// ... repeat for 8+ more metrics
+```
+
+After (clean and simple):
+```go
+// Create worker metrics with the builder
+func NewWorkerMetrics(provider *metricsfx.MetricsProvider, logger *logfx.Logger) (*WorkerMetrics, error) {
+    builder := metricsfx.NewMetricsBuilder(provider, "bfo.workers", "1.0.0")
+
+    ticksTotal, err := builder.Counter(
+        "bfo_worker_ticks_total",
+        "Total number of worker ticks executed",
+    ).Build()
+    if err != nil {
+        return nil, err
+    }
+
+    processingTime, err := builder.Histogram(
+        "bfo_worker_processing_duration_seconds",
+        "Time spent processing worker ticks",
+    ).WithDurationBuckets().Build()
+    if err != nil {
+        return nil, err
+    }
+
+    // ... much cleaner metric creation
+
+    return &WorkerMetrics{
+        ticksTotal:     ticksTotal,
+        processingTime: processingTime,
+        // ...
+    }, nil
+}
+
+// Clean usage with helper functions
+func (m *WorkerMetrics) RecordWorkerTick(ctx context.Context, workerName string, duration time.Duration) {
+    attrs := metricsfx.WorkerAttrs(workerName)
+
+    m.ticksTotal.Inc(ctx, attrs...)
+    m.processingTime.RecordDuration(ctx, duration, attrs...)
+}
+```
+
+## MetricsBuilder API
+
+### Creating Metrics
+
+```go
+builder := metricsfx.NewMetricsBuilder(provider, "service-name", "version")
+
+// Counters
+counter, err := builder.Counter("metric_name", "description").
+    WithUnit("requests").
+    Build()
+
+// Gauges
+gauge, err := builder.Gauge("metric_name", "description").
+    WithUnit("connections").
+    Build()
+
+// Histograms
+histogram, err := builder.Histogram("metric_name", "description").
+    WithDurationBuckets().              // Predefined duration buckets
+    Build()
+
+// Custom histogram buckets
+histogram, err := builder.Histogram("metric_name", "description").
+    WithBuckets(0.1, 0.5, 1.0, 2.0, 5.0).
+    Build()
+```
+
+### Using Metrics
+
+```go
+ctx := context.Background()
+
+// Counters
+counter.Inc(ctx)                              // Increment by 1
+counter.Add(ctx, 5)                          // Add 5
+counter.Inc(ctx, attribute.String("key", "value"))  // With attributes
+
+// Gauges
+gauge.Set(ctx, 42)                           // Set value
+gauge.SetBool(ctx, true)                     // Set boolean (1/0)
+
+// Histograms
+histogram.Record(ctx, 1.5)                   // Record value
+histogram.RecordDuration(ctx, 250*time.Millisecond)  // Record duration
+```
+
+### Attribute Helpers
+
+Pre-built attribute helpers for common patterns:
+
+```go
+// Worker attributes
+attrs := metricsfx.WorkerAttrs("worker-1")
+// → [worker_name="worker-1"]
+
+// Error attributes
+attrs := metricsfx.ErrorAttrs(err)
+// → [error_type="*errors.errorString"]
+
+// Combined worker + error
+attrs := metricsfx.WorkerErrorAttrs("worker-1", err)
+// → [worker_name="worker-1", error_type="*errors.errorString"]
+
+// Status attributes
+attrs := metricsfx.StatusAttrs("active")
+// → [status="active"]
+
+// Type attributes
+attrs := metricsfx.TypeAttrs("batch_processing")
+// → [type="batch_processing"]
+```
+
+## Traditional API (Still Available)
 
 ### MetricsProvider
 
-The main interface for metrics functionality:
+The traditional lower-level interface is still available:
 
 ```go
 // Create a new metrics provider
@@ -37,7 +203,7 @@ if err != nil {
 meterProvider := metricsProvider.GetMeterProvider()
 meter := meterProvider.Meter("my-service")
 
-// Create custom metrics
+// Create custom metrics manually
 counter, err := meter.Int64Counter(
     "my_counter",
     metric.WithDescription("Example counter"),
@@ -129,3 +295,13 @@ defer func() {
     }
 }()
 ```
+
+## Benefits of MetricsBuilder
+
+- **90% less boilerplate** - No more repetitive OpenTelemetry setup code
+- **Type-safe** - Compile-time guarantees for metric usage
+- **Fluent interface** - Chain configuration methods for readability
+- **Best practices** - Follows OpenTelemetry conventions automatically
+- **Helper functions** - Common attribute patterns pre-built
+- **Easy testing** - Simple mocking and testing patterns
+- **Backward compatible** - Traditional API still available

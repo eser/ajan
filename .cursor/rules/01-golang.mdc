@@ -37,6 +37,60 @@ alwaysApply: true
 - Use **goroutines safely**; guard shared state with channels or sync primitives.
 - **Defer closing resources** and handle them carefully to avoid leaks.
 
+### Error Handling:
+- Define **sentinel errors** using `errors.New()` for specific error conditions at package level.
+- Use **consistent error context** with the pattern `fmt.Errorf("%w (key=%q)", ErrSentinel, value)` for adding context.
+- For error wrapping, use `fmt.Errorf("%w: %w", ErrSentinel, err)` to wrap external errors.
+- **Avoid dynamic errors** - never use `errors.New()` or `fmt.Errorf()` with dynamic strings inside functions.
+- Use **parentheses with key=value pairs** for context: `(name=%q)`, `(protocol=%q)`, `(name=%q, expected=%q, got=%q)`.
+- **Name sentinel errors** with descriptive prefixes like `ErrConnectionNotFound`, `ErrInvalidType`, `ErrProtocolMismatch`.
+- For functions that can fail in multiple ways, create specific sentinel errors for each failure mode.
+- When building complex error messages, use `fmt.Sprintf()` to construct the message, then wrap with sentinel error.
+
+**Examples:**
+```go
+// ✅ Good: Sentinel errors with context
+var (
+    ErrConnectionNotFound = errors.New("connection not found")
+    ErrInvalidType        = errors.New("invalid type")
+    ErrProtocolMismatch   = errors.New("protocol mismatch")
+)
+
+func GetConnection(name string) (Connection, error) {
+    conn := registry.Get(name)
+    if conn == nil {
+        return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+    }
+    return conn, nil
+}
+
+func ValidateProtocol(name, expected, got string) error {
+    if expected != got {
+        return fmt.Errorf("%w (name=%q, expected=%q, got=%q)",
+            ErrProtocolMismatch, name, expected, got)
+    }
+    return nil
+}
+
+// ✅ Good: Wrapping external errors
+func CreateConnection(config Config) error {
+    conn, err := external.Connect(config.DSN)
+    if err != nil {
+        return fmt.Errorf("%w (name=%q): %w", ErrFailedToConnect, config.Name, err)
+    }
+    return nil
+}
+
+// ❌ Bad: Dynamic errors
+func BadExample(name string) error {
+    return errors.New("connection " + name + " not found") // Don't do this
+}
+
+// ❌ Bad: Inconsistent context format
+func BadContext(name string) error {
+    return fmt.Errorf("%w: %s", ErrConnectionNotFound, name) // Use (name=%q) instead
+}
+
 ### Security and Resilience:
 - Apply **input validation and sanitization** rigorously, especially on inputs from external sources.
 - Use secure defaults for **JWT, cookies**, and configuration settings.
@@ -51,6 +105,82 @@ alwaysApply: true
 - Separate **fast unit tests** from slower integration and E2E tests.
 - Ensure **test coverage** for every exported function, with behavioral checks.
 - Use tools like 'go test -cover' to ensure adequate test coverage.
+- **Test errors using sentinel error checking** with `assert.ErrorIs(t, err, ErrExpected)` instead of string matching.
+- **Avoid testing error messages** with `assert.Contains(t, err.Error(), "message")` - use sentinel errors instead.
+- **Test both success and failure paths** for all functions that return errors.
+- **Use require.NoError()** for setup operations that must succeed, **assert.Error()** for expected failures.
+
+**Error Testing Examples:**
+```go
+// ✅ Good: Test using sentinel errors
+func TestGetConnection_NotFound(t *testing.T) {
+    manager := NewManager()
+
+    _, err := manager.GetConnection("nonexistent")
+    assert.Error(t, err)
+    assert.ErrorIs(t, err, ErrConnectionNotFound)
+}
+
+func TestValidateProtocol_Mismatch(t *testing.T) {
+    err := ValidateProtocol("db", "postgres", "mysql")
+    assert.Error(t, err)
+    assert.ErrorIs(t, err, ErrProtocolMismatch)
+    // You can still check context if needed
+    assert.Contains(t, err.Error(), `expected="postgres"`)
+    assert.Contains(t, err.Error(), `got="mysql"`)
+}
+
+// ✅ Good: Test error wrapping
+func TestCreateConnection_ExternalError(t *testing.T) {
+    mockConfig := Config{Name: "test", DSN: "invalid"}
+
+    err := CreateConnection(mockConfig)
+    assert.Error(t, err)
+    assert.ErrorIs(t, err, ErrFailedToConnect)
+    // Verify the wrapped error is preserved
+    assert.ErrorContains(t, err, "test")
+}
+
+// ❌ Bad: Testing error strings
+func TestBadErrorTesting(t *testing.T) {
+    _, err := manager.GetConnection("nonexistent")
+    assert.Error(t, err)
+    assert.Contains(t, err.Error(), "connection not found") // Fragile!
+}
+
+// ✅ Good: Table-driven error tests
+func TestGetConnection_Errors(t *testing.T) {
+    tests := []struct {
+        name        string
+        connName    string
+        expectedErr error
+        setup       func(*Manager)
+    }{
+        {
+            name:        "connection not found",
+            connName:    "nonexistent",
+            expectedErr: ErrConnectionNotFound,
+        },
+        {
+            name:        "nil connection name",
+            connName:    "",
+            expectedErr: ErrInvalidConnectionName,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            manager := NewManager()
+            if tt.setup != nil {
+                tt.setup(manager)
+            }
+
+            _, err := manager.GetConnection(tt.connName)
+            assert.Error(t, err)
+            assert.ErrorIs(t, err, tt.expectedErr)
+        })
+    }
+}
 
 ### Documentation and Standards:
 - Document public functions and packages with **GoDoc-style comments**.

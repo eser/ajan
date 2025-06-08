@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -16,6 +17,12 @@ const (
 	SelfSignedCertOrganization = "Development"
 	SelfSignedCertValidity     = 365 * 24 * time.Hour
 	SelfSignedKeyLength        = 2048
+)
+
+var (
+	ErrPrivateKeyGeneration  = errors.New("failed to generate private key")
+	ErrCertificateGeneration = errors.New("failed to generate certificate")
+	ErrKeyPairCreation       = errors.New("failed to create key pair")
 )
 
 func CryptoGetRandomBytes(size int) []byte {
@@ -30,7 +37,7 @@ func GenerateSelfSignedCert() (tls.Certificate, error) {
 	// Generate private key
 	priv, err := rsa.GenerateKey(rand.Reader, SelfSignedKeyLength)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error on GenerateSelfSignedCert: %w", err)
+		return tls.Certificate{}, fmt.Errorf("%w: %w", ErrPrivateKeyGeneration, err)
 	}
 
 	// Generate certificate template
@@ -49,7 +56,7 @@ func GenerateSelfSignedCert() (tls.Certificate, error) {
 	// Generate self-signed certificate
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error on GenerateSelfSignedCert: %w", err)
+		return tls.Certificate{}, fmt.Errorf("%w: %w", ErrCertificateGeneration, err)
 	}
 
 	// Convert certificate and private key to PEM format
@@ -65,7 +72,7 @@ func GenerateSelfSignedCert() (tls.Certificate, error) {
 	// Create tls.Certificate
 	keypair, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error on GenerateSelfSignedCert: %w", err)
+		return tls.Certificate{}, fmt.Errorf("%w: %w", ErrKeyPairCreation, err)
 	}
 
 	return keypair, nil

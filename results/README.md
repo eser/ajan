@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **results** package provides a structured way to handle and represent
+**results** package provides a structured way to handle and represent
 operational results, including errors, within the application.
 
 The documentation below provides an overview of the package, its types,
@@ -42,9 +42,9 @@ Creates a new `Definition` object.
 // func Define(code string, message string, attributes ...slog.Attr) *Definition
 
 var (
-  resOk       = results.Define("OP001", "OK")
-  resNotFound = results.Define("OP002", "Not Found")
-  resFailure  = results.Define("OP003", "Fail")
+  resOk       = results.Define(results.ResultKindSuccess, "OP001", "OK")
+  resNotFound = results.Define(results.ResultKindSuccess, "OP002", "Not Found")
+  resFailure  = results.Define(results.ResultKindError, "OP003", "Fail")
 )
 ```
 
@@ -56,9 +56,9 @@ Example 1:
 
 ```go
 var (
-  resOk       = results.Define("OP001", "OK")
-  resNotFound = results.Define("OP002", "Not Found")
-  resFailure  = results.Define("OP003", "Fail")
+  resOk       = results.Define(results.ResultKindSuccess, "OP001", "OK")
+  resNotFound = results.Define(results.ResultKindSuccess, "OP002", "Not Found")
+  resFailure  = results.Define(results.ResultKindError, "OP003", "Fail")
 )
 
 // func (r *Definition) New(payload ...any) ResultImpl
@@ -84,9 +84,9 @@ Example 2:
 
 ```go
 var (
-  resOk                = results.Define("PARSE001", "OK")
-  resSyntaxError       = results.Define("PARSE002", "Syntax Error")
-  resInvalidOperation  = results.Define("PARSE003", "Invalid Operation")
+  resOk                = results.Define(results.ResultKindSuccess, "PARSE001", "OK")
+  resSyntaxError       = results.Define(results.ResultKindError, "PARSE002", "Syntax Error")
+  resInvalidOperation  = results.Define(results.ResultKindError, "PARSE003", "Invalid Operation")
 )
 
 // func (r *Definition) New(payload ...any) ResultImpl

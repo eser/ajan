@@ -21,6 +21,6 @@ type BaseConfig struct {
 	Cache cachefx.Config `conf:"cache"`
 	Queue queuefx.Config `conf:"queue"`
 	Log   logfx.Config   `conf:"log"`
-	Grpc  grpcfx.Config  `conf:"grpc"`
-	Http  httpfx.Config  `conf:"http"`
+	GRPC  grpcfx.Config  `conf:"grpc"`
+	HTTP  httpfx.Config  `conf:"http"`
 }

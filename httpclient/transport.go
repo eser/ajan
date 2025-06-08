@@ -23,6 +23,12 @@ var (
 	ErrRequestBodyNotRetriable = errors.New(
 		"request body cannot be retried, implement GetBody to enable retries",
 	)
+	// ErrAllRetryAttemptsFailed is returned when all retry attempts fail.
+	ErrAllRetryAttemptsFailed = errors.New("all retry attempts failed")
+	// ErrTransportError is returned when the underlying transport fails.
+	ErrTransportError = errors.New("transport error")
+	// ErrRequestContextError is returned when request context is cancelled.
+	ErrRequestContextError = errors.New("request context error")
 )
 
 type ResilientTransport struct {
@@ -91,7 +97,7 @@ func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
+		return nil, fmt.Errorf("%w: %w", ErrAllRetryAttemptsFailed, lastErr)
 	}
 
 	return nil, ErrMaxRetries
@@ -118,7 +124,7 @@ func (t *ResilientTransport) handleRequest(req *http.Request) (*http.Response, e
 			return nil, ErrCircuitOpen
 		}
 
-		return nil, fmt.Errorf("transport error: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrTransportError, err)
 	}
 
 	if resp.StatusCode >= t.circuitBreaker.Config.ServerErrorThreshold {
@@ -148,7 +154,7 @@ func (t *ResilientTransport) handleRetry(req *http.Request, attempt uint) (*http
 
 	select {
 	case <-req.Context().Done():
-		return nil, fmt.Errorf("request context error: %w", req.Context().Err())
+		return nil, fmt.Errorf("%w: %w", ErrRequestContextError, req.Context().Err())
 	case <-timer.C:
 	}
 

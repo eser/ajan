@@ -66,6 +66,7 @@ repos:
             README.md|
             cachefx/README.md|
             configfx/README.md|
+            connfx/README.md|
             datafx/README.md|
             di/README.md|
             eventsfx/README.md|
@@ -75,9 +76,11 @@ repos:
             lib/README.md|
             logfx/README.md|
             metricsfx/README.md|
+            processfx/README.md|
             queuefx/README.md|
             results/README.md|
             types/README.md|
+            sampleapp/README.md|
             sampleapp/Dockerfile
           )$
       - id: run-tests

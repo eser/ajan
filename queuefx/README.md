@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **queuefx** package is a flexible message queue package that provides a
+**queuefx** package is a flexible message queue package that provides a
 unified interface for different message queue backends. Currently, it supports
 RabbitMQ (AMQP) as a message queue backend.
 

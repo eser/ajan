@@ -1,11 +1,18 @@
 package configfx
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/eser/ajan/configfx/envparser"
 	"github.com/eser/ajan/configfx/jsonparser"
 	"github.com/eser/ajan/lib"
+)
+
+var (
+	ErrFailedToParseEnvFile    = errors.New("failed to parse env file")
+	ErrFailedToParseJSONFile   = errors.New("failed to parse JSON file")
+	ErrFailedToParseJSONString = errors.New("failed to parse JSON string")
 )
 
 func (cl *ConfigManager) FromEnvFileDirect(
@@ -15,7 +22,7 @@ func (cl *ConfigManager) FromEnvFileDirect(
 	return func(target *map[string]any) error {
 		err := envparser.TryParseFiles(target, keyCaseInsensitive, filename)
 		if err != nil {
-			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
+			return fmt.Errorf("%w (filename=%q): %w", ErrFailedToParseEnvFile, filename, err)
 		}
 
 		return nil
@@ -29,7 +36,7 @@ func (cl *ConfigManager) FromEnvFile(filename string, keyCaseInsensitive bool) C
 
 		err := envparser.TryParseFiles(target, keyCaseInsensitive, filenames...)
 		if err != nil {
-			return fmt.Errorf("failed to parse env file - %q: %w", filename, err)
+			return fmt.Errorf("%w (filename=%q): %w", ErrFailedToParseEnvFile, filename, err)
 		}
 
 		return nil
@@ -44,36 +51,36 @@ func (cl *ConfigManager) FromSystemEnv(keyCaseInsensitive bool) ConfigResource {
 	}
 }
 
-func (cl *ConfigManager) FromJsonFileDirect(filename string) ConfigResource {
+func (cl *ConfigManager) FromJSONFileDirect(filename string) ConfigResource {
 	return func(target *map[string]any) error {
 		err := jsonparser.TryParseFiles(target, filename)
 		if err != nil {
-			return fmt.Errorf("failed to parse json file - %q: %w", filename, err)
+			return fmt.Errorf("%w (filename=%q): %w", ErrFailedToParseJSONFile, filename, err)
 		}
 
 		return nil
 	}
 }
 
-func (cl *ConfigManager) FromJsonFile(filename string) ConfigResource {
+func (cl *ConfigManager) FromJSONFile(filename string) ConfigResource {
 	return func(target *map[string]any) error {
 		env := lib.EnvGetCurrent()
 		filenames := lib.EnvAwareFilenames(env, filename)
 
 		err := jsonparser.TryParseFiles(target, filenames...)
 		if err != nil {
-			return fmt.Errorf("failed to parse json file - %q: %w", filename, err)
+			return fmt.Errorf("%w (filename=%q): %w", ErrFailedToParseJSONFile, filename, err)
 		}
 
 		return nil
 	}
 }
 
-func (cl *ConfigManager) FromJsonString(jsonStr string) ConfigResource {
+func (cl *ConfigManager) FromJSONString(jsonStr string) ConfigResource {
 	return func(target *map[string]any) error {
 		err := jsonparser.ParseBytes([]byte(jsonStr), target)
 		if err != nil {
-			return fmt.Errorf("failed to parse json string: %w", err)
+			return fmt.Errorf("%w: %w", ErrFailedToParseJSONString, err)
 		}
 
 		return nil

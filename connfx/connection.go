@@ -1,0 +1,152 @@
+package connfx
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+)
+
+// Sentinel errors for GetTypedConnection function.
+var (
+	ErrConnectionIsNil    = errors.New("connection is nil")
+	ErrRawConnectionIsNil = errors.New("raw connection is nil")
+	ErrInvalidType        = errors.New("invalid type")
+)
+
+// ConnectionBehavior represents the behavioral type of connection.
+type ConnectionBehavior string
+
+const (
+	// ConnectionBehaviorStateful represents persistent connections that maintain state
+	// Examples: database connections, persistent TCP connections, connection pools.
+	ConnectionBehaviorStateful ConnectionBehavior = "stateful"
+
+	// ConnectionBehaviorStateless represents connections that don't maintain state
+	// Examples: HTTP clients, REST APIs, stateless services.
+	ConnectionBehaviorStateless ConnectionBehavior = "stateless"
+
+	// ConnectionBehaviorStreaming represents streaming/real-time connections
+	// Examples: message queues, event streams, websockets, gRPC streams.
+	ConnectionBehaviorStreaming ConnectionBehavior = "streaming"
+)
+
+// ConnectionState represents the current state of a connection.
+type ConnectionState int32
+
+const (
+	ConnectionStateUnknown      ConnectionState = 0
+	ConnectionStateConnected    ConnectionState = 1
+	ConnectionStateDisconnected ConnectionState = 2
+	ConnectionStateError        ConnectionState = 3
+	ConnectionStateReconnecting ConnectionState = 4
+)
+
+// String returns the string representation of ConnectionState.
+func (s ConnectionState) String() string {
+	switch s {
+	case ConnectionStateUnknown:
+		return "unknown"
+	case ConnectionStateConnected:
+		return "connected"
+	case ConnectionStateDisconnected:
+		return "disconnected"
+	case ConnectionStateError:
+		return "error"
+	case ConnectionStateReconnecting:
+		return "reconnecting"
+	default:
+		return "unknown"
+	}
+}
+
+// HealthStatus represents the health check result.
+type HealthStatus struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Error     error           `json:"error,omitempty"`
+	Message   string          `json:"message,omitempty"`
+	Latency   time.Duration   `json:"latency,omitempty"`
+	State     ConnectionState `json:"state"`
+}
+
+// Connection represents a generic connection interface.
+type Connection interface {
+	// GetName returns the connection name
+	GetName() string
+
+	// GetBehaviors returns the connection behaviors this connection supports
+	GetBehaviors() []ConnectionBehavior
+
+	// GetProtocol returns the protocol/technology used (e.g., "postgres", "redis", "http")
+	GetProtocol() string
+
+	// GetState returns the current connection state
+	GetState() ConnectionState
+
+	// HealthCheck performs a health check and returns the status
+	HealthCheck(ctx context.Context) *HealthStatus
+
+	// Close closes the connection
+	Close(ctx context.Context) error
+
+	// GetRawConnection returns the underlying connection object
+	GetRawConnection() any
+}
+
+// ConnectionConfig represents the base configuration for all connections.
+type ConnectionConfig interface {
+	GetName() string
+	GetProtocol() string
+	Validate() error
+}
+
+// ConnectionFactory creates connections from configuration.
+type ConnectionFactory interface {
+	// CreateConnection creates a new connection from configuration
+	CreateConnection(ctx context.Context, config ConnectionConfig) (Connection, error)
+
+	// GetProtocol returns the protocol this factory supports (e.g., "postgres", "redis")
+	GetProtocol() string
+
+	// GetSupportedBehaviors returns the behaviors this factory creates
+	GetSupportedBehaviors() []ConnectionBehavior
+}
+
+// GetTypedConnection extracts a typed connection from a Connection interface.
+// This provides type-safe access to the underlying connection without manual type assertions.
+//
+// Example usage:
+//
+//	conn, err := connfx.GetConnection("database")
+//	if err != nil { return err }
+//
+//	db, err := connfx.GetTypedConnection[*sql.DB](conn)
+//	if err != nil { return err }
+//
+//	// Now db is *sql.DB and can be used safely
+//	rows, err := db.Query("SELECT * FROM users")
+func GetTypedConnection[T any](conn Connection) (T, error) {
+	var zero T
+
+	if conn == nil {
+		return zero, ErrConnectionIsNil
+	}
+
+	raw := conn.GetRawConnection()
+	if raw == nil {
+		return zero, fmt.Errorf(
+			"%w (name=%q, protocol=%q)",
+			ErrRawConnectionIsNil,
+			conn.GetName(),
+			conn.GetProtocol(),
+		)
+	}
+
+	typed, ok := raw.(T)
+	if !ok {
+		return zero, fmt.Errorf("%w (name=%q, protocol=%q, expected=%T, got=%T)",
+			ErrInvalidType, conn.GetName(), conn.GetProtocol(), zero, raw)
+	}
+
+	return typed, nil
+}

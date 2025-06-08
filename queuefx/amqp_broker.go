@@ -2,9 +2,22 @@ package queuefx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+var (
+	ErrFailedToOpenBrokerConnection = errors.New("failed to open broker connection")
+	ErrFailedToOpenBrokerChannel    = errors.New("failed to open broker channel")
+	ErrFailedToDeclareQueue         = errors.New("failed to declare queue")
+	ErrFailedToPublishMessage       = errors.New("failed to publish message")
+	ErrFailedToReconnect            = errors.New("failed to reconnect")
+	ErrFailedToStartConsuming       = errors.New("failed to start consuming")
+	ErrChannelClosed                = errors.New("channel closed")
+	ErrFailedToCloseChannel         = errors.New("failed to close channel")
+	ErrFailedToRecreateChannel      = errors.New("failed to recreate channel")
 )
 
 type AmqpBroker struct {
@@ -16,12 +29,12 @@ type AmqpBroker struct {
 func NewAmqpBroker(ctx context.Context, dialect Dialect, dsn string) (*AmqpBroker, error) {
 	connection, err := amqp.Dial(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open broker connection: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenBrokerConnection, err)
 	}
 
 	channel, err := connection.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open broker channel: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenBrokerChannel, err)
 	}
 
 	return &AmqpBroker{
@@ -45,7 +58,7 @@ func (broker *AmqpBroker) QueueDeclare(ctx context.Context, name string) (string
 		nil,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to declare queue: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrFailedToDeclareQueue, err)
 	}
 
 	return queue.Name, nil
@@ -63,7 +76,7 @@ func (broker *AmqpBroker) Publish(ctx context.Context, name string, body []byte)
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to publish message: %w", err)
+		return fmt.Errorf("%w: %w", ErrFailedToPublishMessage, err)
 	}
 
 	return nil
@@ -133,7 +146,7 @@ func (broker *AmqpBroker) Consume( //nolint:cyclop,gocognit,funlen
 				// Ensure we have an open channel
 				if broker.channel == nil {
 					if err := broker.reconnect(); err != nil {
-						errors <- fmt.Errorf("failed to reconnect: %w", err)
+						errors <- fmt.Errorf("%w: %w", ErrFailedToReconnect, err)
 						// Add exponential backoff here if needed
 						continue
 					}
@@ -150,7 +163,7 @@ func (broker *AmqpBroker) Consume( //nolint:cyclop,gocognit,funlen
 					config.Args,
 				)
 				if err != nil {
-					errors <- fmt.Errorf("failed to start consuming: %w", err)
+					errors <- fmt.Errorf("%w: %w", ErrFailedToStartConsuming, err)
 
 					continue
 				}
@@ -164,7 +177,7 @@ func (broker *AmqpBroker) Consume( //nolint:cyclop,gocognit,funlen
 					case <-ctx.Done():
 						return
 					case err := <-chanClose:
-						errors <- fmt.Errorf("channel closed: %w", err)
+						errors <- fmt.Errorf("%w: %w", ErrChannelClosed, err)
 
 						broker.channel = nil
 
@@ -206,13 +219,13 @@ func (broker *AmqpBroker) reconnect() error {
 	if broker.channel != nil {
 		err := broker.channel.Close()
 		if err != nil {
-			return fmt.Errorf("failed to close channel: %w", err)
+			return fmt.Errorf("%w: %w", ErrFailedToCloseChannel, err)
 		}
 	}
 
 	channel, err := broker.connection.Channel()
 	if err != nil {
-		return fmt.Errorf("failed to recreate channel: %w", err)
+		return fmt.Errorf("%w: %w", ErrFailedToRecreateChannel, err)
 	}
 
 	broker.channel = channel

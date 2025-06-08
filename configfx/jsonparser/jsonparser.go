@@ -3,11 +3,14 @@ package jsonparser
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 )
+
+var ErrParsingError = errors.New("parsing error")
 
 const Separator = "__"
 
@@ -16,7 +19,7 @@ func ParseBytes(data []byte, out *map[string]any) error {
 
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
-		return fmt.Errorf("parsing error: %w", err)
+		return fmt.Errorf("%w: %w", ErrParsingError, err)
 	}
 
 	flattenJSON(raw, "", out)
@@ -29,7 +32,7 @@ func Parse(m *map[string]any, r io.Reader) error {
 
 	_, err := io.Copy(&buf, r)
 	if err != nil {
-		return fmt.Errorf("parsing error: %w", err)
+		return fmt.Errorf("%w: %w", ErrParsingError, err)
 	}
 
 	return ParseBytes(buf.Bytes(), m)
@@ -42,7 +45,7 @@ func tryParseFile(m *map[string]any, filename string) (err error) {
 			return nil
 		}
 
-		return fmt.Errorf("parsing error: %w", fileErr)
+		return fmt.Errorf("%w: %w", ErrParsingError, fileErr)
 	}
 
 	defer func() {

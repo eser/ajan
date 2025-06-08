@@ -1,10 +1,16 @@
 package logfx
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
+)
+
+var (
+	ErrInvalidLevelString = errors.New("invalid level string")
+	ErrUnknownErrorLevel  = errors.New("unknown error level")
 )
 
 // OtelLevel - 9 = Level.
@@ -101,7 +107,7 @@ func ParseLevel(s string, errorOnEmpty bool) (*slog.Level, error) { //nolint:cyc
 
 		offset, err = strconv.Atoi(s[i:])
 		if err != nil {
-			return nil, fmt.Errorf("logfx: level string %q: %w", s, err)
+			return nil, fmt.Errorf("%w (s=%q): %w", ErrInvalidLevelString, s, err)
 		}
 	}
 
@@ -121,7 +127,7 @@ func ParseLevel(s string, errorOnEmpty bool) (*slog.Level, error) { //nolint:cyc
 	case "PANIC":
 		l = LevelPanic
 	default:
-		return nil, fmt.Errorf("unknown error level %q", s) //nolint:err113
+		return nil, fmt.Errorf("%w (s=%q)", ErrUnknownErrorLevel, s)
 	}
 
 	l += slog.Level(offset)

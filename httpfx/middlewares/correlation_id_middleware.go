@@ -5,19 +5,19 @@ import (
 	"github.com/eser/ajan/lib"
 )
 
-const CorrelationIdHeader = "X-Correlation-Id"
+const CorrelationIDHeader = "X-Correlation-ID"
 
-func CorrelationIdMiddleware() httpfx.Handler {
+func CorrelationIDMiddleware() httpfx.Handler {
 	return func(ctx *httpfx.Context) httpfx.Result {
 		// FIXME(@eser) no need to check if the header is specified
-		correlationId := ctx.Request.Header.Get(CorrelationIdHeader)
-		if correlationId == "" {
-			correlationId = lib.IdsGenerateUnique()
+		correlationID := ctx.Request.Header.Get(CorrelationIDHeader)
+		if correlationID == "" {
+			correlationID = lib.IDsGenerateUnique()
 		}
 
 		result := ctx.Next()
 
-		ctx.ResponseWriter.Header().Set(CorrelationIdHeader, correlationId)
+		ctx.ResponseWriter.Header().Set(CorrelationIDHeader, correlationID)
 
 		return result
 	}

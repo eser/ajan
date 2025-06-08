@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIdsGenerateUnique(t *testing.T) {
+func TestIDsGenerateUnique(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -25,7 +25,7 @@ func TestIdsGenerateUnique(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := lib.IdsGenerateUnique()
+			got := lib.IDsGenerateUnique()
 
 			assert.Len(t, got, 26)
 		})

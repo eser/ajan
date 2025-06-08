@@ -11,7 +11,7 @@ import (
 
 const (
 	ClientAddr       httpfx.ContextKey = "client-addr"
-	ClientAddrIp     httpfx.ContextKey = "client-addr-ip"
+	ClientAddrIP     httpfx.ContextKey = "client-addr-ip"
 	ClientAddrOrigin httpfx.ContextKey = "client-addr-origin"
 )
 

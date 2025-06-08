@@ -1,15 +1,18 @@
 package configfx
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/eser/ajan/results"
 )
 
-var ErrNotStruct = results.Define("ERRBC00001", "not a struct") //nolint:gochecknoglobals
+var (
+	ErrNotStruct                  = errors.New("not a struct")
+	ErrMissingRequiredConfigValue = errors.New("missing required config value")
+)
 
 type ConfigManager struct{}
 
@@ -67,7 +70,10 @@ func (cl *ConfigManager) Load(i any, resources ...ConfigResource) error {
 		return err
 	}
 
-	reflectSet(meta, "", target)
+	err = reflectSet(meta, "", target)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -75,7 +81,7 @@ func (cl *ConfigManager) Load(i any, resources ...ConfigResource) error {
 func (cl *ConfigManager) LoadDefaults(i any) error {
 	return cl.Load(
 		i,
-		cl.FromJsonFile("config.json"),
+		cl.FromJSONFile("config.json"),
 		cl.FromEnvFile(".env", true),
 		cl.FromSystemEnv(true),
 	)
@@ -85,7 +91,11 @@ func reflectMeta(r reflect.Value) ([]ConfigItemMeta, error) {
 	result := make([]ConfigItemMeta, 0)
 
 	if r.Kind() != reflect.Struct {
-		return nil, ErrNotStruct.New()
+		return nil, fmt.Errorf(
+			"%w (type=%s)",
+			ErrNotStruct,
+			r.Type().String(),
+		)
 	}
 
 	for i := range r.NumField() {
@@ -143,7 +153,7 @@ func reflectSet( //nolint:cyclop,gocognit,funlen
 	meta ConfigItemMeta,
 	prefix string,
 	target *map[string]any,
-) {
+) error {
 	for _, child := range meta.Children {
 		key := prefix + child.Name
 
@@ -194,7 +204,10 @@ func reflectSet( //nolint:cyclop,gocognit,funlen
 					subMeta.Children = children
 				}
 
-				reflectSet(subMeta, prefix+mapKey+Separator, target)
+				err := reflectSet(subMeta, prefix+mapKey+Separator, target)
+				if err != nil {
+					return err
+				}
 
 				// Set the value in the map
 				newMap.SetMapIndex(reflect.ValueOf(mapKey), mapValue)
@@ -206,7 +219,10 @@ func reflectSet( //nolint:cyclop,gocognit,funlen
 		}
 
 		if child.Type.Kind() == reflect.Struct {
-			reflectSet(child, key+Separator, target)
+			err := reflectSet(child, key+Separator, target)
+			if err != nil {
+				return err
+			}
 
 			continue
 		}
@@ -221,7 +237,13 @@ func reflectSet( //nolint:cyclop,gocognit,funlen
 			}
 
 			if child.IsRequired {
-				panic("missing required config value: " + child.Name)
+				return fmt.Errorf(
+					"%w (key=%q, child_name=%q, child_type=%s)",
+					ErrMissingRequiredConfigValue,
+					key,
+					child.Name,
+					child.Type.String(),
+				)
 			}
 
 			continue
@@ -229,6 +251,8 @@ func reflectSet( //nolint:cyclop,gocognit,funlen
 
 		reflectSetField(child.Field, child.Type, value)
 	}
+
+	return nil
 }
 
 func reflectSetField( //nolint:cyclop,funlen

@@ -2,34 +2,39 @@ package grpcfx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"time"
 
 	"github.com/eser/ajan/logfx"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/eser/ajan/metricsfx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
-type GrpcService struct {
+var (
+	ErrFailedToCreateGRPCMetrics = errors.New("failed to create gRPC metrics")
+	ErrGRPCServiceNetListenError = errors.New("gRPC service net listen error")
+)
+
+type GRPCService struct {
 	InnerServer  *grpc.Server
 	InnerMetrics *Metrics
 	Config       *Config
 	logger       *logfx.Logger
 }
 
-type MetricsProvider interface {
-	GetMeterProvider() metric.MeterProvider
-}
-
-func NewGrpcService(
+func NewGRPCService(
 	config *Config,
-	metricsProvider MetricsProvider,
+	metricsProvider *metricsfx.MetricsProvider,
 	logger *logfx.Logger,
-) *GrpcService {
-	metrics := NewMetrics(metricsProvider)
+) (*GRPCService, error) {
+	metrics, err := NewMetrics(metricsProvider)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateGRPCMetrics, err)
+	}
 
 	server := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
@@ -42,33 +47,33 @@ func NewGrpcService(
 		reflection.Register(server)
 	}
 
-	return &GrpcService{
+	return &GRPCService{
 		InnerServer:  server,
 		InnerMetrics: metrics,
 		Config:       config,
 		logger:       logger,
-	}
+	}, nil
 }
 
-func (gs *GrpcService) Server() *grpc.Server {
+func (gs *GRPCService) Server() *grpc.Server {
 	return gs.InnerServer
 }
 
-func (gs *GrpcService) RegisterService(desc *grpc.ServiceDesc, impl any) {
+func (gs *GRPCService) RegisterService(desc *grpc.ServiceDesc, impl any) {
 	gs.InnerServer.RegisterService(desc, impl)
 }
 
-func (gs *GrpcService) Start(ctx context.Context) (func(), error) {
-	gs.logger.InfoContext(ctx, "GrpcService is starting...", slog.String("addr", gs.Config.Addr))
+func (gs *GRPCService) Start(ctx context.Context) (func(), error) {
+	gs.logger.InfoContext(ctx, "GRPCService is starting...", slog.String("addr", gs.Config.Addr))
 
 	listener, err := net.Listen("tcp", gs.Config.Addr)
 	if err != nil {
-		return nil, fmt.Errorf("GrpcService Net Listen error: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrGRPCServiceNetListenError, err)
 	}
 
 	go func() {
 		if err := gs.InnerServer.Serve(listener); err != nil {
-			gs.logger.ErrorContext(ctx, "GrpcService Serve error", slog.Any("error", err))
+			gs.logger.ErrorContext(ctx, "GRPCService Serve error", slog.Any("error", err))
 		}
 	}()
 
@@ -83,9 +88,9 @@ func (gs *GrpcService) Start(ctx context.Context) (func(), error) {
 
 		select {
 		case <-stopped:
-			gs.logger.InfoContext(ctx, "GrpcService has gracefully stopped.")
+			gs.logger.InfoContext(ctx, "GRPCService has gracefully stopped.")
 		case <-time.After(gs.Config.GracefulShutdownTimeout):
-			gs.logger.WarnContext(ctx, "GrpcService shutdown timeout exceeded, forcing stop")
+			gs.logger.WarnContext(ctx, "GRPCService shutdown timeout exceeded, forcing stop")
 			gs.InnerServer.Stop()
 		}
 	}

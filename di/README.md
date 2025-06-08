@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **di** package provides a lightweight yet powerful dependency injection
+**di** package provides a lightweight yet powerful dependency injection
 container for Go applications. It supports registration of concrete
 implementations, interface bindings, and dependency resolution through
 reflection. The package is designed to be simple to use while providing robust

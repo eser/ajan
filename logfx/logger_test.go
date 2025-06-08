@@ -16,7 +16,7 @@ func TestRegisterLogger(t *testing.T) {
 		name        string
 		config      *logfx.Config
 		wantErr     bool
-		expectedErr string
+		expectedErr error
 	}{
 		{
 			name: "ValidConfig",
@@ -26,7 +26,7 @@ func TestRegisterLogger(t *testing.T) {
 				AddSource:  true,
 			},
 			wantErr:     false,
-			expectedErr: "",
+			expectedErr: nil,
 		},
 		{
 			name: "InvalidLogLevel",
@@ -36,7 +36,7 @@ func TestRegisterLogger(t *testing.T) {
 				AddSource:  true,
 			},
 			wantErr:     true,
-			expectedErr: "failed to parse log level: unknown error level \"invalid\"",
+			expectedErr: logfx.ErrFailedToParseLogLevel,
 		},
 	}
 
@@ -48,8 +48,8 @@ func TestRegisterLogger(t *testing.T) {
 
 			if tt.wantErr {
 				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, logger)
-				assert.Equal(t, tt.expectedErr, err.Error())
 
 				return
 			}

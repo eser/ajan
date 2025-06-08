@@ -25,24 +25,24 @@ type RouterParameter struct {
 	IsRequired  bool
 }
 
-type RouteOpenApiSpecRequest struct {
+type RouteOpenAPISpecRequest struct {
 	Model any
 }
 
-type RouteOpenApiSpecResponse struct {
+type RouteOpenAPISpecResponse struct {
 	Model      any
 	StatusCode int
 	HasModel   bool
 }
 
-type RouteOpenApiSpec struct {
-	OperationId string
+type RouteOpenAPISpec struct {
+	OperationID string
 	Summary     string
 	Description string
 	Tags        []string
 
-	Requests   []RouteOpenApiSpecRequest
-	Responses  []RouteOpenApiSpecResponse
+	Requests   []RouteOpenAPISpecRequest
+	Responses  []RouteOpenAPISpecResponse
 	Deprecated bool
 }
 
@@ -52,11 +52,11 @@ type Route struct {
 	Handlers       []Handler
 	MuxHandlerFunc func(http.ResponseWriter, *http.Request)
 
-	Spec RouteOpenApiSpec
+	Spec RouteOpenAPISpec
 }
 
-func (r *Route) HasOperationId(operationId string) *Route {
-	r.Spec.OperationId = operationId
+func (r *Route) HasOperationID(operationID string) *Route {
+	r.Spec.OperationID = operationID
 
 	return r
 }
@@ -120,7 +120,7 @@ func (r *Route) HasQueryParameter(name string, description string) *Route {
 }
 
 func (r *Route) HasRequestModel(model any) *Route {
-	r.Spec.Requests = append(r.Spec.Requests, RouteOpenApiSpecRequest{
+	r.Spec.Requests = append(r.Spec.Requests, RouteOpenAPISpecRequest{
 		Model: model,
 	})
 
@@ -128,7 +128,7 @@ func (r *Route) HasRequestModel(model any) *Route {
 }
 
 func (r *Route) HasResponse(statusCode int) *Route {
-	r.Spec.Responses = append(r.Spec.Responses, RouteOpenApiSpecResponse{
+	r.Spec.Responses = append(r.Spec.Responses, RouteOpenAPISpecResponse{
 		StatusCode: statusCode,
 		HasModel:   false,
 		Model:      nil,
@@ -138,7 +138,7 @@ func (r *Route) HasResponse(statusCode int) *Route {
 }
 
 func (r *Route) HasResponseModel(statusCode int, model any) *Route {
-	r.Spec.Responses = append(r.Spec.Responses, RouteOpenApiSpecResponse{
+	r.Spec.Responses = append(r.Spec.Responses, RouteOpenAPISpecResponse{
 		StatusCode: statusCode,
 		HasModel:   true,
 		Model:      model,

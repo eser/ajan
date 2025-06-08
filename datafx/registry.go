@@ -3,6 +3,7 @@ package datafx
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,9 +11,14 @@ import (
 	"github.com/eser/ajan/logfx"
 )
 
+var (
+	ErrFailedToDetermineDialect = errors.New("failed to determine dialect")
+	ErrFailedToAddConnection    = errors.New("failed to add connection")
+)
+
 const DefaultDatasource = "default"
 
-type SqlExecutor interface {
+type SQLExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -21,7 +27,7 @@ type SqlExecutor interface {
 
 type Datasource interface {
 	GetDialect() Dialect
-	GetConnection() SqlExecutor
+	GetConnection() SQLExecutor
 	ExecuteUnitOfWork(ctx context.Context, fn func(uow *UnitOfWork) error) error
 }
 
@@ -55,7 +61,7 @@ func (registry *Registry) AddConnection(
 ) error {
 	dialect, err := DetermineDialect(provider, dsn)
 	if err != nil {
-		return fmt.Errorf("failed to determine dialect for %q: %w", name, err)
+		return fmt.Errorf("%w (name=%q): %w", ErrFailedToDetermineDialect, name, err)
 	}
 
 	registry.logger.Info(
@@ -71,7 +77,7 @@ func (registry *Registry) AddConnection(
 	// if dialect == DialectPostgresPgx {
 	// 	db, err = NewPgxDatasource(ctx, dialect, dsn)
 	// } else {
-	db, err := NewSqlDatasource(ctx, dialect, dsn)
+	db, err := NewSQLDatasource(ctx, dialect, dsn)
 	// }
 	if err != nil {
 		registry.logger.Error(
@@ -80,7 +86,7 @@ func (registry *Registry) AddConnection(
 			slog.String("name", name),
 		)
 
-		return fmt.Errorf("failed to add connection for %q: %w", name, err)
+		return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, name, err)
 	}
 
 	registry.datasources[name] = db
@@ -96,7 +102,7 @@ func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) er
 
 		err := registry.AddConnection(ctx, nameLower, source.Provider, source.DSN)
 		if err != nil {
-			return fmt.Errorf("failed to add connection for %q: %w", nameLower, err)
+			return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, nameLower, err)
 		}
 	}
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **eventsfx** package provides an event handling and pub/sub system for Go
+**eventsfx** package provides an event handling and pub/sub system for Go
 applications. It supports synchronous and asynchronous event handling with
 configurable timeouts and buffer sizes.
 

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCorrelationIdMiddleware(t *testing.T) {
+func TestCorrelationIDMiddleware(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -37,7 +37,7 @@ func TestCorrelationIdMiddleware(t *testing.T) {
 			// Create a test request
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if tt.existingHeaderValue != "" {
-				req.Header.Set(middlewares.CorrelationIdHeader, tt.existingHeaderValue)
+				req.Header.Set(middlewares.CorrelationIDHeader, tt.existingHeaderValue)
 			}
 
 			// Create a test response recorder
@@ -51,12 +51,12 @@ func TestCorrelationIdMiddleware(t *testing.T) {
 			}
 
 			// Create and execute the middleware
-			middleware := middlewares.CorrelationIdMiddleware()
+			middleware := middlewares.CorrelationIDMiddleware()
 			result := middleware(ctx)
 			require.NotNil(t, result)
 
 			// Check the response header
-			correlationID := w.Header().Get(middlewares.CorrelationIdHeader)
+			correlationID := w.Header().Get(middlewares.CorrelationIDHeader)
 			if tt.wantHeaderExists {
 				assert.NotEmpty(t, correlationID)
 

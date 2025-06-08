@@ -1,5 +1,5 @@
 // This module is taken from the Go standard library and
-// modified to work with the Ajan framework.
+// modified to work with the ajan framework.
 
 // Copyright 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

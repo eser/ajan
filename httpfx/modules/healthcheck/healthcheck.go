@@ -6,7 +6,7 @@ import (
 	"github.com/eser/ajan/httpfx"
 )
 
-func RegisterHttpRoutes(routes *httpfx.Router, config *httpfx.Config) {
+func RegisterHTTPRoutes(routes *httpfx.Router, config *httpfx.Config) {
 	if !config.HealthCheckEnabled {
 		return
 	}

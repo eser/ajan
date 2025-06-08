@@ -48,7 +48,7 @@ func parseMetricFloatString(input string) (float64, error) {
 
 	n, err := strconv.ParseFloat(base, 64)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse float from %q: %w", base, err)
+		return 0, fmt.Errorf("%w (base=%q): %w", ErrFailedToParseFloat, base, err)
 	}
 
 	return n * mul, nil

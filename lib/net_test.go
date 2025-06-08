@@ -50,7 +50,8 @@ func TestDetectLocalNetwork(t *testing.T) {
 
 			isLocal, err := lib.DetectLocalNetwork(tt.addr)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				assert.ErrorIs(t, err, lib.ErrInvalidIPAddress)
 
 				return
 			}

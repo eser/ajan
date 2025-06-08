@@ -1,9 +1,9 @@
-# 🧢 Ajan
+# 🧢 ajan framework
 
 [![codecov](https://codecov.io/gh/eser/ajan/branch/main/graph/badge.svg?token=w6s3ODtULz)](https://codecov.io/gh/eser/ajan)
 [![Build Pipeline](https://github.com/eser/ajan/actions/workflows/build.yml/badge.svg)](https://github.com/eser/ajan/actions/workflows/build.yml)
 
-`Ajan` project is designed to unlock Golang's greatest strength—its standard library—by enabling you to harness it with maximum robustness and flexibility. Rather than reinventing the wheel, this project builds upon Golang's core, providing you with a continuously updated, battle-tested foundation. At the same time, it offers flexible structures that let you configure and extend the standard library to meet your unique needs.
+`ajan` project is designed to unlock Golang's greatest strength—its standard library—by enabling you to harness it with maximum robustness and flexibility. Rather than reinventing the wheel, this project builds upon Golang's core, providing you with a continuously updated, battle-tested foundation. At the same time, it offers flexible structures that let you configure and extend the standard library to meet your unique needs.
 
 ## 📂 Components
 
@@ -11,16 +11,21 @@
 | ------------------------- | ----------- |
 | [cachefx](./cachefx/)     | Flexible caching solution with support for Redis and other backends |
 | [configfx](./configfx/)   | Configuration management with support for multiple sources including environment variables and files |
+| [connfx](./connfx/)       | Connection management and registry for databases, caches, and external services |
 | [datafx](./datafx/)       | Database access layer supporting PostgreSQL, MySQL, and SQLite |
 | [di](./di/)               | Lightweight yet powerful dependency injection container |
 | [eventsfx](./eventsfx/)   | Event handling and pub/sub system |
 | [grpcfx](./grpcfx/)       | gRPC service integration and utilities |
+| [httpclient](./httpclient/) | HTTP client utilities and helpers for external API communication |
 | [httpfx](./httpfx/)       | HTTP service framework with routing and middleware support |
-| [lib](./lib/)             | Common utilities and shared functionality |
+| [lib](./lib/)             | Common utilities and shared functionality including network, crypto, and string helpers |
 | [logfx](./logfx/)         | Structured logging with pretty-printing and OpenTelemetry support |
 | [metricsfx](./metricsfx/) | Metrics collection and monitoring utilities |
+| [processfx](./processfx/) | Process and goroutine lifecycle management with graceful shutdown handling |
 | [queuefx](./queuefx/)     | Message queue integration with RabbitMQ support |
 | [results](./results/)     | Structured error handling and result types |
+| [sampleapp](./sampleapp/) | Complete example application demonstrating ajan framework usage and best practices |
+| [types](./types/)         | Custom data types including metric types with unit suffix support |
 
 ## 🙋🏻 FAQ
 

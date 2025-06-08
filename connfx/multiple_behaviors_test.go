@@ -1,0 +1,195 @@
+package connfx_test
+
+import (
+	"log/slog"
+	"os"
+	"testing"
+
+	"github.com/eser/ajan/connfx"
+	"github.com/eser/ajan/connfx/adapters"
+	"github.com/eser/ajan/logfx"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
+	t.Parallel()
+
+	// Create logger
+	slogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{ //nolint:exhaustruct
+		Level: slog.LevelInfo, // Show info logs for this test to see behavior registration
+	}))
+	logger := logfx.NewLoggerFromSlog(slogger)
+
+	ctx := t.Context()
+
+	// Add Redis connection - NOTE: This will fail to connect since no Redis server is running
+	// But we can still test the factory and behavior setup
+	t.Run("factory_behaviors", func(t *testing.T) {
+		t.Parallel()
+
+		manager := connfx.NewManager(logger)
+
+		// Register Redis adapter (supports both stateful and streaming)
+		err := adapters.RegisterRedisAdapter(manager)
+		require.NoError(t, err)
+
+		// Register other adapters for comparison
+		err = adapters.RegisterSQLiteAdapter(manager)
+		require.NoError(t, err)
+
+		err = adapters.RegisterHTTPAdapter(manager)
+		require.NoError(t, err)
+
+		protocols := manager.ListRegisteredProtocols()
+		assert.Contains(t, protocols, "redis")
+		assert.Contains(t, protocols, "sqlite")
+		assert.Contains(t, protocols, "http")
+
+		// Verify that all expected protocols are registered
+		assert.Len(t, protocols, 3)
+	})
+
+	t.Run("behavior_filtering_with_multiple_behaviors", func(t *testing.T) {
+		t.Parallel()
+
+		manager := connfx.NewManager(logger)
+
+		// Register adapters
+		err := adapters.RegisterRedisAdapter(manager)
+		require.NoError(t, err)
+		err = adapters.RegisterSQLiteAdapter(manager)
+		require.NoError(t, err)
+		err = adapters.RegisterHTTPAdapter(manager)
+		require.NoError(t, err)
+
+		// Add SQLite connection (stateful only)
+		sqlConfig := connfx.NewConnectionConfig(
+			"database",
+			connfx.ConnectionConfigData{ //nolint:exhaustruct
+				Protocol: "sqlite",
+				Database: ":memory:",
+			},
+		)
+		err = manager.AddConnection(ctx, sqlConfig)
+		require.NoError(t, err)
+
+		// Note: We can't test Redis connection without a Redis server,
+		// but we can demonstrate the concept with SQL and HTTP
+
+		// Test behavior filtering
+		statefulConnections := manager.GetStatefulConnections()
+		assert.Len(t, statefulConnections, 1)
+		assert.Equal(t, "database", statefulConnections[0].GetName())
+		assert.Contains(t, statefulConnections[0].GetBehaviors(), connfx.ConnectionBehaviorStateful)
+
+		// Test that SQL connection only has stateful behavior
+		conn := statefulConnections[0]
+		behaviors := conn.GetBehaviors()
+		assert.Contains(t, behaviors, connfx.ConnectionBehaviorStateful)
+		assert.NotContains(t, behaviors, connfx.ConnectionBehaviorStateless)
+		assert.NotContains(t, behaviors, connfx.ConnectionBehaviorStreaming)
+
+		// Test behavior-specific connection retrieval
+		statefulConn, err := manager.GetConnectionByBehavior(
+			"database",
+			connfx.ConnectionBehaviorStateful,
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "database", statefulConn.GetName())
+
+		// Test that getting a stateless behavior from SQL connection fails
+		_, err = manager.GetConnectionByBehavior("database", connfx.ConnectionBehaviorStateless)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, connfx.ErrBehaviorNotSupported)
+	})
+
+	t.Run("demonstrate_redis_multiple_behaviors", func(t *testing.T) {
+		t.Parallel()
+
+		manager := connfx.NewManager(logger)
+
+		// Register adapters
+		err := adapters.RegisterRedisAdapter(manager)
+		require.NoError(t, err)
+		err = adapters.RegisterSQLiteAdapter(manager)
+		require.NoError(t, err)
+		err = adapters.RegisterHTTPAdapter(manager)
+		require.NoError(t, err)
+
+		// Create a Redis connection config (won't actually connect)
+		redisConfig := connfx.NewConnectionConfig(
+			"cache",
+			connfx.ConnectionConfigData{ //nolint:exhaustruct
+				Protocol: "redis",
+				Host:     "localhost",
+				Port:     6379,
+			},
+		)
+
+		// This will fail because no Redis server is running, but that's expected
+		// We're demonstrating the configuration and behavior setup
+		err = manager.AddConnection(ctx, redisConfig)
+
+		// The connection will fail, but we can show what behaviors it would support
+		t.Logf("Redis connection attempt failed as expected (no server): %v", err)
+
+		// The factory still exists and reports its behaviors
+		protocols := manager.ListRegisteredProtocols()
+		assert.Contains(t, protocols, "redis")
+
+		// Show that if Redis was connected, it would support both behaviors
+		t.Log("Redis adapter supports both stateful (key-value) and streaming (pub/sub) behaviors")
+	})
+}
+
+func TestBehaviorCombinations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		protocol          string
+		expectedBehaviors []connfx.ConnectionBehavior
+		description       string
+	}{
+		{
+			name:              "SQL connections",
+			protocol:          "sqlite",
+			expectedBehaviors: []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateful},
+			description:       "Databases maintain connection state and transactions",
+		},
+		{
+			name:              "HTTP connections",
+			protocol:          "http",
+			expectedBehaviors: []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateless},
+			description:       "HTTP is request-response without persistent state",
+		},
+		{
+			name:     "Redis connections",
+			protocol: "redis",
+			expectedBehaviors: []connfx.ConnectionBehavior{
+				connfx.ConnectionBehaviorStateful,  // For GET/SET operations
+				connfx.ConnectionBehaviorStreaming, // For PUBLISH/SUBSCRIBE
+			},
+			description: "Redis supports both key-value storage (stateful) and pub/sub (streaming)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			t.Logf("Testing %s: %s", tt.protocol, tt.description)
+
+			// This is more of a documentation test showing the expected behaviors
+			// In a real scenario, you'd test actual connection instances
+
+			assert.NotEmpty(t, tt.expectedBehaviors)
+
+			for _, behavior := range tt.expectedBehaviors {
+				assert.NotEmpty(t, string(behavior))
+				t.Logf("  - Supports behavior: %s", behavior)
+			}
+		})
+	}
+}

@@ -2,10 +2,17 @@ package logfx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"strings"
+)
+
+var (
+	ErrFailedToParseLogLevel = errors.New("failed to parse log level")
+	ErrFailedToWriteLog      = errors.New("failed to write log")
+	ErrFailedToHandleLog     = errors.New("failed to handle log")
 )
 
 type Handler struct {
@@ -18,7 +25,7 @@ type Handler struct {
 func NewHandler(w io.Writer, config *Config) (*Handler, error) {
 	level, err := ParseLevel(config.Level, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse log level: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToParseLogLevel, err)
 	}
 
 	opts := &slog.HandlerOptions{
@@ -57,13 +64,13 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 
 		_, err := io.WriteString(h.InnerWriter, out.String())
 		if err != nil {
-			return fmt.Errorf("failed to write log: %w", err)
+			return fmt.Errorf("%w: %w", ErrFailedToWriteLog, err)
 		}
 	}
 
 	err := h.InnerHandler.Handle(ctx, rec)
 	if err != nil {
-		return fmt.Errorf("failed to handle log: %w", err)
+		return fmt.Errorf("%w: %w", ErrFailedToHandleLog, err)
 	}
 
 	return nil

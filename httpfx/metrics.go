@@ -1,29 +1,49 @@
 package httpfx
 
 import (
-	"go.opentelemetry.io/otel/metric"
+	"errors"
+	"fmt"
+
+	"github.com/eser/ajan/metricsfx"
 )
 
-type Metrics struct {
-	mp MetricsProvider
+var (
+	ErrFailedToBuildHTTPRequestsCounter = errors.New(
+		"failed to build HTTP requests counter",
+	)
+	ErrFailedToBuildHTTPRequestDurationHistogram = errors.New(
+		"failed to build HTTP request duration histogram",
+	)
+)
 
-	RequestsTotal metric.Int64Counter
+// Metrics holds HTTP-specific metrics using the simplified MetricsBuilder approach.
+type Metrics struct {
+	RequestsTotal   *metricsfx.CounterMetric
+	RequestDuration *metricsfx.HistogramMetric
 }
 
-func NewMetrics(mp MetricsProvider) *Metrics {
-	meter := mp.GetMeterProvider().Meter("github.com/eser/ajan/httpfx")
+// NewMetrics creates HTTP metrics using the simplified MetricsBuilder.
+func NewMetrics(provider *metricsfx.MetricsProvider) (*Metrics, error) {
+	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/httpfx", "1.0.0")
 
-	requestsTotal, err := meter.Int64Counter(
+	requestsTotal, err := builder.Counter(
 		"http_requests_total",
-		metric.WithDescription("Total number of HTTP requests"),
-		metric.WithUnit("{request}"),
-	)
+		"Total number of HTTP requests",
+	).WithUnit("{request}").Build()
 	if err != nil {
-		panic(err) // Handle error appropriately in your application
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestsCounter, err)
+	}
+
+	requestDuration, err := builder.Histogram(
+		"http_request_duration_seconds",
+		"HTTP request duration in seconds",
+	).WithDurationBuckets().Build()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestDurationHistogram, err)
 	}
 
 	return &Metrics{
-		mp:            mp,
-		RequestsTotal: requestsTotal,
-	}
+		RequestsTotal:   requestsTotal,
+		RequestDuration: requestDuration,
+	}, nil
 }

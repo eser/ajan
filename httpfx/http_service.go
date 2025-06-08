@@ -11,10 +11,17 @@ import (
 
 	"github.com/eser/ajan/lib"
 	"github.com/eser/ajan/logfx"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/eser/ajan/metricsfx"
 )
 
-type HttpService struct {
+var (
+	ErrFailedToLoadCertificate        = errors.New("failed to load certificate")
+	ErrFailedToGenerateSelfSignedCert = errors.New("failed to generate self-signed certificate")
+	ErrFailedToCreateHTTPMetrics      = errors.New("failed to create HTTP metrics")
+	ErrHTTPServiceNetListenError      = errors.New("HTTP service net listen error")
+)
+
+type HTTPService struct {
 	InnerServer  *http.Server
 	InnerRouter  *Router
 	InnerMetrics *Metrics
@@ -23,16 +30,12 @@ type HttpService struct {
 	logger *logfx.Logger
 }
 
-type MetricsProvider interface {
-	GetMeterProvider() metric.MeterProvider
-}
-
-func NewHttpService(
+func NewHTTPService(
 	config *Config,
 	router *Router,
-	metricsProvider MetricsProvider,
+	metricsProvider *metricsfx.MetricsProvider,
 	logger *logfx.Logger,
-) *HttpService {
+) (*HTTPService, error) {
 	server := &http.Server{ //nolint:exhaustruct
 		ReadHeaderTimeout: config.ReadHeaderTimeout,
 		ReadTimeout:       config.ReadTimeout,
@@ -47,7 +50,7 @@ func NewHttpService(
 	if config.CertString != "" && config.KeyString != "" {
 		cert, err := tls.X509KeyPair([]byte(config.CertString), []byte(config.KeyString))
 		if err != nil {
-			panic(fmt.Errorf("failed to load certificate: %w", err))
+			return nil, fmt.Errorf("%w: %w", ErrFailedToLoadCertificate, err)
 		}
 
 		server.TLSConfig = &tls.Config{ //nolint:exhaustruct
@@ -57,7 +60,7 @@ func NewHttpService(
 	} else if config.SelfSigned {
 		cert, err := lib.GenerateSelfSignedCert()
 		if err != nil {
-			panic(fmt.Errorf("failed to generate self-signed certificate: %w", err))
+			return nil, fmt.Errorf("%w: %w", ErrFailedToGenerateSelfSignedCert, err)
 		}
 
 		server.TLSConfig = &tls.Config{ //nolint:exhaustruct
@@ -66,33 +69,38 @@ func NewHttpService(
 		}
 	}
 
-	return &HttpService{
+	metrics, err := NewMetrics(metricsProvider)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHTTPMetrics, err)
+	}
+
+	return &HTTPService{
 		InnerServer:  server,
 		InnerRouter:  router,
-		InnerMetrics: NewMetrics(metricsProvider),
+		InnerMetrics: metrics,
 		Config:       config,
 		logger:       logger,
-	}
+	}, nil
 }
 
-func (hs *HttpService) Server() *http.Server {
+func (hs *HTTPService) Server() *http.Server {
 	return hs.InnerServer
 }
 
-func (hs *HttpService) Router() *Router {
+func (hs *HTTPService) Router() *Router {
 	return hs.InnerRouter
 }
 
-func (hs *HttpService) Start(ctx context.Context) (func(), error) {
-	hs.logger.InfoContext(ctx, "HttpService is starting...", slog.String("addr", hs.Config.Addr))
+func (hs *HTTPService) Start(ctx context.Context) (func(), error) {
+	hs.logger.InfoContext(ctx, "HTTPService is starting...", slog.String("addr", hs.Config.Addr))
 
 	// if hs.Server().TLSConfig == nil {
-	// 	hs.logger.WarnContext(ctx, "HttpService is starting without TLS, this will cause HTTP/2 support to be disabled")
+	// 	hs.logger.WarnContext(ctx, "HTTPService is starting without TLS, this will cause HTTP/2 support to be disabled")
 	// }
 
 	listener, lnErr := net.Listen("tcp", hs.InnerServer.Addr)
 	if lnErr != nil {
-		return nil, fmt.Errorf("HttpService Net Listen error: %w", lnErr)
+		return nil, fmt.Errorf("%w: %w", ErrHTTPServiceNetListenError, lnErr)
 	}
 
 	go func() {
@@ -105,7 +113,7 @@ func (hs *HttpService) Start(ctx context.Context) (func(), error) {
 		}
 
 		if sErr != nil && !errors.Is(sErr, http.ErrServerClosed) {
-			hs.logger.ErrorContext(ctx, "HttpService ServeTLS error: %w", slog.Any("error", sErr))
+			hs.logger.ErrorContext(ctx, "HTTPService ServeTLS error: %w", slog.Any("error", sErr))
 		}
 	}()
 
@@ -117,12 +125,12 @@ func (hs *HttpService) Start(ctx context.Context) (func(), error) {
 
 		if err := hs.InnerServer.Shutdown(newCtx); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
-			hs.logger.ErrorContext(ctx, "HttpService forced to shutdown", slog.Any("error", err))
+			hs.logger.ErrorContext(ctx, "HTTPService forced to shutdown", slog.Any("error", err))
 
 			return
 		}
 
-		hs.logger.InfoContext(ctx, "HttpService has gracefully stopped.")
+		hs.logger.InfoContext(ctx, "HTTPService has gracefully stopped.")
 	}
 
 	return cleanup, nil

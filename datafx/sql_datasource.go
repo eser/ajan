@@ -3,39 +3,45 @@ package datafx
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
-type SqlDatasource struct {
+var (
+	ErrFailedToOpenDatasourceConnection = errors.New("failed to open datasource connection")
+	ErrFailedToPingDatasource           = errors.New("failed to ping datasource")
+)
+
+type SQLDatasource struct {
 	connection *sql.DB
 	dialect    Dialect
 }
 
-func NewSqlDatasource(ctx context.Context, dialect Dialect, dsn string) (*SqlDatasource, error) {
+func NewSQLDatasource(ctx context.Context, dialect Dialect, dsn string) (*SQLDatasource, error) {
 	connection, err := sql.Open(string(dialect), dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open datasource connection: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenDatasourceConnection, err)
 	}
 
 	if err := connection.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping datasource: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToPingDatasource, err)
 	}
 
-	return &SqlDatasource{
+	return &SQLDatasource{
 		connection: connection,
 		dialect:    dialect,
 	}, nil
 }
 
-func (datasource *SqlDatasource) GetDialect() Dialect {
+func (datasource *SQLDatasource) GetDialect() Dialect {
 	return datasource.dialect
 }
 
-func (datasource *SqlDatasource) GetConnection() SqlExecutor {
+func (datasource *SQLDatasource) GetConnection() SQLExecutor {
 	return datasource.connection
 }
 
-func (datasource *SqlDatasource) ExecuteUnitOfWork(
+func (datasource *SQLDatasource) ExecuteUnitOfWork(
 	ctx context.Context,
 	fn func(uow *UnitOfWork) error,
 ) error {

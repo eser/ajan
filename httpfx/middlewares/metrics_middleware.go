@@ -2,23 +2,31 @@ package middlewares
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/eser/ajan/httpfx"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/eser/ajan/metricsfx"
 )
 
+// MetricsMiddleware creates HTTP metrics middleware using the simplified MetricsBuilder approach.
 func MetricsMiddleware(httpMetrics *httpfx.Metrics) httpfx.Handler {
 	return func(ctx *httpfx.Context) httpfx.Result {
+		startTime := time.Now()
+
 		result := ctx.Next()
 
-		attrs := metric.WithAttributes(
-			attribute.String("method", ctx.Request.Method),
-			attribute.String("endpoint", ctx.Request.URL.Path),
-			attribute.String("status", strconv.Itoa(result.StatusCode())),
+		duration := time.Since(startTime)
+
+		// Use the new HTTP-specific attribute helpers
+		attrs := metricsfx.HTTPAttrs(
+			ctx.Request.Method,
+			ctx.Request.URL.Path,
+			strconv.Itoa(result.StatusCode()),
 		)
 
-		httpMetrics.RequestsTotal.Add(ctx.Request.Context(), 1, attrs)
+		// Clean, simple metric recording
+		httpMetrics.RequestsTotal.Inc(ctx.Request.Context(), attrs...)
+		httpMetrics.RequestDuration.RecordDuration(ctx.Request.Context(), duration, attrs...)
 
 		return result
 	}

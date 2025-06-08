@@ -2,11 +2,9 @@
 
 ## Overview
 
-The **httpfx** package provides a framework for building HTTP services with support for routing, middleware, and OpenAPI
-documentation generation. The package is designed to work seamlessly with the `ajan/di` package.
+**httpfx** package provides a framework for building HTTP services with support for routing, middleware, and OpenAPI documentation generation.
 
-The documentation below provides an overview of the package, its types, functions, and usage examples. For more detailed
-information, refer to the source code and tests.
+The documentation below provides an overview of the package, its types, functions, and usage examples. For more detailed information, refer to the source code and tests.
 
 ## Configuration
 
@@ -29,7 +27,7 @@ type Config struct {
 	SelfSigned bool `conf:"self_signed" default:"false"`
 
 	HealthCheckEnabled bool `conf:"health_check" default:"true"`
-	OpenApiEnabled     bool `conf:"openapi"      default:"true"`
+	OpenAPIEnabled     bool `conf:"openapi"      default:"true"`
 	ProfilingEnabled   bool `conf:"profiling"    default:"false"`
 }
 ```
@@ -41,7 +39,7 @@ config := &httpfx.Config{
 	ReadTimeout:     15 * time.Second,
 	WriteTimeout:    15 * time.Second,
 	IdleTimeout:     60 * time.Second,
-	OpenApiEnabled:  true,
+	OpenAPIEnabled:  true,
 	SelfSigned:      false,
 }
 ```
@@ -58,15 +56,15 @@ Create a new `Router` object.
 router := httpfx.NewRouter("/")
 ```
 
-### NewHttpService function
+### NewHTTPService function
 
-Creates a new `HttpService` object based on the provided configuration.
+Creates a new `HTTPService` object based on the provided configuration.
 
 ```go
-// func NewHttpService(config *Config, router Router) *HttpServiceImpl
+// func NewHTTPService(config *Config, router Router) *HTTPServiceImpl
 
 router := httpfx.NewRouter("/")
-hs := httpfx.NewHttpService(config, router)
+hs := httpfx.NewHTTPService(config, router)
 ```
 
 ## Features
@@ -101,7 +99,7 @@ func main() {
 	config := &httpfx.Config{
 		Addr: ":8080",
 	}
-	service := httpfx.NewHttpService(config, router)
+	service := httpfx.NewHTTPService(config, router)
 
 	if err := service.Start(); err != nil {
 		log.Fatal(err)

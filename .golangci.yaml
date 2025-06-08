@@ -49,13 +49,14 @@ linters:
           - google.golang.org/grpc
           - google.golang.org/grpc/reflection
           - google.golang.org/grpc/status
+          - modernc.org/sqlite
     revive:
       rules:
         - name: "var-naming"
           severity: warning
-          disabled: true
+          disabled: false
           arguments:
-            - ["ID", "HTTP", "JSON", "URI", "URL", "SLA", "RFC"] # AllowList
+            - [] # AllowList
             - [] # DenyList
             - - upper-case-const: false
     varnamelen:
