@@ -24,7 +24,8 @@ func main() {
 }
 
 func business(ctx context.Context, appContext *AppContext) {
-	datasource := appContext.Data.GetDefault()
+	connection := appContext.Connections.GetDefault()
+	datasource := datafx.NewDatasource(connection)
 
 	err := datasource.ExecuteUnitOfWork(ctx, func(uow *datafx.UnitOfWork) error {
 		// service1.DoSomething(uow)

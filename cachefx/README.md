@@ -187,20 +187,6 @@ type ConfigCache struct {
 
 ### Example Configuration File
 
-**YAML:**
-```yaml
-caches:
-  default:
-    provider: redis
-    dsn: redis://localhost:6379/0
-  sessions:
-    provider: redis
-    dsn: redis://localhost:6379/1
-  temp:
-    provider: redis
-    dsn: redis://cache-server:6379/2
-```
-
 **JSON:**
 ```json
 {

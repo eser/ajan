@@ -30,7 +30,6 @@ var (
 type RedisConnection struct {
 	lastHealth time.Time
 	conn       net.Conn // Simplified for demonstration - would use Redis client library
-	name       string
 	protocol   string
 	host       string
 	port       int
@@ -51,24 +50,17 @@ func NewRedisConnectionFactory(protocol string) *RedisConnectionFactory {
 
 func (f *RedisConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config connfx.ConnectionConfig,
+	config *connfx.ConfigTarget,
 ) (connfx.Connection, error) {
-	baseConfig, ok := config.(*connfx.BaseConnectionConfig)
-	if !ok {
-		return nil, ErrInvalidConfigTypeRedis
-	}
-
-	data := baseConfig.Data
-
 	// Default Redis port
 	port := DefaultRedisPort
-	if data.Port > 0 {
-		port = data.Port
+	if config.Port > 0 {
+		port = config.Port
 	}
 
 	host := "localhost"
-	if data.Host != "" {
-		host = data.Host
+	if config.Host != "" {
+		host = config.Host
 	}
 
 	// For demonstration - create a simple TCP connection to Redis
@@ -77,8 +69,8 @@ func (f *RedisConnectionFactory) CreateConnection(
 
 	// Set timeout for connection attempt
 	timeout := DefaultRedisTimeout
-	if data.Timeout > 0 {
-		timeout = data.Timeout
+	if config.Timeout > 0 {
+		timeout = config.Timeout
 	}
 
 	dialer := net.Dialer{Timeout: timeout} //nolint:exhaustruct
@@ -89,7 +81,6 @@ func (f *RedisConnectionFactory) CreateConnection(
 	}
 
 	redisConn := &RedisConnection{
-		name:       config.GetName(),
 		protocol:   f.protocol,
 		host:       host,
 		port:       port,
@@ -114,10 +105,6 @@ func (f *RedisConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBeha
 }
 
 // Connection interface implementation
-
-func (c *RedisConnection) GetName() string {
-	return c.name
-}
 
 func (c *RedisConnection) GetBehaviors() []connfx.ConnectionBehavior {
 	// Redis connections support both stateful and streaming behaviors

@@ -37,11 +37,11 @@ const (
 type ConnectionState int32
 
 const (
-	ConnectionStateUnknown      ConnectionState = 0
-	ConnectionStateConnected    ConnectionState = 1
-	ConnectionStateDisconnected ConnectionState = 2
-	ConnectionStateError        ConnectionState = 3
-	ConnectionStateReconnecting ConnectionState = 4
+	ConnectionStateNotInitialized ConnectionState = 0
+	ConnectionStateConnected      ConnectionState = 1
+	ConnectionStateDisconnected   ConnectionState = 2
+	ConnectionStateError          ConnectionState = 3
+	ConnectionStateReconnecting   ConnectionState = 4
 )
 
 // HealthStatus represents the health check result.
@@ -55,9 +55,6 @@ type HealthStatus struct {
 
 // Connection represents a generic connection interface.
 type Connection interface {
-	// GetName returns the connection name
-	GetName() string
-
 	// GetBehaviors returns the connection behaviors this connection supports
 	GetBehaviors() []ConnectionBehavior
 
@@ -77,17 +74,10 @@ type Connection interface {
 	GetRawConnection() any
 }
 
-// ConnectionConfig represents the base configuration for all connections.
-type ConnectionConfig interface {
-	GetName() string
-	GetProtocol() string
-	Validate() error
-}
-
 // ConnectionFactory creates connections from configuration.
 type ConnectionFactory interface {
 	// CreateConnection creates a new connection from configuration
-	CreateConnection(ctx context.Context, config ConnectionConfig) (Connection, error)
+	CreateConnection(ctx context.Context, config *ConfigTarget) (Connection, error)
 
 	// GetProtocol returns the protocol this factory supports (e.g., "postgres", "redis")
 	GetProtocol() string
@@ -119,17 +109,16 @@ func GetTypedConnection[T any](conn Connection) (T, error) {
 	raw := conn.GetRawConnection()
 	if raw == nil {
 		return zero, fmt.Errorf(
-			"%w (name=%q, protocol=%q)",
+			"%w (protocol=%q)",
 			ErrRawConnectionIsNil,
-			conn.GetName(),
 			conn.GetProtocol(),
 		)
 	}
 
 	typed, ok := raw.(T)
 	if !ok {
-		return zero, fmt.Errorf("%w (name=%q, protocol=%q, expected=%T, got=%T)",
-			ErrInvalidType, conn.GetName(), conn.GetProtocol(), zero, raw)
+		return zero, fmt.Errorf("%w (protocol=%q, expected=%T, got=%T)",
+			ErrInvalidType, conn.GetProtocol(), zero, raw)
 	}
 
 	return typed, nil

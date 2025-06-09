@@ -36,12 +36,12 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	ctx := t.Context()
 
 	// Test SQLite connection (no external dependencies)
-	config := connfx.NewConnectionConfig("test", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "sqlite",
-		Database: ":memory:",
-	})
+		DSN:      ":memory:",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
 
 	// Test GetNamed method
@@ -49,7 +49,6 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	require.NotNil(t, connNamed)
 
 	// Test connection properties
-	assert.Equal(t, "test", connNamed.GetName())
 	assert.Contains(t, connNamed.GetBehaviors(), connfx.ConnectionBehaviorStateful)
 	assert.Equal(t, "sqlite", connNamed.GetProtocol())
 	assert.Equal(t, connfx.ConnectionStateConnected, connNamed.GetState())
@@ -85,21 +84,17 @@ func TestRegistry_GetDefaultConnection(t *testing.T) {
 	ctx := t.Context()
 
 	// Add default connection
-	config := connfx.NewConnectionConfig(
-		"default",
-		connfx.ConnectionConfigData{ //nolint:exhaustruct
-			Protocol: "sqlite",
-			Database: ":memory:",
-		},
-	)
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
+		Protocol: "sqlite",
+		DSN:      ":memory:",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "default", config)
 	require.NoError(t, err)
 
 	// Test GetDefault method
 	defaultConn := registry.GetDefault()
 	require.NotNil(t, defaultConn)
-	assert.Equal(t, "default", defaultConn.GetName())
 
 	// Test GetDefaultConnection method
 	defaultConnWithErr := registry.GetDefault()
@@ -118,10 +113,10 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 	ctx := t.Context()
 
 	config := &connfx.Config{
-		Connections: map[string]connfx.ConnectionConfigData{
+		Targets: map[string]connfx.ConfigTarget{
 			"default": { //nolint:exhaustruct
 				Protocol: "sqlite",
-				Database: ":memory:",
+				DSN:      ":memory:",
 			},
 		},
 	}
@@ -150,15 +145,12 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	ctx := t.Context()
 
 	// Add connection
-	config := connfx.NewConnectionConfig(
-		"sql_test",
-		connfx.ConnectionConfigData{ //nolint:exhaustruct
-			Protocol: "sqlite",
-			Database: ":memory:",
-		},
-	)
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
+		Protocol: "sqlite",
+		DSN:      ":memory:",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "sql_test", config)
 	require.NoError(t, err)
 
 	// Test health check for all connections
@@ -190,12 +182,12 @@ func TestRegistry_RemoveConnection(t *testing.T) {
 	ctx := t.Context()
 
 	// Add connection
-	config := connfx.NewConnectionConfig("test", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "sqlite",
-		Database: ":memory:",
-	})
+		DSN:      ":memory:",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
 
 	// Verify connection exists
@@ -227,12 +219,12 @@ func TestRegistry_Close(t *testing.T) {
 	ctx := t.Context()
 
 	// Add connection
-	config := connfx.NewConnectionConfig("test", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "sqlite",
-		Database: ":memory:",
-	})
+		DSN:      ":memory:",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
 
 	// Close all connections
@@ -244,76 +236,12 @@ func TestRegistry_Close(t *testing.T) {
 	assert.Empty(t, connections)
 }
 
-func TestConnectionConfig_Validation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		config  connfx.ConnectionConfig
-		wantErr bool
-	}{
-		{
-			name: "valid SQLite config",
-			config: connfx.NewConnectionConfig(
-				"test",
-				connfx.ConnectionConfigData{ //nolint:exhaustruct
-					Protocol: "sqlite",
-					Database: "test.db",
-				},
-			),
-			wantErr: false,
-		},
-		{
-			name: "valid HTTP config",
-			config: connfx.NewConnectionConfig(
-				"test",
-				connfx.ConnectionConfigData{ //nolint:exhaustruct
-					Protocol: "http",
-					URL:      "https://api.example.com",
-				},
-			),
-			wantErr: false,
-		},
-		{
-			name: "invalid config - no protocol",
-			config: connfx.NewConnectionConfig(
-				"test",
-				connfx.ConnectionConfigData{}, //nolint:exhaustruct
-			),
-			wantErr: true,
-		},
-		{
-			name: "invalid config - empty name",
-			config: connfx.NewConnectionConfig("", connfx.ConnectionConfigData{ //nolint:exhaustruct
-				Protocol: "sqlite",
-			}),
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			baseConfig, ok := tt.config.(*connfx.BaseConnectionConfig)
-			require.True(t, ok, "config should be of type *connfx.BaseConnectionConfig")
-
-			err := baseConfig.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestConnectionStates(t *testing.T) {
 	t.Parallel()
 
 	// Test that connection states are properly defined
 	states := []connfx.ConnectionState{
-		connfx.ConnectionStateUnknown,
+		connfx.ConnectionStateNotInitialized,
 		connfx.ConnectionStateConnected,
 		connfx.ConnectionStateDisconnected,
 		connfx.ConnectionStateError,
@@ -353,17 +281,16 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 	ctx := t.Context()
 
 	// Add a stateful connection (SQLite)
-	sqlConfig := connfx.NewConnectionConfig("db", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	sqlConfig := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "sqlite",
-		Database: ":memory:",
-	})
-	err := registry.AddConnection(ctx, sqlConfig)
+		DSN:      ":memory:",
+	}
+	err := registry.AddConnection(ctx, "db", sqlConfig)
 	require.NoError(t, err)
 
 	// Test behavior filtering
 	statefulConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 	assert.Len(t, statefulConnections, 1)
-	assert.Equal(t, "db", statefulConnections[0].GetName())
 
 	statelessConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateless)
 	assert.Empty(t, statelessConnections) // No HTTP connection added
@@ -371,7 +298,6 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 	// Test protocol filtering
 	sqliteConnections := registry.GetByProtocol("sqlite")
 	assert.Len(t, sqliteConnections, 1)
-	assert.Equal(t, "db", sqliteConnections[0].GetName())
 }
 
 func TestRegistry_AdapterRegistration(t *testing.T) {
@@ -402,11 +328,11 @@ func TestGetTypedConnection(t *testing.T) {
 	ctx := t.Context()
 
 	// Add SQLite connection
-	config := connfx.NewConnectionConfig("db", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "sqlite",
-		Database: ":memory:",
-	})
-	err := registry.AddConnection(ctx, config)
+		DSN:      ":memory:",
+	}
+	err := registry.AddConnection(ctx, "db", config)
 	require.NoError(t, err)
 
 	// Get connection
@@ -446,12 +372,12 @@ func TestRegistry_ErrorHandling(t *testing.T) {
 	assert.Nil(t, conn)
 
 	// Test adding connection without registered factory
-	config := connfx.NewConnectionConfig("test", connfx.ConnectionConfigData{ //nolint:exhaustruct
+	config := &connfx.ConfigTarget{ //nolint:exhaustruct
 		Protocol: "unsupported",
-		Database: "test.db",
-	})
+		DSN:      "test.db",
+	}
 
-	err := registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, "test", config)
 	require.Error(t, err)
 	require.ErrorIs(t, err, connfx.ErrUnsupportedProtocol)
 

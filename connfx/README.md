@@ -62,7 +62,7 @@ func main() {
 
     // Load configuration - no behavior field needed!
     config := &connfx.Config{
-        Connections: map[string]connfx.ConnectionConfigData{
+        Connections: map[string]connfx.ConfigTarget{
             "default": {
                 Protocol: "sqlite",
                 Database: ":memory:",
@@ -163,7 +163,6 @@ type CustomConnection struct {
     // ... your connection-specific fields
 }
 
-func (c *CustomConnection) GetName() string { return c.name }
 func (c *CustomConnection) GetProtocol() string { return c.protocol }
 func (c *CustomConnection) GetBehaviors() []connfx.ConnectionBehavior {
     // Your adapter defines what behaviors it supports
@@ -254,8 +253,8 @@ if dbConn == nil {
 }
 
 // Check connection properties
-fmt.Printf("Connection: %s, Protocol: %s, Behaviors: %v\n",
-    dbConn.GetName(), dbConn.GetProtocol(), dbConn.GetBehaviors())
+fmt.Printf("Protocol: %s, Behaviors: %v\n",
+    dbConn.GetProtocol(), dbConn.GetBehaviors())
 ```
 
 ### Filtering by Behavior
@@ -272,7 +271,7 @@ streamingConns := registry.GetByBehavior(connfx.ConnectionBehaviorStreaming)
 
 // Redis appears in both stateful and streaming lists!
 for _, conn := range statefulConns {
-    fmt.Printf("Stateful connection: %s (%s)\n", conn.GetName(), conn.GetProtocol())
+    fmt.Printf("Stateful connection: %s\n", conn.GetProtocol())
 }
 ```
 
@@ -285,8 +284,8 @@ postgresConns := registry.GetByProtocol("postgres")
 // Get all Redis connections (support multiple behaviors)
 redisConns := registry.GetByProtocol("redis")
 for _, conn := range redisConns {
-    fmt.Printf("Redis connection %s supports: %v\n", conn.GetName(), conn.GetBehaviors())
-    // Output: Redis connection cache supports: [stateful streaming]
+    fmt.Printf("Redis connection supports: %v\n", conn.GetBehaviors())
+    // Output: Redis connection supports: [stateful streaming]
 }
 ```
 
@@ -490,7 +489,7 @@ func (r *Registry) GetByBehavior(behavior ConnectionBehavior) []Connection
 func (r *Registry) GetByProtocol(protocol string) []Connection
 
 // Connection management
-func (r *Registry) AddConnection(ctx context.Context, config ConnectionConfig) error
+func (r *Registry) AddConnection(ctx context.Context, config *ConnectionConfig) error
 func (r *Registry) RemoveConnection(ctx context.Context, name string) error
 func (r *Registry) LoadFromConfig(ctx context.Context, config *Config) error
 
@@ -511,7 +510,6 @@ func (r *Registry) RegisterFactory(factory ConnectionFactory) error
 
 ```go
 type Connection interface {
-    GetName() string
     GetBehaviors() []ConnectionBehavior
     GetProtocol() string
     GetState() ConnectionState

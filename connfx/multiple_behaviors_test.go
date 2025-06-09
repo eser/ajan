@@ -57,14 +57,11 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 		// Add SQLite connection (stateful only)
-		sqlConfig := connfx.NewConnectionConfig(
-			"database",
-			connfx.ConnectionConfigData{ //nolint:exhaustruct
-				Protocol: "sqlite",
-				Database: ":memory:",
-			},
-		)
-		err := registry.AddConnection(ctx, sqlConfig)
+		sqlConfig := &connfx.ConfigTarget{ //nolint:exhaustruct
+			Protocol: "sqlite",
+			DSN:      ":memory:",
+		}
+		err := registry.AddConnection(ctx, "database", sqlConfig)
 		require.NoError(t, err)
 
 		// Note: We can't test Redis connection without a Redis server,
@@ -73,7 +70,6 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		// Test behavior filtering
 		statefulConnections := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
 		assert.Len(t, statefulConnections, 1)
-		assert.Equal(t, "database", statefulConnections[0].GetName())
 		assert.Contains(t, statefulConnections[0].GetBehaviors(), connfx.ConnectionBehaviorStateful)
 
 		// Test that SQL connection only has stateful behavior
@@ -85,7 +81,7 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 
 		// Test behavior-specific connection retrieval
 		statefulConn := registry.GetNamed("database")
-		assert.Equal(t, "database", statefulConn.GetName())
+		assert.NotNil(t, statefulConn)
 	})
 
 	t.Run("demonstrate_redis_multiple_behaviors", func(t *testing.T) {
@@ -99,18 +95,15 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 		// Create a Redis connection config (won't actually connect)
-		redisConfig := connfx.NewConnectionConfig(
-			"cache",
-			connfx.ConnectionConfigData{ //nolint:exhaustruct
-				Protocol: "redis",
-				Host:     "localhost",
-				Port:     6379,
-			},
-		)
+		redisConfig := &connfx.ConfigTarget{ //nolint:exhaustruct
+			Protocol: "redis",
+			Host:     "localhost",
+			Port:     6379,
+		}
 
 		// This will fail because no Redis server is running, but that's expected
 		// We're demonstrating the configuration and behavior setup
-		err := registry.AddConnection(ctx, redisConfig)
+		err := registry.AddConnection(ctx, "cache", redisConfig)
 
 		// The connection will fail, but we can show what behaviors it would support
 		t.Logf("Redis connection attempt failed as expected (no server): %v", err)

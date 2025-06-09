@@ -34,7 +34,6 @@ type HTTPConnection struct {
 	lastHealth time.Time
 	client     *http.Client
 	headers    map[string]string
-	name       string
 	protocol   string
 	baseURL    string
 	state      int32 // atomic field for connection state
@@ -54,24 +53,18 @@ func NewHTTPConnectionFactory(protocol string) *HTTPConnectionFactory {
 
 func (f *HTTPConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config connfx.ConnectionConfig,
+	config *connfx.ConfigTarget,
 ) (connfx.Connection, error) {
-	baseConfig, ok := config.(*connfx.BaseConnectionConfig)
-	if !ok {
-		return nil, ErrInvalidConfigTypeHTTP
-	}
-
 	// Create HTTP client with configuration
-	client, headers, err := f.buildHTTPClient(baseConfig)
+	client, headers, err := f.buildHTTPClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHTTPClient, err)
 	}
 
-	baseURL := baseConfig.Data.URL
+	baseURL := config.URL
 
 	// Initial health check
 	conn := &HTTPConnection{
-		name:       config.GetName(),
 		protocol:   f.protocol,
 		client:     client,
 		baseURL:    baseURL,
@@ -98,22 +91,20 @@ func (f *HTTPConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehav
 }
 
 func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
-	config *connfx.BaseConnectionConfig,
+	config *connfx.ConfigTarget,
 ) (*http.Client, map[string]string, error) {
-	data := config.Data
-
 	// Configure transport
 	transport := &http.Transport{} //nolint:exhaustruct
 
 	// TLS configuration
-	if data.TLS || data.TLSSkipVerify {
+	if config.TLS || config.TLSSkipVerify {
 		transport.TLSClientConfig = &tls.Config{ //nolint:exhaustruct
-			InsecureSkipVerify: data.TLSSkipVerify, //nolint:gosec
+			InsecureSkipVerify: config.TLSSkipVerify, //nolint:gosec
 		}
 
 		// Load client certificates if provided
-		if data.CertFile != "" && data.KeyFile != "" {
-			cert, err := tls.LoadX509KeyPair(data.CertFile, data.KeyFile)
+		if config.CertFile != "" && config.KeyFile != "" {
+			cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to load client certificate: %w", err)
 			}
@@ -128,8 +119,8 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 	}
 
 	// Set timeout
-	if data.Timeout > 0 {
-		client.Timeout = data.Timeout
+	if config.Timeout > 0 {
+		client.Timeout = config.Timeout
 	} else {
 		client.Timeout = DefaultHTTPTimeout
 	}
@@ -138,15 +129,9 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 	headers := make(map[string]string)
 	headers["User-Agent"] = "connfx-http-client/1.0"
 
-	// Add authentication headers
-	if data.Username != "" && data.Password != "" {
-		// For simplicity, just store credentials - in real implementation use proper encoding
-		headers["Authorization"] = fmt.Sprintf("Basic %s:%s", data.Username, data.Password)
-	}
-
 	// Add custom headers from properties
-	if data.Properties != nil {
-		if customHeaders, ok := data.Properties["headers"].(map[string]any); ok {
+	if config.Properties != nil {
+		if customHeaders, ok := config.Properties["headers"].(map[string]any); ok {
 			for k, v := range customHeaders {
 				if strVal, ok := v.(string); ok {
 					headers[k] = strVal
@@ -159,10 +144,6 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 }
 
 // Connection interface implementation
-
-func (c *HTTPConnection) GetName() string {
-	return c.name
-}
 
 func (c *HTTPConnection) GetBehaviors() []connfx.ConnectionBehavior {
 	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateless}

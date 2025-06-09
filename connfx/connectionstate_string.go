@@ -8,16 +8,16 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[ConnectionStateUnknown-0]
+	_ = x[ConnectionStateNotInitialized-0]
 	_ = x[ConnectionStateConnected-1]
 	_ = x[ConnectionStateDisconnected-2]
 	_ = x[ConnectionStateError-3]
 	_ = x[ConnectionStateReconnecting-4]
 }
 
-const _ConnectionState_name = "UnknownConnectedDisconnectedErrorReconnecting"
+const _ConnectionState_name = "NotInitializedConnectedDisconnectedErrorReconnecting"
 
-var _ConnectionState_index = [...]uint8{0, 7, 16, 28, 33, 45}
+var _ConnectionState_index = [...]uint8{0, 14, 23, 35, 40, 52}
 
 func (i ConnectionState) String() string {
 	if i < 0 || i >= ConnectionState(len(_ConnectionState_index)-1) {

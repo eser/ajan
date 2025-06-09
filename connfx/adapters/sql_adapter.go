@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,13 +17,13 @@ var (
 	ErrInvalidConfigTypeSQL      = errors.New("invalid config type for SQL connection")
 	ErrUnsupportedSQLProtocol    = errors.New("unsupported SQL protocol")
 	ErrFailedToCloseSQLDB        = errors.New("failed to close SQL database")
+	ErrInvalidDSN                = errors.New("invalid or empty DSN")
 )
 
 // SQLConnection represents a SQL database connection.
 type SQLConnection struct {
 	lastHealth time.Time
 	db         *sql.DB
-	name       string
 	protocol   string
 	state      int32 // atomic field for connection state
 }
@@ -43,24 +42,26 @@ func NewSQLConnectionFactory(protocol string) *SQLConnectionFactory {
 
 func (f *SQLConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config connfx.ConnectionConfig,
+	config *connfx.ConfigTarget,
 ) (connfx.Connection, error) {
-	// Build DSN from config
-	dsn, err := f.buildDSN(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build DSN: %w", err)
+	if config.DSN == "" {
+		return nil, fmt.Errorf("%w (protocol=%q)", ErrInvalidDSN, f.protocol)
 	}
 
-	db, err := sql.Open(f.protocol, dsn)
+	db, err := sql.Open(f.protocol, config.DSN)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenSQLConnection, err)
+		return nil, fmt.Errorf(
+			"%w (protocol=%q, dsn=%q): %w",
+			ErrFailedToOpenSQLConnection,
+			f.protocol,
+			config.DSN,
+			err,
+		)
 	}
 
 	// Configure connection pool if timeout is specified
-	if baseConfig, ok := config.(*connfx.BaseConnectionConfig); ok {
-		if baseConfig.Data.Timeout > 0 {
-			db.SetConnMaxLifetime(baseConfig.Data.Timeout)
-		}
+	if config.Timeout > 0 {
+		db.SetConnMaxLifetime(config.Timeout)
 	}
 
 	// Initial ping to verify connection
@@ -71,7 +72,6 @@ func (f *SQLConnectionFactory) CreateConnection(
 	}
 
 	conn := &SQLConnection{
-		name:       config.GetName(),
 		protocol:   f.protocol,
 		db:         db,
 		state:      int32(connfx.ConnectionStateConnected),
@@ -89,101 +89,7 @@ func (f *SQLConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavi
 	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateful}
 }
 
-func (f *SQLConnectionFactory) buildDSN(config connfx.ConnectionConfig) (string, error) {
-	baseConfig, ok := config.(*connfx.BaseConnectionConfig)
-	if !ok {
-		return "", ErrInvalidConfigTypeSQL
-	}
-
-	data := baseConfig.Data
-
-	// If DSN is provided directly, use it
-	if data.DSN != "" {
-		return data.DSN, nil
-	}
-
-	// Build DSN based on protocol
-	switch f.protocol {
-	case "postgres":
-		return f.buildPostgresDSN(data), nil
-	case "mysql":
-		return f.buildMySQLDSN(data), nil
-	case "sqlite":
-		return f.buildSQLiteDSN(data), nil
-	default:
-		return "", fmt.Errorf("%w (protocol=%q)", ErrUnsupportedSQLProtocol, f.protocol)
-	}
-}
-
-func (f *SQLConnectionFactory) buildPostgresDSN(data connfx.ConnectionConfigData) string {
-	parts := []string{}
-	if data.Host != "" {
-		parts = append(parts, "host="+data.Host)
-	}
-
-	if data.Port > 0 {
-		parts = append(parts, fmt.Sprintf("port=%d", data.Port))
-	}
-
-	if data.Database != "" {
-		parts = append(parts, "dbname="+data.Database)
-	}
-
-	if data.Username != "" {
-		parts = append(parts, "user="+data.Username)
-	}
-
-	if data.Password != "" {
-		parts = append(parts, "password="+data.Password)
-	}
-
-	if !data.TLS {
-		parts = append(parts, "sslmode=disable")
-	}
-
-	return strings.Join(parts, " ")
-}
-
-func (f *SQLConnectionFactory) buildMySQLDSN(data connfx.ConnectionConfigData) string {
-	dsn := ""
-	if data.Username != "" {
-		dsn += data.Username
-		if data.Password != "" {
-			dsn += ":" + data.Password
-		}
-
-		dsn += "@"
-	}
-
-	if data.Host != "" {
-		dsn += "tcp(" + data.Host
-		if data.Port > 0 {
-			dsn += fmt.Sprintf(":%d", data.Port)
-		}
-
-		dsn += ")"
-	}
-
-	if data.Database != "" {
-		dsn += "/" + data.Database
-	}
-
-	return dsn
-}
-
-func (f *SQLConnectionFactory) buildSQLiteDSN(data connfx.ConnectionConfigData) string {
-	if data.Database != "" {
-		return data.Database
-	}
-
-	return ":memory:"
-}
-
 // Connection interface implementation
-
-func (c *SQLConnection) GetName() string {
-	return c.name
-}
 
 func (c *SQLConnection) GetBehaviors() []connfx.ConnectionBehavior {
 	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateful}
