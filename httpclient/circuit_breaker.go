@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+//go:generate go tool stringer -type CircuitState -trimprefix CircuitState
 type CircuitState int
 
 const (

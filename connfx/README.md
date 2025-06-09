@@ -23,8 +23,6 @@
 - **Stateless**: Connections that don't maintain state (HTTP APIs, REST services)
 - **Streaming**: Real-time/streaming connections (message queues, event streams, websockets)
 
-**Note**: Behaviors are determined by the connection provider/adapter, not by user configuration. Some providers like Redis support multiple behaviors simultaneously.
-
 ## Quick Start
 
 ### Basic Usage with Registry
@@ -46,13 +44,10 @@ import (
 
 func main() {
     // Create logger using logfx
-    logger, err := logfx.NewLogger(os.Stdout, &logfx.Config{
+    logger := logfx.NewLogger(os.Stdout, &logfx.Config{
         Level:      "INFO",
         PrettyMode: true,
     })
-    if err != nil {
-        log.Fatal(err)
-    }
 
     // Create connection registry
     registry := connfx.NewRegistry(logger)
@@ -195,9 +190,9 @@ func (f *CustomConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBeh
 }
 
 // Register the adapter
-func RegisterCustomAdapter(registry *connfx.Registry) error {
+func RegisterCustomAdapter(registry *connfx.Registry) {
     factory := &CustomConnectionFactory{}
-    return registry.RegisterFactory(factory)
+    registry.RegisterFactory(factory)
 }
 ```
 
@@ -382,17 +377,16 @@ if err != nil {
 ## Available Adapters
 
 ### SQL Databases (Stateful)
-- Postgres: `adapters.RegisterPostgresAdapter(registry)` → `[stateful]`
-- MySQL: `adapters.RegisterMySQLAdapter(registry)` → `[stateful]`
-- SQLite: `adapters.RegisterSQLiteAdapter(registry)` → `[stateful]`
+- Postgres: `registry.RegisterFactory(postgresFactory)` → `[stateful]`
+- MySQL: `registry.RegisterFactory(mysqlFactory)` → `[stateful]`
+- SQLite: `registry.RegisterFactory(sqliteFactory)` → `[stateful]`
 
 ### HTTP APIs (Stateless)
-- HTTP: `adapters.RegisterHTTPAdapter(registry)` → `[stateless]`
-- HTTPS: `adapters.RegisterHTTPSAdapter(registry)` → `[stateless]`
-- GraphQL: `adapters.RegisterGraphQLAdapter(registry)` → `[stateless]`
+- HTTP: `registry.RegisterFactory(httpFactory)` → `[stateless]`
+- GraphQL: `registry.RegisterFactory(graphqlFactory)` → `[stateless]`
 
 ### Multiple Behavior Providers
-- Redis: `adapters.RegisterRedisAdapter(registry)` → `[stateful, streaming]`
+- Redis: `registry.RegisterFactory(redisFactory)` → `[stateful, streaming]`
 
 ## Integration Examples
 
@@ -541,12 +535,6 @@ conn := registry.GetNamed("nonexistent")
 if conn == nil {
     // Handle missing connection
     return errors.New("connection not found")
-}
-
-// Adapter registration errors
-err := registry.RegisterFactory(factory)
-if errors.Is(err, connfx.ErrFactoryAlreadyRegistered) {
-    // Handle duplicate registration
 }
 
 // Type extraction errors

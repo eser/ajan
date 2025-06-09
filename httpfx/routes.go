@@ -6,6 +6,7 @@ import (
 	"github.com/eser/ajan/httpfx/uris"
 )
 
+//go:generate go tool stringer -type RouteParameterType -trimprefix RouteParameterType
 type RouteParameterType int
 
 const (

@@ -16,16 +16,26 @@ var (
 )
 
 type Handler struct {
+	InitError error
+
 	InnerHandler slog.Handler
 
 	InnerWriter io.Writer
 	InnerConfig *Config
 }
 
-func NewHandler(w io.Writer, config *Config) (*Handler, error) {
+func NewHandler(w io.Writer, config *Config) *Handler {
+	var initError error
+
+	var l slog.Level
+
 	level, err := ParseLevel(config.Level, false)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToParseLogLevel, err)
+		initError = fmt.Errorf("%w (level=%q): %w", ErrFailedToParseLogLevel, config.Level, err)
+
+		// FIXME(@eser) default to info level
+		l = LevelInfo
+		level = &l
 	}
 
 	opts := &slog.HandlerOptions{
@@ -37,10 +47,12 @@ func NewHandler(w io.Writer, config *Config) (*Handler, error) {
 	innerHandler := slog.NewJSONHandler(w, opts)
 
 	return &Handler{
+		InitError: initError,
+
 		InnerHandler: innerHandler,
 		InnerWriter:  w,
 		InnerConfig:  config,
-	}, nil
+	}
 }
 
 func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -78,16 +90,22 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &Handler{
+		InitError: h.InitError,
+
 		InnerHandler: h.InnerHandler.WithAttrs(attrs),
-		InnerWriter:  h.InnerWriter,
-		InnerConfig:  h.InnerConfig,
+
+		InnerWriter: h.InnerWriter,
+		InnerConfig: h.InnerConfig,
 	}
 }
 
 func (h *Handler) WithGroup(name string) slog.Handler {
 	return &Handler{
+		InitError: h.InitError,
+
 		InnerHandler: h.InnerHandler.WithGroup(name),
-		InnerWriter:  h.InnerWriter,
-		InnerConfig:  h.InnerConfig,
+
+		InnerWriter: h.InnerWriter,
+		InnerConfig: h.InnerConfig,
 	}
 }

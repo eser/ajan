@@ -363,38 +363,3 @@ func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *co
 
 	return nil
 }
-
-// Package level registration helpers
-
-// RegisterHTTPAdapter registers the HTTP adapter with a registry.
-func RegisterHTTPAdapter(registry *connfx.Registry) error {
-	factory := NewHTTPConnectionFactory("http")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=http): %w", err)
-	}
-
-	return nil
-}
-
-// RegisterHTTPSAdapter registers the HTTPS adapter with a registry.
-func RegisterHTTPSAdapter(registry *connfx.Registry) error {
-	factory := NewHTTPConnectionFactory("https")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=https): %w", err)
-	}
-
-	return nil
-}
-
-// RegisterGraphQLAdapter registers the GraphQL adapter (using HTTP) with a registry.
-func RegisterGraphQLAdapter(registry *connfx.Registry) error {
-	factory := NewHTTPConnectionFactory("graphql")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=graphql): %w", err)
-	}
-
-	return nil
-}

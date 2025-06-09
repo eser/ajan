@@ -35,10 +35,7 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	}
 
 	// logger
-	appContext.Logger, err = logfx.NewLoggerAsDefault(os.Stdout, &appContext.Config.Log)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-	}
+	appContext.Logger = logfx.NewLoggerAsDefault(os.Stdout, &appContext.Config.Log)
 
 	// metrics
 	appContext.Metrics = metricsfx.NewMetricsProvider()

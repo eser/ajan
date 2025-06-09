@@ -5,11 +5,11 @@ import (
 )
 
 type Definition struct {
-	Kind    ResultKind
 	Code    string
 	Message string
 
 	Attributes []slog.Attr
+	Kind       ResultKind
 }
 
 func Define(kind ResultKind, code string, message string, attributes ...slog.Attr) *Definition {

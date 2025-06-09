@@ -31,15 +31,11 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register Redis adapter (supports both stateful and streaming)
-		err := adapters.RegisterRedisAdapter(registry)
-		require.NoError(t, err)
+		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
 
 		// Register other adapters for comparison
-		err = adapters.RegisterSQLiteAdapter(registry)
-		require.NoError(t, err)
-
-		err = adapters.RegisterHTTPAdapter(registry)
-		require.NoError(t, err)
+		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 		protocols := registry.ListRegisteredProtocols()
 		assert.Contains(t, protocols, "redis")
@@ -56,12 +52,9 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		err := adapters.RegisterRedisAdapter(registry)
-		require.NoError(t, err)
-		err = adapters.RegisterSQLiteAdapter(registry)
-		require.NoError(t, err)
-		err = adapters.RegisterHTTPAdapter(registry)
-		require.NoError(t, err)
+		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
+		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 		// Add SQLite connection (stateful only)
 		sqlConfig := connfx.NewConnectionConfig(
@@ -71,7 +64,7 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 				Database: ":memory:",
 			},
 		)
-		err = registry.AddConnection(ctx, sqlConfig)
+		err := registry.AddConnection(ctx, sqlConfig)
 		require.NoError(t, err)
 
 		// Note: We can't test Redis connection without a Redis server,
@@ -101,12 +94,9 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		err := adapters.RegisterRedisAdapter(registry)
-		require.NoError(t, err)
-		err = adapters.RegisterSQLiteAdapter(registry)
-		require.NoError(t, err)
-		err = adapters.RegisterHTTPAdapter(registry)
-		require.NoError(t, err)
+		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
+		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 		// Create a Redis connection config (won't actually connect)
 		redisConfig := connfx.NewConnectionConfig(
@@ -120,7 +110,7 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 
 		// This will fail because no Redis server is running, but that's expected
 		// We're demonstrating the configuration and behavior setup
-		err = registry.AddConnection(ctx, redisConfig)
+		err := registry.AddConnection(ctx, redisConfig)
 
 		// The connection will fail, but we can show what behaviors it would support
 		t.Logf("Redis connection attempt failed as expected (no server): %v", err)

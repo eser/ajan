@@ -18,27 +18,54 @@ var (
 )
 
 type RedisCache struct {
-	client  *redis.Client
-	dialect Dialect
+	clientError error
+	client      *redis.Client
+
+	dialect   Dialect
+	hasPinged bool
 }
 
-func NewRedisCache(ctx context.Context, dialect Dialect, dsn string) (*RedisCache, error) {
+func NewRedisCache(ctx context.Context, dialect Dialect, dsn string) *RedisCache {
 	opt, err := redis.ParseURL(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToParseRedisURL, err)
-	}
+		return &RedisCache{
+			client: nil,
+			clientError: fmt.Errorf(
+				"%w (dialect=%q, dsn=%q): %w",
+				ErrFailedToParseRedisURL,
+				dialect,
+				dsn,
+				err,
+			),
+			hasPinged: false,
 
-	client := redis.NewClient(opt)
-
-	// Test the connection
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToConnectToRedis, err)
+			dialect: dialect,
+		}
 	}
 
 	return &RedisCache{
-		client:  client,
+		client:      redis.NewClient(opt),
+		clientError: nil,
+		hasPinged:   false,
+
 		dialect: dialect,
-	}, nil
+	}
+}
+
+func (cache *RedisCache) EnsureConnection(ctx context.Context) error {
+	if cache.clientError != nil {
+		return cache.clientError
+	}
+
+	if !cache.hasPinged {
+		if err := cache.client.Ping(ctx).Err(); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToConnectToRedis, err)
+		}
+
+		cache.hasPinged = true
+	}
+
+	return nil
 }
 
 func (cache *RedisCache) GetDialect() Dialect {

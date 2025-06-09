@@ -18,32 +18,44 @@ var (
 
 // Metrics holds HTTP-specific metrics using the simplified MetricsBuilder approach.
 type Metrics struct {
+	builder *metricsfx.MetricsBuilder
+
 	RequestsTotal   *metricsfx.CounterMetric
 	RequestDuration *metricsfx.HistogramMetric
 }
 
 // NewMetrics creates HTTP metrics using the simplified MetricsBuilder.
-func NewMetrics(provider *metricsfx.MetricsProvider) (*Metrics, error) {
+func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
 	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/httpfx", "1.0.0")
 
-	requestsTotal, err := builder.Counter(
+	return &Metrics{
+		builder: builder,
+
+		RequestsTotal:   nil,
+		RequestDuration: nil,
+	}
+}
+
+func (metrics *Metrics) Init() error {
+	requestsTotal, err := metrics.builder.Counter(
 		"http_requests_total",
 		"Total number of HTTP requests",
 	).WithUnit("{request}").Build()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestsCounter, err)
+		return fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestsCounter, err)
 	}
 
-	requestDuration, err := builder.Histogram(
+	metrics.RequestsTotal = requestsTotal
+
+	requestDuration, err := metrics.builder.Histogram(
 		"http_request_duration_seconds",
 		"HTTP request duration in seconds",
 	).WithDurationBuckets().Build()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestDurationHistogram, err)
+		return fmt.Errorf("%w: %w", ErrFailedToBuildHTTPRequestDurationHistogram, err)
 	}
 
-	return &Metrics{
-		RequestsTotal:   requestsTotal,
-		RequestDuration: requestDuration,
-	}, nil
+	metrics.RequestDuration = requestDuration
+
+	return nil
 }

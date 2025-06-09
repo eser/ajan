@@ -44,9 +44,9 @@ seamless integration with observability platforms.
 Creates a new `logfx.Logger` object based on the provided configuration.
 
 ```go
-// func NewLogger(w io.Writer, config *Config) (*logfx.Logger, error)
+// func NewLogger(w io.Writer, config *Config) *logfx.Logger
 
-logger, err := logfx.NewLogger(os.Stdout, config)
+logger := logfx.NewLogger(os.Stdout, config)
 ```
 
 ### NewLoggerAsDefault function
@@ -55,9 +55,9 @@ Creates a new `logfx.Logger` object based on the provided configuration and
 makes it default slog instance.
 
 ```go
-// func NewLoggerAsDefault(w io.Writer, config *Config) (*logfx.Logger, error)
+// func NewLoggerAsDefault(w io.Writer, config *Config) *logfx.Logger
 
-logger, err := logfx.NewLoggerAsDefault(os.Stdout, config)
+logger := logfx.NewLoggerAsDefault(os.Stdout, config)
 ```
 
 ### Colored outputs

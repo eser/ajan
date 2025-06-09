@@ -31,8 +31,7 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -42,7 +41,7 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Test GetNamed method
@@ -81,8 +80,7 @@ func TestRegistry_GetDefaultConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -95,7 +93,7 @@ func TestRegistry_GetDefaultConnection(t *testing.T) {
 		},
 	)
 
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Test GetDefault method
@@ -115,8 +113,7 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -129,7 +126,7 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 		},
 	}
 
-	err = registry.LoadFromConfig(ctx, config)
+	err := registry.LoadFromConfig(ctx, config)
 	require.NoError(t, err)
 
 	// Verify connection was loaded
@@ -148,8 +145,7 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -162,7 +158,7 @@ func TestRegistry_HealthCheck(t *testing.T) {
 		},
 	)
 
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Test health check for all connections
@@ -189,8 +185,7 @@ func TestRegistry_RemoveConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -200,7 +195,7 @@ func TestRegistry_RemoveConnection(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Verify connection exists
@@ -227,8 +222,7 @@ func TestRegistry_Close(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -238,7 +232,7 @@ func TestRegistry_Close(t *testing.T) {
 		Database: ":memory:",
 	})
 
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Close all connections
@@ -353,10 +347,8 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register adapters
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
-	err = adapters.RegisterHTTPAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 	ctx := t.Context()
 
@@ -365,7 +357,7 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 		Protocol: "sqlite",
 		Database: ":memory:",
 	})
-	err = registry.AddConnection(ctx, sqlConfig)
+	err := registry.AddConnection(ctx, sqlConfig)
 	require.NoError(t, err)
 
 	// Test behavior filtering
@@ -389,16 +381,8 @@ func TestRegistry_AdapterRegistration(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Test registering adapters
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
-
-	err = adapters.RegisterHTTPAdapter(registry)
-	require.NoError(t, err)
-
-	// Test duplicate registration fails
-	err = adapters.RegisterSQLiteAdapter(registry)
-	require.Error(t, err)
-	require.ErrorIs(t, err, connfx.ErrFactoryAlreadyRegistered)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
 
 	// Test listing protocols
 	protocols := registry.ListRegisteredProtocols()
@@ -413,8 +397,7 @@ func TestGetTypedConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	err := adapters.RegisterSQLiteAdapter(registry)
-	require.NoError(t, err)
+	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -423,7 +406,7 @@ func TestGetTypedConnection(t *testing.T) {
 		Protocol: "sqlite",
 		Database: ":memory:",
 	})
-	err = registry.AddConnection(ctx, config)
+	err := registry.AddConnection(ctx, config)
 	require.NoError(t, err)
 
 	// Get connection

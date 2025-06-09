@@ -18,7 +18,6 @@ var (
 	ErrConnectionAlreadyExists  = errors.New("connection already exists")
 	ErrFailedToCreateConnection = errors.New("failed to create connection")
 	ErrUnsupportedProtocol      = errors.New("unsupported protocol")
-	ErrFactoryAlreadyRegistered = errors.New("factory already registered")
 	ErrFailedToCloseConnections = errors.New("failed to close connections")
 	ErrProtocolMismatch         = errors.New("protocol mismatch")
 	ErrBehaviorNotSupported     = errors.New("behavior not supported")
@@ -45,16 +44,11 @@ func NewRegistry(logger *logfx.Logger) *Registry {
 }
 
 // RegisterFactory registers a connection factory for a specific protocol.
-func (r *Registry) RegisterFactory(factory ConnectionFactory) error {
+func (r *Registry) RegisterFactory(factory ConnectionFactory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	protocol := factory.GetProtocol()
-
-	// Check if factory is already registered
-	if _, exists := r.factories[protocol]; exists {
-		return fmt.Errorf("%w (protocol=%q)", ErrFactoryAlreadyRegistered, protocol)
-	}
 
 	r.factories[protocol] = factory
 
@@ -70,8 +64,6 @@ func (r *Registry) RegisterFactory(factory ConnectionFactory) error {
 		slog.String("protocol", protocol),
 		slog.Any("behaviors", behaviorStrs),
 	)
-
-	return nil
 }
 
 // GetDefault returns the default connection.

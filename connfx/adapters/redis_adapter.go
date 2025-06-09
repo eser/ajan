@@ -227,16 +227,3 @@ func (c *RedisConnection) IsStatefulReady() bool {
 func (c *RedisConnection) IsStreamingReady() bool {
 	return c.GetState() == connfx.ConnectionStateConnected
 }
-
-// Package level registration helper
-
-// RegisterRedisAdapter registers the Redis adapter with a registry.
-func RegisterRedisAdapter(registry *connfx.Registry) error {
-	factory := NewRedisConnectionFactory("redis")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=redis): %w", err)
-	}
-
-	return nil
-}

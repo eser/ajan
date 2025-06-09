@@ -63,7 +63,10 @@ func TestMetricsMiddleware(t *testing.T) {
 
 			// Create metrics using the new MetricsBuilder
 			metricsProvider := setupTestMetricsProvider(t)
-			metrics, err := httpfx.NewMetrics(metricsProvider)
+			metrics := httpfx.NewMetrics(metricsProvider)
+			require.NotNil(t, metrics)
+
+			err := metrics.Init()
 			require.NoError(t, err)
 
 			// Create a router with the metrics middleware

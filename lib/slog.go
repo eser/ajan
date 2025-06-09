@@ -6,17 +6,15 @@ import (
 )
 
 func SerializeSlogAttrs(attrs []slog.Attr) string {
-	length := len(attrs)
-
-	if length == 0 {
-		return ""
-	}
-
-	result := make([]string, length)
+	var b strings.Builder
 
 	for i, attr := range attrs {
-		result[i] = attr.String()
+		if i > 0 {
+			b.WriteString(", ")
+		}
+
+		b.WriteString(attr.String())
 	}
 
-	return strings.Join(result, ", ")
+	return b.String()
 }

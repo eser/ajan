@@ -32,6 +32,8 @@ const (
 )
 
 // ConnectionState represents the current state of a connection.
+//
+//go:generate go tool stringer -type ConnectionState -trimprefix ConnectionState
 type ConnectionState int32
 
 const (
@@ -41,24 +43,6 @@ const (
 	ConnectionStateError        ConnectionState = 3
 	ConnectionStateReconnecting ConnectionState = 4
 )
-
-// String returns the string representation of ConnectionState.
-func (s ConnectionState) String() string {
-	switch s {
-	case ConnectionStateUnknown:
-		return "unknown"
-	case ConnectionStateConnected:
-		return "connected"
-	case ConnectionStateDisconnected:
-		return "disconnected"
-	case ConnectionStateError:
-		return "error"
-	case ConnectionStateReconnecting:
-		return "reconnecting"
-	default:
-		return "unknown"
-	}
-}
 
 // HealthStatus represents the health check result.
 type HealthStatus struct {

@@ -65,15 +65,24 @@ func (registry *Registry) AddConnection(
 		slog.String("dialect", string(dialect)),
 	)
 
-	cache, err := NewRedisCache(ctx, dialect, dsn)
-	if err != nil {
+	cache := NewRedisCache(ctx, dialect, dsn)
+	if err := cache.EnsureConnection(ctx); err != nil {
 		registry.logger.Error(
 			"failed to open cache connection",
 			slog.String("error", err.Error()),
 			slog.String("name", name),
+			slog.String("dialect", string(dialect)),
+			slog.String("dsn", dsn),
 		)
 
-		return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, name, err)
+		return fmt.Errorf(
+			"%w (name=%q, dialect=%q, dsn=%q): %w",
+			ErrFailedToAddConnection,
+			name,
+			dialect,
+			dsn,
+			err,
+		)
 	}
 
 	registry.caches[name] = cache

@@ -75,15 +75,16 @@ func TestNewHTTPService(t *testing.T) { //nolint:funlen
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger, err := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
-			require.NoError(t, err)
+			logger := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
 
 			router := httpfx.NewRouter("/")
 			metricsProvider := setupTestMetricsProvider(t)
 
-			service, err := httpfx.NewHTTPService(tt.config, router, metricsProvider, logger)
-			require.NoError(t, err)
+			service := httpfx.NewHTTPService(tt.config, router, metricsProvider, logger)
 			require.NotNil(t, service)
+
+			err := service.SetupTLS(t.Context())
+			require.NoError(t, err)
 
 			assert.NotNil(t, service.Server())
 			assert.Equal(t, tt.config.Addr, service.Server().Addr)
@@ -109,8 +110,7 @@ func TestNewHTTPService(t *testing.T) { //nolint:funlen
 func TestHTTPService_Start(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
-	logger, err := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
-	require.NoError(t, err)
+	logger := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
 
 	router := httpfx.NewRouter("/")
 	metricsProvider := setupTestMetricsProvider(t)
@@ -132,8 +132,7 @@ func TestHTTPService_Start(t *testing.T) { //nolint:funlen
 		GracefulShutdownTimeout: time.Second * 5,
 	}
 
-	service, err := httpfx.NewHTTPService(config, router, metricsProvider, logger)
-	require.NoError(t, err)
+	service := httpfx.NewHTTPService(config, router, metricsProvider, logger)
 	require.NotNil(t, service)
 
 	ctx := t.Context()

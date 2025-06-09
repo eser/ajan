@@ -18,8 +18,8 @@ func setupTestRedis(t *testing.T) (*cachefx.RedisCache, *miniredis.Miniredis, er
 		return nil, nil, err //nolint:wrapcheck
 	}
 
-	cache, err := cachefx.NewRedisCache(t.Context(), cachefx.DialectRedis, "redis://"+mr.Addr())
-	if err != nil {
+	cache := cachefx.NewRedisCache(t.Context(), cachefx.DialectRedis, "redis://"+mr.Addr())
+	if err := cache.EnsureConnection(t.Context()); err != nil {
 		mr.Close()
 
 		return nil, nil, err //nolint:wrapcheck

@@ -75,11 +75,11 @@ func (registry *Registry) AddConnection(
 	// var err error
 
 	// if dialect == DialectPostgresPgx {
-	// 	db, err = NewPgxDatasource(ctx, dialect, dsn)
+	// 	db = NewPgxDatasource(ctx, dialect, dsn)
 	// } else {
-	db, err := NewSQLDatasource(ctx, dialect, dsn)
+	db := NewSQLDatasource(ctx, dialect, dsn)
 	// }
-	if err != nil {
+	if err := db.EnsureConnection(ctx); err != nil {
 		registry.logger.Error(
 			"failed to open datasource connection",
 			slog.String("error", err.Error()),

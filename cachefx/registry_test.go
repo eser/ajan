@@ -14,7 +14,7 @@ import (
 func setupTestRegistry(t *testing.T) *cachefx.Registry {
 	t.Helper()
 
-	logger, _ := logfx.NewLogger(
+	logger := logfx.NewLogger(
 		os.Stdout,
 		&logfx.Config{}, //nolint:exhaustruct
 	)

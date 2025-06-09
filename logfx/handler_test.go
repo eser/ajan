@@ -53,17 +53,16 @@ func TestNewHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler, err := logfx.NewHandler(tt.writer, tt.config)
+			handler := logfx.NewHandler(tt.writer, tt.config)
 
 			if tt.expectedErr != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, tt.expectedErr)
-				assert.Nil(t, handler)
+				require.Error(t, handler.InitError)
+				require.ErrorIs(t, handler.InitError, tt.expectedErr)
 
 				return
 			}
 
-			require.NoError(t, err)
+			require.NoError(t, handler.InitError)
 			assert.NotNil(t, handler)
 		})
 	}
@@ -133,7 +132,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 			t.Parallel()
 
 			writer := &bytes.Buffer{}
-			handler, _ := logfx.NewHandler(writer, &logfx.Config{ //nolint:exhaustruct
+			handler := logfx.NewHandler(writer, &logfx.Config{ //nolint:exhaustruct
 				Level:      tt.level,
 				PrettyMode: true,
 			})
@@ -148,7 +147,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 	t.Run("failed to write log", func(t *testing.T) {
 		t.Parallel()
 
-		handler, _ := logfx.NewHandler(&mockFailWriter{}, &logfx.Config{ //nolint:exhaustruct
+		handler := logfx.NewHandler(&mockFailWriter{}, &logfx.Config{ //nolint:exhaustruct
 			Level:      "info",
 			PrettyMode: true,
 		})
@@ -160,7 +159,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 func TestHandler_WithAttrs(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
+	handler := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
 		Level: "info",
 	})
 	newHandler := handler.WithAttrs(make([]slog.Attr, 0))
@@ -171,7 +170,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 func TestHandler_WithGroup(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
+	handler := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
 		Level: "info",
 	})
 	newHandler := handler.WithGroup("test")

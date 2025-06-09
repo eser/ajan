@@ -30,11 +30,8 @@ func NewGRPCService(
 	config *Config,
 	metricsProvider *metricsfx.MetricsProvider,
 	logger *logfx.Logger,
-) (*GRPCService, error) {
-	metrics, err := NewMetrics(metricsProvider)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateGRPCMetrics, err)
-	}
+) *GRPCService {
+	metrics := NewMetrics(metricsProvider)
 
 	server := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
@@ -50,9 +47,10 @@ func NewGRPCService(
 	return &GRPCService{
 		InnerServer:  server,
 		InnerMetrics: metrics,
-		Config:       config,
-		logger:       logger,
-	}, nil
+
+		Config: config,
+		logger: logger,
+	}
 }
 
 func (gs *GRPCService) Server() *grpc.Server {
@@ -65,6 +63,12 @@ func (gs *GRPCService) RegisterService(desc *grpc.ServiceDesc, impl any) {
 
 func (gs *GRPCService) Start(ctx context.Context) (func(), error) {
 	gs.logger.InfoContext(ctx, "GRPCService is starting...", slog.String("addr", gs.Config.Addr))
+
+	if gs.InnerMetrics == nil {
+		if err := gs.InnerMetrics.Init(); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToCreateGRPCMetrics, err)
+		}
+	}
 
 	listener, err := net.Listen("tcp", gs.Config.Addr)
 	if err != nil {

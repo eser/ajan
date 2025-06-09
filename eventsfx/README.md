@@ -44,6 +44,9 @@ The main component for event handling:
 ```go
 // Create a new event bus
 bus := eventsfx.NewEventBus(config, metricsProvider, logger)
+if err := bus.Init(); err != nil {
+  panic("unable to initialize event bus")
+}
 
 // Subscribe to events
 bus.Subscribe("user.created", func(event Event) {

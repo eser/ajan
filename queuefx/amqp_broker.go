@@ -23,25 +23,52 @@ var (
 type AmqpBroker struct {
 	connection *amqp.Connection
 	channel    *amqp.Channel
-	dialect    Dialect
+
+	dialect Dialect
+	dsn     string
 }
 
-func NewAmqpBroker(ctx context.Context, dialect Dialect, dsn string) (*AmqpBroker, error) {
-	connection, err := amqp.Dial(dsn)
+func NewAmqpBroker(ctx context.Context, dialect Dialect, dsn string) *AmqpBroker {
+	return &AmqpBroker{
+		connection: nil,
+		channel:    nil,
+
+		dialect: dialect,
+		dsn:     dsn,
+	}
+}
+
+func (broker *AmqpBroker) EnsureConnection(ctx context.Context) error {
+	if broker.connection != nil {
+		return nil
+	}
+
+	connection, err := amqp.Dial(broker.dsn)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenBrokerConnection, err)
+		return fmt.Errorf(
+			"%w (dialect=%q, dsn=%q): %w",
+			ErrFailedToOpenBrokerConnection,
+			broker.dialect,
+			broker.dsn,
+			err,
+		)
 	}
 
 	channel, err := connection.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenBrokerChannel, err)
+		return fmt.Errorf(
+			"%w (dialect=%q, dsn=%q): %w",
+			ErrFailedToOpenBrokerChannel,
+			broker.dialect,
+			broker.dsn,
+			err,
+		)
 	}
 
-	return &AmqpBroker{
-		connection: connection,
-		channel:    channel,
-		dialect:    dialect,
-	}, nil
+	broker.connection = connection
+	broker.channel = channel
+
+	return nil
 }
 
 func (broker *AmqpBroker) GetDialect() Dialect {

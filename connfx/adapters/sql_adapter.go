@@ -261,38 +261,3 @@ func (c *SQLConnection) GetDB() *sql.DB {
 func (c *SQLConnection) Stats() sql.DBStats {
 	return c.db.Stats()
 }
-
-// Package level registration helpers
-
-// RegisterPostgresAdapter registers the Postgres adapter with a registry.
-func RegisterPostgresAdapter(registry *connfx.Registry) error {
-	factory := NewSQLConnectionFactory("postgres")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=postgres): %w", err)
-	}
-
-	return nil
-}
-
-// RegisterMySQLAdapter registers the MySQL adapter with a registry.
-func RegisterMySQLAdapter(registry *connfx.Registry) error {
-	factory := NewSQLConnectionFactory("mysql")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=mysql): %w", err)
-	}
-
-	return nil
-}
-
-// RegisterSQLiteAdapter registers the SQLite adapter with a registry.
-func RegisterSQLiteAdapter(registry *connfx.Registry) error {
-	factory := NewSQLConnectionFactory("sqlite")
-
-	if err := registry.RegisterFactory(factory); err != nil {
-		return fmt.Errorf("failed to register adapter (protocol=sqlite): %w", err)
-	}
-
-	return nil
-}

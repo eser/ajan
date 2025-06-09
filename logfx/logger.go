@@ -10,24 +10,27 @@ type Logger struct {
 	*slog.Logger
 }
 
-func NewLogger(w io.Writer, config *Config) (*Logger, error) {
-	handler, err := NewHandler(w, config)
-	if err != nil {
-		return nil, err
+func NewLogger(w io.Writer, config *Config) *Logger {
+	handler := NewHandler(w, config)
+
+	logger := &Logger{Logger: slog.New(handler)}
+
+	if handler.InitError != nil {
+		logger.Warn(
+			"an error occurred while initializing the logger",
+			slog.String("error", handler.InitError.Error()),
+			slog.Any("config", config),
+		)
 	}
 
-	return &Logger{Logger: slog.New(handler)}, nil
+	return logger
 }
 
-func NewLoggerAsDefault(w io.Writer, config *Config) (*Logger, error) {
-	logger, err := NewLogger(w, config)
-	if err != nil {
-		return nil, err
-	}
-
+func NewLoggerAsDefault(w io.Writer, config *Config) *Logger {
+	logger := NewLogger(w, config)
 	slog.SetDefault(logger.Logger)
 
-	return logger, nil
+	return logger
 }
 
 func NewLoggerFromSlog(slog *slog.Logger) *Logger {

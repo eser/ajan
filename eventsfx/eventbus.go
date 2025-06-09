@@ -37,11 +37,8 @@ func NewEventBus(
 	config *Config,
 	metricsProvider *metricsfx.MetricsProvider,
 	logger *logfx.Logger,
-) (*EventBus, error) {
-	metrics, err := NewMetrics(metricsProvider)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateMetrics, err)
-	}
+) *EventBus {
+	metrics := NewMetrics(metricsProvider)
 
 	return &EventBus{
 		InnerMetrics: metrics,
@@ -51,7 +48,17 @@ func NewEventBus(
 
 		Config: config,
 		logger: logger,
-	}, nil
+	}
+}
+
+func (bus *EventBus) Init() error {
+	if bus.InnerMetrics == nil {
+		if err := bus.InnerMetrics.Init(); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToCreateMetrics, err)
+		}
+	}
+
+	return nil
 }
 
 func (bus *EventBus) Subscribe(eventName string, handler EventHandler) {

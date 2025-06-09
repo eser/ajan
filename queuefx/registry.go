@@ -64,8 +64,8 @@ func (registry *Registry) AddConnection(
 		slog.String("dialect", string(dialect)),
 	)
 
-	db, err := NewAmqpBroker(ctx, dialect, dsn)
-	if err != nil {
+	db := NewAmqpBroker(ctx, dialect, dsn)
+	if err := db.EnsureConnection(ctx); err != nil {
 		registry.logger.Error(
 			"failed to open broker connection",
 			slog.String("error", err.Error()),

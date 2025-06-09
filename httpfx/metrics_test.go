@@ -13,9 +13,11 @@ func TestNewMetrics(t *testing.T) {
 	t.Parallel()
 
 	provider := setupTestMetricsProvider(t)
-	metrics, err := httpfx.NewMetrics(provider)
-	require.NoError(t, err)
+	metrics := httpfx.NewMetrics(provider)
 	require.NotNil(t, metrics)
+
+	err := metrics.Init()
+	require.NoError(t, err)
 
 	// Test that we can use the metrics (basic smoke test)
 	ctx := t.Context()
@@ -30,9 +32,11 @@ func TestMetrics_Integration(t *testing.T) {
 	t.Parallel()
 
 	provider := setupTestMetricsProvider(t)
-	metrics, err := httpfx.NewMetrics(provider)
-	require.NoError(t, err)
+	metrics := httpfx.NewMetrics(provider)
 	require.NotNil(t, metrics)
+
+	err := metrics.Init()
+	require.NoError(t, err)
 
 	ctx := t.Context()
 

@@ -35,7 +35,7 @@ func NewHTTPService(
 	router *Router,
 	metricsProvider *metricsfx.MetricsProvider,
 	logger *logfx.Logger,
-) (*HTTPService, error) {
+) *HTTPService {
 	server := &http.Server{ //nolint:exhaustruct
 		ReadHeaderTimeout: config.ReadHeaderTimeout,
 		ReadTimeout:       config.ReadTimeout,
@@ -47,32 +47,7 @@ func NewHTTPService(
 		Handler: router.GetMux(),
 	}
 
-	if config.CertString != "" && config.KeyString != "" {
-		cert, err := tls.X509KeyPair([]byte(config.CertString), []byte(config.KeyString))
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrFailedToLoadCertificate, err)
-		}
-
-		server.TLSConfig = &tls.Config{ //nolint:exhaustruct
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS12,
-		}
-	} else if config.SelfSigned {
-		cert, err := lib.GenerateSelfSignedCert()
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrFailedToGenerateSelfSignedCert, err)
-		}
-
-		server.TLSConfig = &tls.Config{ //nolint:exhaustruct
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS12,
-		}
-	}
-
-	metrics, err := NewMetrics(metricsProvider)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHTTPMetrics, err)
-	}
+	metrics := NewMetrics(metricsProvider)
 
 	return &HTTPService{
 		InnerServer:  server,
@@ -80,7 +55,7 @@ func NewHTTPService(
 		InnerMetrics: metrics,
 		Config:       config,
 		logger:       logger,
-	}, nil
+	}
 }
 
 func (hs *HTTPService) Server() *http.Server {
@@ -91,12 +66,50 @@ func (hs *HTTPService) Router() *Router {
 	return hs.InnerRouter
 }
 
+func (hs *HTTPService) SetupTLS(ctx context.Context) error {
+	switch {
+	case hs.Config.CertString != "" && hs.Config.KeyString != "":
+		cert, err := tls.X509KeyPair([]byte(hs.Config.CertString), []byte(hs.Config.KeyString))
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToLoadCertificate, err)
+		}
+
+		hs.InnerServer.TLSConfig = &tls.Config{ //nolint:exhaustruct
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+	case hs.Config.SelfSigned:
+		cert, err := lib.GenerateSelfSignedCert()
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToGenerateSelfSignedCert, err)
+		}
+
+		hs.InnerServer.TLSConfig = &tls.Config{ //nolint:exhaustruct
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+	default:
+		hs.logger.WarnContext(
+			ctx,
+			"HTTPService is starting without TLS, this will cause HTTP/2 support to be disabled",
+		)
+	}
+
+	return nil
+}
+
 func (hs *HTTPService) Start(ctx context.Context) (func(), error) {
 	hs.logger.InfoContext(ctx, "HTTPService is starting...", slog.String("addr", hs.Config.Addr))
 
-	// if hs.Server().TLSConfig == nil {
-	// 	hs.logger.WarnContext(ctx, "HTTPService is starting without TLS, this will cause HTTP/2 support to be disabled")
-	// }
+	if hs.InnerMetrics == nil {
+		if err := hs.InnerMetrics.Init(); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHTTPMetrics, err)
+		}
+	}
+
+	if err := hs.SetupTLS(ctx); err != nil {
+		return nil, err
+	}
 
 	listener, lnErr := net.Listen("tcp", hs.InnerServer.Addr)
 	if lnErr != nil {
@@ -106,7 +119,7 @@ func (hs *HTTPService) Start(ctx context.Context) (func(), error) {
 	go func() {
 		var sErr error
 
-		if hs.Server().TLSConfig != nil {
+		if hs.InnerServer.TLSConfig != nil {
 			sErr = hs.InnerServer.ServeTLS(listener, "", "")
 		} else {
 			sErr = hs.InnerServer.Serve(listener)
