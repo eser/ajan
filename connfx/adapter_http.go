@@ -85,10 +85,6 @@ func (f *HTTPConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *HTTPConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
-	return []ConnectionBehavior{ConnectionBehaviorStateless}
-}
-
 func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 	config *ConfigTarget,
 ) (*http.Client, map[string]string, error) {
@@ -152,6 +148,10 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 
 func (c *HTTPConnection) GetBehaviors() []ConnectionBehavior {
 	return []ConnectionBehavior{ConnectionBehaviorStateless}
+}
+
+func (c *HTTPConnection) GetCapabilities() []ConnectionCapability {
+	return []ConnectionCapability{}
 }
 
 func (c *HTTPConnection) GetProtocol() string {

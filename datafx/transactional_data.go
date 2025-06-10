@@ -32,8 +32,8 @@ func NewTransactionalStore(conn connfx.Connection) (*TransactionalStore, error) 
 	}
 
 	// Check if the connection supports transactional behavior
-	behaviors := conn.GetBehaviors()
-	supportsTransactions := slices.Contains(behaviors, connfx.ConnectionBehaviorTransactional)
+	capabilities := conn.GetCapabilities()
+	supportsTransactions := slices.Contains(capabilities, connfx.ConnectionCapabilityTransactional)
 
 	if !supportsTransactions {
 		return nil, fmt.Errorf(

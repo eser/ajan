@@ -86,6 +86,10 @@ func main() {
     log.Printf("DB behaviors: %v", dbConn.GetBehaviors())     // [stateful]
     log.Printf("API behaviors: %v", apiConn.GetBehaviors())   // [stateless]
 
+    // Check capabilities determined by providers
+    log.Printf("DB capabilities: %v", dbConn.GetCapabilities())     // [transactional relational]
+    log.Printf("API capabilities: %v", apiConn.GetBehaviors())   // []
+
     // Use the connections with type safety
     db, err := connfx.GetTypedConnection[*sql.DB](dbConn)
     if err != nil {
@@ -163,6 +167,14 @@ func (c *CustomConnection) GetBehaviors() []connfx.ConnectionBehavior {
         connfx.ConnectionBehaviorStreaming, // Example: supports multiple behaviors
     }
 }
+
+func (c *CustomConnection) GetCapabilities() []connfx.ConnectionCapability {
+    // Your adapter defines what capabilities it supports
+    return []connfx.ConnectionCapability{
+        connfx.ConnectionCapabilityRelational,
+        connfx.ConnectionCapabilityTransactional, // Example: supports multiple capabilities
+    }
+}
 // ... implement other Connection interface methods
 
 // CustomConnectionFactory implements connfx.ConnectionFactory
@@ -173,12 +185,6 @@ func (f *CustomConnectionFactory) CreateConnection(ctx context.Context, config c
 }
 
 func (f *CustomConnectionFactory) GetProtocol() string { return "myprotocol" }
-func (f *CustomConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-    return []connfx.ConnectionBehavior{
-        connfx.ConnectionBehaviorStateful,
-        connfx.ConnectionBehaviorStreaming,
-    }
-}
 
 // Register the adapter
 func RegisterCustomAdapter(registry *connfx.Registry) {
@@ -245,8 +251,8 @@ if dbConn == nil {
 }
 
 // Check connection properties
-fmt.Printf("Protocol: %s, Behaviors: %v\n",
-    dbConn.GetProtocol(), dbConn.GetBehaviors())
+fmt.Printf("Protocol: %s, Behaviors: %v, Capabilities: %v\n",
+    dbConn.GetProtocol(), dbConn.GetBehaviors(), dbConn.GetCapabilities())
 ```
 
 ### Filtering by Behavior
@@ -267,17 +273,41 @@ for _, conn := range statefulConns {
 }
 ```
 
+### Filtering by Capabilities
+
+```go
+// Get all relational connections (databases, etc.)
+relationalConns := registry.GetByCapability(connfx.ConnectionCapabilityRelational)
+
+// Get all transactional connections (databases, etc.)
+transactionalConns := registry.GetByCapability(connfx.ConnectionCapabilityTransactional)
+
+// Get all cache connections (redis, etc.)
+cacheConns := registry.GetByCapability(connfx.ConnectionCapabilityCache)
+
+// Get all queue connections (amqp, etc.)
+queueConns := registry.GetByCapability(connfx.ConnectionCapabilityQueue)
+
+// Get all key-value connections (redis, etc.)
+keyValueConns := registry.GetByCapability(connfx.ConnectionCapabilityKeyValue)
+
+// Redis appears in cache, queue and key-value lists!
+for _, conn := range queueConns {
+    fmt.Printf("Queue connection: %s\n", conn.GetProtocol())
+}
+```
+
 ### Filtering by Protocol
 
 ```go
 // Get all Postgres connections
 postgresConns := registry.GetByProtocol("postgres")
 
-// Get all Redis connections (support multiple behaviors)
+// Get all Redis connections (support multiple behaviors and capabilities)
 redisConns := registry.GetByProtocol("redis")
 for _, conn := range redisConns {
-    fmt.Printf("Redis connection supports: %v\n", conn.GetBehaviors())
-    // Output: Redis connection supports: [stateful streaming]
+    fmt.Printf("Redis connection supports: %v and %v\n", conn.GetBehaviors(), conn.GetCapabilities())
+    // Output: Redis connection supports: [stateful streaming] and [cache queue key-value]
 }
 ```
 
@@ -431,9 +461,10 @@ if redisConn == nil {
     return errors.New("cache connection not found")
 }
 
-// Check what behaviors this Redis connection supports
+// Check what behaviors and capabilities this Redis connection supports
 behaviors := redisConn.GetBehaviors()
-fmt.Printf("Redis supports: %v\n", behaviors) // [stateful streaming]
+capabilities := redisConn.GetCapabilities()
+fmt.Printf("Redis supports: %v and %v\n", behaviors, capabilities) // [stateful streaming] and [cache queue key-value]
 
 // Extract Redis client safely
 redisClient, err := connfx.GetTypedConnection[redis.Client](redisConn) // Assuming redis.Client type
@@ -499,6 +530,7 @@ func (r *Registry) RegisterFactory(factory ConnectionFactory) error
 ```go
 type Connection interface {
     GetBehaviors() []ConnectionBehavior
+    GetCapabilities() []ConnectionCapability
     GetProtocol() string
     GetState() ConnectionState
     HealthCheck(ctx context.Context) *HealthStatus

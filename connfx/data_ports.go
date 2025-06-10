@@ -5,6 +5,28 @@ import (
 	"time"
 )
 
+type ConnectionCapability string
+
+const (
+	// ConnectionCapabilityKeyValue represents key-value storage behavior.
+	ConnectionCapabilityKeyValue ConnectionCapability = "key-value"
+
+	// ConnectionCapabilityDocument represents document storage behavior.
+	ConnectionCapabilityDocument ConnectionCapability = "document"
+
+	// ConnectionCapabilityRelational represents relational database behavior.
+	ConnectionCapabilityRelational ConnectionCapability = "relational"
+
+	// ConnectionCapabilityTransactional represents transactional behavior.
+	ConnectionCapabilityTransactional ConnectionCapability = "transactional"
+
+	// ConnectionCapabilityCache represents caching behavior with expiration support.
+	ConnectionCapabilityCache ConnectionCapability = "cache"
+
+	// ConnectionCapabilityQueue represents message queue behavior.
+	ConnectionCapabilityQueue ConnectionCapability = "queue"
+)
+
 // Repository defines the port for data access operations.
 // This interface will be implemented by adapters in connfx for different storage technologies.
 type Repository interface {
@@ -160,23 +182,3 @@ func DefaultConsumerConfig() ConsumerConfig {
 		Args:      nil,
 	}
 }
-
-const (
-	// ConnectionBehaviorKeyValue represents key-value storage behavior.
-	ConnectionBehaviorKeyValue ConnectionBehavior = "key-value"
-
-	// ConnectionBehaviorDocument represents document storage behavior.
-	ConnectionBehaviorDocument ConnectionBehavior = "document"
-
-	// ConnectionBehaviorRelational represents relational database behavior.
-	ConnectionBehaviorRelational ConnectionBehavior = "relational"
-
-	// ConnectionBehaviorTransactional represents transactional behavior.
-	ConnectionBehaviorTransactional ConnectionBehavior = "transactional"
-
-	// ConnectionBehaviorCache represents caching behavior with expiration support.
-	ConnectionBehaviorCache ConnectionBehavior = "cache"
-
-	// ConnectionBehaviorQueue represents message queue behavior.
-	ConnectionBehaviorQueue ConnectionBehavior = "queue"
-)

@@ -31,8 +31,8 @@ func NewQueue(conn connfx.Connection) (*Queue, error) {
 	}
 
 	// Check if the connection supports queue operations
-	behaviors := conn.GetBehaviors()
-	supportsQueue := slices.Contains(behaviors, connfx.ConnectionBehaviorQueue)
+	capabilities := conn.GetCapabilities()
+	supportsQueue := slices.Contains(capabilities, connfx.ConnectionCapabilityQueue)
 
 	if !supportsQueue {
 		return nil, fmt.Errorf("%w: connection does not support queue operations (protocol=%q)",

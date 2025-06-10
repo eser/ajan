@@ -59,7 +59,12 @@ func (ac *AMQPConnection) GetBehaviors() []ConnectionBehavior {
 	return []ConnectionBehavior{
 		ConnectionBehaviorStateful,
 		ConnectionBehaviorStreaming,
-		ConnectionBehaviorQueue,
+	}
+}
+
+func (ac *AMQPConnection) GetCapabilities() []ConnectionCapability {
+	return []ConnectionCapability{
+		ConnectionCapabilityQueue,
 	}
 }
 
@@ -336,12 +341,4 @@ func (f *AMQPConnectionFactory) CreateConnection(
 
 func (f *AMQPConnectionFactory) GetProtocol() string {
 	return f.protocol
-}
-
-func (f *AMQPConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
-	return []ConnectionBehavior{
-		ConnectionBehaviorStateful,
-		ConnectionBehaviorStreaming,
-		ConnectionBehaviorQueue,
-	}
 }

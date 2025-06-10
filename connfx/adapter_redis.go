@@ -64,8 +64,13 @@ func (rc *RedisConnection) GetBehaviors() []ConnectionBehavior {
 	return []ConnectionBehavior{
 		ConnectionBehaviorStateful,
 		ConnectionBehaviorStreaming,
-		ConnectionBehaviorKeyValue,
-		ConnectionBehaviorCache,
+	}
+}
+
+func (rc *RedisConnection) GetCapabilities() []ConnectionCapability {
+	return []ConnectionCapability{
+		ConnectionCapabilityKeyValue,
+		ConnectionCapabilityCache,
 	}
 }
 
@@ -270,12 +275,4 @@ func (f *RedisConnectionFactory) CreateConnection(
 
 func (f *RedisConnectionFactory) GetProtocol() string {
 	return f.protocol
-}
-
-func (f *RedisConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
-	return []ConnectionBehavior{
-		ConnectionBehaviorStateful,
-		ConnectionBehaviorStreaming,
-		ConnectionBehaviorKeyValue,
-	}
 }

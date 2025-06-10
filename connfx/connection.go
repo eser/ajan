@@ -58,6 +58,9 @@ type Connection interface {
 	// GetBehaviors returns the connection behaviors this connection supports
 	GetBehaviors() []ConnectionBehavior
 
+	// GetCapabilities returns the connection capabilities this connection supports
+	GetCapabilities() []ConnectionCapability
+
 	// GetProtocol returns the protocol/technology used (e.g., "postgres", "redis", "http")
 	GetProtocol() string
 
@@ -81,9 +84,6 @@ type ConnectionFactory interface {
 
 	// GetProtocol returns the protocol this factory supports (e.g., "postgres", "redis")
 	GetProtocol() string
-
-	// GetSupportedBehaviors returns the behaviors this factory creates
-	GetSupportedBehaviors() []ConnectionBehavior
 }
 
 // GetTypedConnection extracts a typed connection from a Connection interface.

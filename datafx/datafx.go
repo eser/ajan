@@ -32,25 +32,25 @@ func NewStore(conn connfx.Connection) (*Store, error) {
 	}
 
 	// Check if the connection supports data operations
-	behaviors := conn.GetBehaviors()
-	supportsData := false
+	capabilities := conn.GetCapabilities()
+	supportsStore := false
 
-	for _, behavior := range behaviors {
-		if behavior == connfx.ConnectionBehaviorKeyValue ||
-			behavior == connfx.ConnectionBehaviorDocument ||
-			behavior == connfx.ConnectionBehaviorRelational {
-			supportsData = true
+	for _, capability := range capabilities {
+		if capability == connfx.ConnectionCapabilityKeyValue ||
+			capability == connfx.ConnectionCapabilityDocument ||
+			capability == connfx.ConnectionCapabilityRelational {
+			supportsStore = true
 
 			break
 		}
 	}
 
-	if !supportsData {
-		return nil, fmt.Errorf("%w: connection does not support data operations (protocol=%q)",
+	if !supportsStore {
+		return nil, fmt.Errorf("%w: connection does not support store operations (protocol=%q)",
 			ErrConnectionNotSupported, conn.GetProtocol())
 	}
 
-	// Get the data repository from the raw connection
+	// Get the repository from the raw connection
 	repo, ok := conn.GetRawConnection().(connfx.Repository)
 	if !ok {
 		return nil, fmt.Errorf(

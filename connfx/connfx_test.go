@@ -46,6 +46,7 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 
 	// Test connection properties
 	assert.Contains(t, conn.GetBehaviors(), connfx.ConnectionBehaviorStateful)
+	assert.Contains(t, conn.GetCapabilities(), connfx.ConnectionCapabilityRelational)
 	assert.Equal(t, "sqlite", conn.GetProtocol())
 	assert.Equal(t, connfx.ConnectionStateConnected, conn.GetState())
 

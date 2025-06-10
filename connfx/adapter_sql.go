@@ -78,14 +78,17 @@ func (f *SQLConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *SQLConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
-	return []ConnectionBehavior{ConnectionBehaviorStateful}
-}
-
 // Connection interface implementation
 
 func (c *SQLConnection) GetBehaviors() []ConnectionBehavior {
 	return []ConnectionBehavior{ConnectionBehaviorStateful}
+}
+
+func (c *SQLConnection) GetCapabilities() []ConnectionCapability {
+	return []ConnectionCapability{
+		ConnectionCapabilityRelational,
+		ConnectionCapabilityTransactional,
+	}
 }
 
 func (c *SQLConnection) GetProtocol() string {

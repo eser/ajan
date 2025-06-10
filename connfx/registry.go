@@ -74,17 +74,9 @@ func (registry *Registry) RegisterFactory(factory ConnectionFactory) {
 
 	registry.factories[protocol] = factory
 
-	behaviors := factory.GetSupportedBehaviors()
-	behaviorStrs := make([]string, len(behaviors))
-
-	for i, b := range behaviors {
-		behaviorStrs[i] = string(b)
-	}
-
 	registry.logger.Info(
 		"registered connection factory",
 		slog.String("protocol", protocol),
-		slog.Any("behaviors", behaviorStrs),
 	)
 }
 
@@ -113,6 +105,21 @@ func (registry *Registry) GetByBehavior(behavior ConnectionBehavior) []Connectio
 	for _, conn := range registry.connections {
 		// Check if the connection supports the requested behavior
 		if slices.Contains(conn.GetBehaviors(), behavior) {
+			connections = append(connections, conn)
+		}
+	}
+
+	return connections
+}
+
+// GetByCapability returns all connections of a specific capability.
+func (registry *Registry) GetByCapability(capability ConnectionCapability) []Connection {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	var connections []Connection
+	for _, conn := range registry.connections {
+		if slices.Contains(conn.GetCapabilities(), capability) {
 			connections = append(connections, conn)
 		}
 	}
@@ -339,10 +346,10 @@ func (registry *Registry) GetRepository(name string) (Repository, error) {
 	}
 
 	// Check if the connection supports key-value behavior
-	behaviors := conn.GetBehaviors()
-	if !slices.Contains(behaviors, ConnectionBehaviorKeyValue) &&
-		!slices.Contains(behaviors, ConnectionBehaviorDocument) &&
-		!slices.Contains(behaviors, ConnectionBehaviorRelational) {
+	capabilities := conn.GetCapabilities()
+	if !slices.Contains(capabilities, ConnectionCapabilityKeyValue) &&
+		!slices.Contains(capabilities, ConnectionCapabilityDocument) &&
+		!slices.Contains(capabilities, ConnectionCapabilityRelational) {
 		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
 			ErrConnectionNotSupported, name, "data repository operations")
 	}

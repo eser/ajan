@@ -72,6 +72,15 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		assert.Len(t, statefulConnections, 1)
 		assert.Contains(t, statefulConnections[0].GetBehaviors(), connfx.ConnectionBehaviorStateful)
 
+		// Test capability filtering
+		relationalConnections := registry.GetByCapability(connfx.ConnectionCapabilityRelational)
+		assert.Len(t, relationalConnections, 1)
+		assert.Contains(
+			t,
+			relationalConnections[0].GetCapabilities(),
+			connfx.ConnectionCapabilityRelational,
+		)
+
 		// Test that SQL connection only has stateful behavior
 		conn := statefulConnections[0]
 		behaviors := conn.GetBehaviors()

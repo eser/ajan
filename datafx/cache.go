@@ -31,8 +31,8 @@ func NewCache(conn connfx.Connection) (*Cache, error) {
 	}
 
 	// Check if the connection supports cache operations
-	behaviors := conn.GetBehaviors()
-	supportsCache := slices.Contains(behaviors, connfx.ConnectionBehaviorCache)
+	capabilities := conn.GetCapabilities()
+	supportsCache := slices.Contains(capabilities, connfx.ConnectionCapabilityCache)
 
 	if !supportsCache {
 		return nil, fmt.Errorf("%w: connection does not support cache operations (protocol=%q)",
