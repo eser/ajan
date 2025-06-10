@@ -4,12 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	"maps"
+	"math"
 	"strconv"
 	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+// Constants for AMQP adapter.
+const (
+	maxInt32 = math.MaxInt32
 )
 
 var (
@@ -25,13 +31,31 @@ var (
 	ErrFailedToReconnect        = errors.New("failed to reconnect")
 	ErrDeliveryChannelClosed    = errors.New("delivery channel closed")
 	ErrNoChannelAvailable       = errors.New("no channel available")
+	ErrFailedToCloseAMQPClient  = errors.New("failed to close AMQP client")
+	ErrAMQPOperation            = errors.New("AMQP operation failed")
+	ErrAMQPConnectionFailed     = errors.New("failed to connect to AMQP")
+	ErrFailedToCreateAMQPClient = errors.New("failed to create AMQP client")
+	ErrAMQPUnsupportedOperation = errors.New("operation not supported by AMQP")
+	ErrIntegerOverflow          = errors.New("integer overflow in conversion")
 )
+
+// AMQPConfig holds AMQP-specific configuration options.
+type AMQPConfig struct {
+	URL string
+}
+
+// NewDefaultAMQPConfig creates an AMQP configuration with sensible defaults.
+func NewDefaultAMQPConfig() *AMQPConfig {
+	return &AMQPConfig{
+		URL: "amqp://guest:guest@localhost:5672/",
+	}
+}
 
 // AMQPAdapter implements the QueueRepository interface for AMQP-based message queues.
 type AMQPAdapter struct {
 	connection *amqp.Connection
 	channel    *amqp.Channel
-	dsn        string
+	config     *AMQPConfig
 }
 
 // AMQPConnection implements the connfx.Connection interface for AMQP connections.
@@ -42,11 +66,15 @@ type AMQPConnection struct {
 }
 
 // NewAMQPConnection creates a new AMQP connection.
-func NewAMQPConnection(protocol, dsn string) *AMQPConnection {
+func NewAMQPConnection(protocol string, config *AMQPConfig) *AMQPConnection {
+	if config == nil {
+		config = NewDefaultAMQPConfig()
+	}
+
 	adapter := &AMQPAdapter{
-		dsn:        dsn,
 		connection: nil,
 		channel:    nil,
+		config:     config,
 	}
 
 	return &AMQPConnection{
@@ -89,20 +117,17 @@ func (ac *AMQPConnection) HealthCheck(ctx context.Context) *HealthStatus {
 		Latency:   0,
 	}
 
-	// Check connection status
-	if connErr := ac.validateConnection(status, start); connErr != nil {
+	if err := ac.adapter.ensureConnection(); err != nil {
+		status.State = ConnectionStateError
+		status.Error = err
+		status.Message = fmt.Sprintf("Failed to connect to AMQP: %v", err)
+		status.Latency = time.Since(start)
+
 		return status
 	}
 
-	// Test channel operations
-	if channelErr := ac.testChannelOperations(status, start); channelErr != nil {
-		return status
-	}
-
-	// Connection is ready
-	atomic.StoreInt32(&ac.state, int32(ConnectionStateReady))
 	status.State = ConnectionStateReady
-	status.Message = "AMQP connection is live and ready"
+	status.Message = "AMQP connection is ready"
 	status.Latency = time.Since(start)
 
 	return status
@@ -113,13 +138,13 @@ func (ac *AMQPConnection) Close(ctx context.Context) error {
 
 	if ac.adapter.channel != nil {
 		if err := ac.adapter.channel.Close(); err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToCloseChannel, err)
+			return fmt.Errorf("%w (channel): %w", ErrFailedToCloseAMQPClient, err)
 		}
 	}
 
 	if ac.adapter.connection != nil {
 		if err := ac.adapter.connection.Close(); err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToCloseConnection, err)
+			return fmt.Errorf("%w (connection): %w", ErrFailedToCloseAMQPClient, err)
 		}
 	}
 
@@ -128,76 +153,6 @@ func (ac *AMQPConnection) Close(ctx context.Context) error {
 
 func (ac *AMQPConnection) GetRawConnection() any {
 	return ac.adapter
-}
-
-func (ac *AMQPConnection) validateConnection(status *HealthStatus, start time.Time) error {
-	// Check if connection exists and is not closed
-	if ac.adapter.connection == nil {
-		atomic.StoreInt32(&ac.state, int32(ConnectionStateNotInitialized))
-		status.State = ConnectionStateNotInitialized
-		status.Error = ErrAMQPClientNotInitialized
-		status.Message = "AMQP connection not initialized"
-		status.Latency = time.Since(start)
-
-		return ErrAMQPClientNotInitialized
-	}
-
-	if ac.adapter.connection.IsClosed() {
-		atomic.StoreInt32(&ac.state, int32(ConnectionStateDisconnected))
-		status.State = ConnectionStateDisconnected
-		status.Error = ErrFailedToOpenConnection
-		status.Message = "AMQP connection is closed"
-		status.Latency = time.Since(start)
-
-		return ErrFailedToOpenConnection
-	}
-
-	// Connection exists and is open - check if we have a working channel
-	if ac.adapter.channel == nil {
-		// Connection exists but no channel - connected but not live
-		atomic.StoreInt32(&ac.state, int32(ConnectionStateConnected))
-		status.State = ConnectionStateConnected
-		status.Message = "AMQP connection established but no channel available"
-		status.Latency = time.Since(start)
-
-		return ErrNoChannelAvailable
-	}
-
-	return nil
-}
-
-func (ac *AMQPConnection) testChannelOperations(status *HealthStatus, start time.Time) error {
-	// Try to perform a basic operation to test channel liveness
-	// We'll try to declare a temporary queue to verify we can perform operations
-	tempQueueName := fmt.Sprintf("__connfx_health_check_%d__", start.UnixNano())
-	_, err := ac.adapter.channel.QueueDeclare(
-		tempQueueName, // queue name
-		false,         // durable
-		true,          // delete when unused
-		true,          // exclusive
-		false,         // no-wait
-		nil,           // arguments
-	)
-
-	status.Latency = time.Since(start)
-
-	if err != nil {
-		// Channel exists but operations fail - live but not ready
-		atomic.StoreInt32(&ac.state, int32(ConnectionStateLive))
-		status.State = ConnectionStateLive
-		status.Error = err
-		status.Message = fmt.Sprintf(
-			"AMQP connection is live but channel operations failing: %v",
-			err,
-		)
-
-		return fmt.Errorf("%w: %w", ErrFailedToDeclareQueue, err)
-	}
-
-	// Clean up the temporary queue (best effort)
-	_, _ = ac.adapter.channel.QueueDelete(tempQueueName, false, false, false)
-
-	return nil
 }
 
 // QueueRepository interface implementation.
@@ -221,32 +176,94 @@ func (aa *AMQPAdapter) QueueDeclare(ctx context.Context, name string) (string, e
 	return queue.Name, nil
 }
 
+func (aa *AMQPAdapter) QueueDeclareWithConfig(
+	ctx context.Context,
+	name string,
+	config QueueConfig,
+) (string, error) {
+	if err := aa.ensureConnection(); err != nil {
+		return "", fmt.Errorf("%w (queue=%q): %w", ErrAMQPClientNotInitialized, name, err)
+	}
+
+	args := amqp.Table{}
+
+	// Copy additional arguments
+	if config.Args != nil {
+		maps.Copy(args, config.Args)
+	}
+
+	// Add TTL if specified
+	if config.MessageTTL > 0 {
+		ttlMs := config.MessageTTL.Milliseconds()
+		if ttlMs > maxInt32 {
+			return "", fmt.Errorf(
+				"%w: message TTL %d ms exceeds maximum",
+				ErrIntegerOverflow,
+				ttlMs,
+			)
+		}
+
+		args["x-message-ttl"] = int32(ttlMs) //nolint:gosec // bounds checked above
+	}
+
+	// Add max length if specified
+	if config.MaxLength > 0 {
+		if config.MaxLength > maxInt32 {
+			return "", fmt.Errorf(
+				"%w: max length %d exceeds maximum",
+				ErrIntegerOverflow,
+				config.MaxLength,
+			)
+		}
+
+		args["x-max-length"] = int32(config.MaxLength)
+	}
+
+	queue, err := aa.channel.QueueDeclare(
+		name,
+		config.Durable,
+		config.AutoDelete,
+		config.Exclusive,
+		false, // no-wait
+		args,
+	)
+	if err != nil {
+		return "", fmt.Errorf("%w (queue=%q): %w", ErrFailedToDeclareQueue, name, err)
+	}
+
+	return queue.Name, nil
+}
+
 func (aa *AMQPAdapter) Publish(ctx context.Context, queueName string, body []byte) error {
+	return aa.PublishWithHeaders(ctx, queueName, body, nil)
+}
+
+func (aa *AMQPAdapter) PublishWithHeaders(
+	ctx context.Context,
+	queueName string,
+	body []byte,
+	headers map[string]any,
+) error {
 	if err := aa.ensureConnection(); err != nil {
 		return fmt.Errorf("%w (queue=%q): %w", ErrAMQPClientNotInitialized, queueName, err)
 	}
 
-	err := aa.channel.Publish(
+	publishing := amqp.Publishing{ //nolint:exhaustruct
+		ContentType: "application/octet-stream",
+		Body:        body,
+	}
+
+	if headers != nil {
+		publishing.Headers = amqp.Table(headers)
+	}
+
+	err := aa.channel.PublishWithContext(
+		ctx,
 		"",        // exchange
 		queueName, // routing key
 		false,     // mandatory
 		false,     // immediate
-		amqp.Publishing{
-			Headers:         nil,
-			ContentType:     "application/json",
-			ContentEncoding: "",
-			Body:            body,
-			DeliveryMode:    0,
-			Priority:        0,
-			CorrelationId:   "",
-			ReplyTo:         "",
-			Expiration:      "",
-			MessageId:       "",
-			Timestamp:       time.Time{},
-			Type:            "",
-			UserId:          "",
-			AppId:           "",
-		},
+		publishing,
 	)
 	if err != nil {
 		return fmt.Errorf("%w (queue=%q): %w", ErrFailedToPublishMessage, queueName, err)
@@ -273,23 +290,78 @@ func (aa *AMQPAdapter) Consume(
 	return messages, errors
 }
 
+func (aa *AMQPAdapter) ConsumeWithGroup(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+) (<-chan Message, <-chan error) {
+	// AMQP doesn't have native consumer groups like Redis Streams
+	// We'll use the regular consume method
+	return aa.Consume(ctx, queueName, config)
+}
+
+func (aa *AMQPAdapter) ClaimPendingMessages(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	minIdleTime time.Duration,
+	count int,
+) ([]Message, error) {
+	// AMQP doesn't support pending message claiming
+	return []Message{}, fmt.Errorf(
+		"%w: AMQP does not support pending message claiming",
+		ErrAMQPUnsupportedOperation,
+	)
+}
+
+func (aa *AMQPAdapter) AckMessage(
+	ctx context.Context,
+	queueName, consumerGroup, receiptHandle string,
+) error {
+	// In AMQP, acknowledgment is handled through the message's Ack method
+	// This is a no-op for compatibility
+	return nil
+}
+
+func (aa *AMQPAdapter) DeleteMessage(ctx context.Context, queueName, receiptHandle string) error {
+	// AMQP doesn't support individual message deletion after consumption
+	return fmt.Errorf(
+		"%w: AMQP does not support individual message deletion",
+		ErrAMQPUnsupportedOperation,
+	)
+}
+
+// Private methods (unexported) - placed after all exported methods.
+
 // ensureConnection ensures we have an active AMQP connection.
 func (aa *AMQPAdapter) ensureConnection() error {
 	if aa.connection != nil && !aa.connection.IsClosed() {
 		return nil
 	}
 
-	connection, err := amqp.Dial(aa.dsn)
+	conn, err := amqp.Dial(aa.config.URL)
 	if err != nil {
-		return fmt.Errorf("%w (dsn=%q): %w", ErrFailedToOpenConnection, aa.dsn, err)
+		return fmt.Errorf("%w: %w", ErrFailedToCreateAMQPClient, err)
 	}
 
-	channel, err := connection.Channel()
+	channel, err := conn.Channel()
 	if err != nil {
-		return fmt.Errorf("%w (dsn=%q): %w", ErrFailedToOpenChannel, aa.dsn, err)
+		if closeErr := conn.Close(); closeErr != nil {
+			return fmt.Errorf(
+				"%w (channel): %w, close error: %w",
+				ErrFailedToCreateAMQPClient,
+				err,
+				closeErr,
+			)
+		}
+
+		return fmt.Errorf("%w (channel): %w", ErrFailedToCreateAMQPClient, err)
 	}
 
-	aa.connection = connection
+	aa.connection = conn
 	aa.channel = channel
 
 	return nil
@@ -303,70 +375,63 @@ func (aa *AMQPAdapter) consumeLoop(
 	messages chan<- Message,
 	errors chan<- error,
 ) {
-	for {
+	if err := aa.ensureConnection(); err != nil {
 		select {
+		case errors <- fmt.Errorf("%w (queue=%q): %w", ErrAMQPClientNotInitialized, queueName, err):
 		case <-ctx.Done():
-			return
-		default:
-			if err := aa.ensureConnection(); err != nil {
-				errors <- fmt.Errorf("%w: %w", ErrFailedToReconnect, err)
-
-				continue
-			}
-
-			if err := aa.processMessages(ctx, queueName, config, messages, errors); err != nil {
-				// Connection lost, reset channel and retry
-				aa.channel = nil
-			}
 		}
+
+		return
 	}
+
+	deliveries, err := aa.channel.Consume(
+		queueName, // queue
+		"",        // consumer
+		config.AutoAck,
+		config.Exclusive,
+		config.NoLocal,
+		config.NoWait,
+		amqp.Table(config.Args),
+	)
+	if err != nil {
+		select {
+		case errors <- fmt.Errorf("%w (operation=consume, queue=%q): %w", ErrAMQPOperation, queueName, err):
+		case <-ctx.Done():
+		}
+
+		return
+	}
+
+	aa.processMessages(ctx, deliveries, messages, errors)
 }
 
 // processMessages handles message processing for a single connection session.
 func (aa *AMQPAdapter) processMessages(
 	ctx context.Context,
-	queueName string,
-	config ConsumerConfig,
+	deliveries <-chan amqp.Delivery,
 	messages chan<- Message,
 	errors chan<- error,
-) error {
-	deliveries, err := aa.channel.Consume(
-		queueName,        // queue
-		"",               // consumer
-		config.AutoAck,   // auto-ack
-		config.Exclusive, // exclusive
-		config.NoLocal,   // no-local
-		config.NoWait,    // no-wait
-		config.Args,      // args
-	)
-	if err != nil {
-		errors <- fmt.Errorf("%w (queue=%q): %w", ErrFailedToStartConsuming, queueName, err)
-
-		return fmt.Errorf("%w: %w", ErrFailedToStartConsuming, err)
-	}
-
-	// Monitor channel closure
-	chanClose := aa.channel.NotifyClose(make(chan *amqp.Error, 1))
-
-	// Process messages
+) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
-		case err := <-chanClose:
-			errors <- fmt.Errorf("%w: %w", ErrChannelClosed, err)
-
-			return err
+			return
 		case delivery, ok := <-deliveries:
 			if !ok {
-				return ErrDeliveryChannelClosed
+				select {
+				case errors <- ErrDeliveryChannelClosed:
+				case <-ctx.Done():
+				}
+
+				return
 			}
 
 			msg := aa.createMessage(delivery)
+
 			select {
 			case messages <- msg:
 			case <-ctx.Done():
-				return nil
+				return
 			}
 		}
 	}
@@ -374,15 +439,25 @@ func (aa *AMQPAdapter) processMessages(
 
 // createMessage creates a connfx.Message from an AMQP delivery.
 func (aa *AMQPAdapter) createMessage(delivery amqp.Delivery) Message {
-	msg := Message{ //nolint:exhaustruct
-		Body:    delivery.Body,
-		Headers: delivery.Headers,
+	headers := make(map[string]any)
+
+	if delivery.Headers != nil {
+		maps.Copy(headers, delivery.Headers)
 	}
 
-	// Set acknowledgment functions
+	msg := Message{ //nolint:exhaustruct
+		Headers:       headers,
+		Body:          delivery.Body,
+		ReceiptHandle: strconv.FormatUint(delivery.DeliveryTag, 10),
+		MessageID:     delivery.MessageId,
+		Timestamp:     delivery.Timestamp,
+		DeliveryCount: int(delivery.DeliveryTag), //nolint:gosec // DeliveryTag is sequential
+	}
+
 	msg.SetAckFunc(func() error {
 		return delivery.Ack(false)
 	})
+
 	msg.SetNackFunc(func(requeue bool) error {
 		return delivery.Nack(false, requeue)
 	})
@@ -406,15 +481,21 @@ func (f *AMQPConnectionFactory) CreateConnection(
 	ctx context.Context,
 	config *ConfigTarget,
 ) (Connection, error) {
-	dsn := config.DSN
-	if dsn == "" {
-		// Build DSN from config components using net.JoinHostPort
-		hostPort := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-		dsn = "amqp://" + hostPort
+	amqpConfig := &AMQPConfig{
+		URL: config.DSN,
 	}
 
-	// Create the connection
-	conn := NewAMQPConnection(f.protocol, dsn)
+	if amqpConfig.URL == "" {
+		amqpConfig.URL = NewDefaultAMQPConfig().URL
+	}
+
+	conn := NewAMQPConnection(f.protocol, amqpConfig)
+
+	// Test the connection
+	status := conn.HealthCheck(ctx)
+	if status.State == ConnectionStateError {
+		return nil, fmt.Errorf("%w: %w", ErrAMQPConnectionFailed, status.Error)
+	}
 
 	return conn, nil
 }

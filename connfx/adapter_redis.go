@@ -2,38 +2,80 @@ package connfx
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"maps"
 	"sync/atomic"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// Constants for Redis connection configuration.
+const (
+	// Default Redis connection retry configuration.
+	defaultMaxRetries      = 3
+	defaultMinRetryBackoff = 8 * time.Millisecond   // 8ms
+	defaultMaxRetryBackoff = 512 * time.Millisecond // 512ms
+	defaultPoolSize        = 10
+	defaultMinIdleConns    = 1
+	defaultMaxIdleConns    = 5
+	defaultConnMaxIdleTime = 30 * time.Minute
+	defaultPoolTimeout     = 4 * time.Second
+	defaultRedisPort       = 6379
 )
 
 var (
-	ErrRedisClientNotInitialized = errors.New("redis client not initialized")
-	ErrFailedToCloseRedisClient  = errors.New("failed to close Redis client")
-	ErrRedisOperation            = errors.New("redis operation failed")
+	ErrRedisClientNotInitialized   = errors.New("redis client not initialized")
+	ErrFailedToCloseRedisClient    = errors.New("failed to close Redis client")
+	ErrRedisOperation              = errors.New("redis operation failed")
+	ErrRedisConnectionFailed       = errors.New("failed to connect to Redis")
+	ErrRedisUnexpectedPingResponse = errors.New("unexpected ping response")
+	ErrRedisPoolTimeouts           = errors.New("redis connection pool has timeouts")
+	ErrFailedToCreateRedisClient   = errors.New("failed to create Redis client")
 )
 
-// RedisAdapter is an example adapter that implements the Repository interface.
-// This would typically wrap a real Redis client like go-redis/redis.
-type RedisAdapter struct {
-	client   RedisClient // This would be a real Redis client
-	host     string
-	password string
-	port     int
-	db       int
+// RedisConfig holds Redis-specific configuration options.
+type RedisConfig struct {
+	Address               string
+	Password              string
+	DB                    int
+	PoolSize              int
+	MinIdleConns          int
+	MaxIdleConns          int
+	ConnMaxIdleTime       time.Duration
+	PoolTimeout           time.Duration
+	MaxRetries            int
+	MinRetryBackoff       time.Duration
+	MaxRetryBackoff       time.Duration
+	TLSEnabled            bool
+	TLSInsecureSkipVerify bool
 }
 
-// RedisClient represents a Redis client interface (would be implemented by actual Redis library).
-type RedisClient interface {
-	Get(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, key string, value string, expiration time.Duration) error
-	Del(ctx context.Context, keys ...string) error
-	Exists(ctx context.Context, keys ...string) (int64, error)
-	Close() error
-	Ping(ctx context.Context) error
-	TTL(ctx context.Context, key string) (time.Duration, error)
-	Expire(ctx context.Context, key string, expiration time.Duration) error
+// NewDefaultRedisConfig creates a Redis configuration with sensible defaults.
+func NewDefaultRedisConfig() *RedisConfig {
+	return &RedisConfig{
+		Address:               "localhost:6379",
+		Password:              "",
+		DB:                    0,
+		PoolSize:              defaultPoolSize,
+		MinIdleConns:          defaultMinIdleConns,
+		MaxIdleConns:          defaultMaxIdleConns,
+		ConnMaxIdleTime:       defaultConnMaxIdleTime,
+		PoolTimeout:           defaultPoolTimeout,
+		MaxRetries:            defaultMaxRetries,
+		MinRetryBackoff:       defaultMinRetryBackoff,
+		MaxRetryBackoff:       defaultMaxRetryBackoff,
+		TLSEnabled:            false,
+		TLSInsecureSkipVerify: false,
+	}
+}
+
+// RedisAdapter implements Redis operations and wraps the Redis client.
+type RedisAdapter struct {
+	client *redis.Client
+	config *RedisConfig
 }
 
 // RedisConnection implements the connfx.Connection interface.
@@ -44,20 +86,21 @@ type RedisConnection struct {
 	isInitialized bool
 }
 
-// NewRedisConnection creates a new Redis connection.
-func NewRedisConnection(protocol, host string, port int, password string, db int) *RedisConnection {
+// NewRedisConnection creates a new Redis connection with enhanced configuration.
+func NewRedisConnection(protocol string, config *RedisConfig) *RedisConnection {
+	if config == nil {
+		config = NewDefaultRedisConfig()
+	}
+
 	adapter := &RedisAdapter{
-		host:     host,
-		port:     port,
-		password: password,
-		db:       db,
-		client:   nil, // Will be initialized with real Redis client
+		config: config,
+		client: nil, // Will be initialized when needed
 	}
 
 	conn := &RedisConnection{
 		adapter:       adapter,
 		protocol:      protocol,
-		state:         int32(ConnectionStateConnected),
+		state:         int32(ConnectionStateNotInitialized),
 		isInitialized: false,
 	}
 
@@ -76,6 +119,7 @@ func (rc *RedisConnection) GetCapabilities() []ConnectionCapability {
 	return []ConnectionCapability{
 		ConnectionCapabilityKeyValue,
 		ConnectionCapabilityCache,
+		ConnectionCapabilityQueue,
 	}
 }
 
@@ -84,7 +128,7 @@ func (rc *RedisConnection) GetProtocol() string {
 }
 
 func (rc *RedisConnection) GetState() ConnectionState {
-	return ConnectionState(rc.state)
+	return ConnectionState(atomic.LoadInt32(&rc.state))
 }
 
 func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
@@ -98,19 +142,19 @@ func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
 		Latency:   0,
 	}
 
-	// Check if client is initialized
-	if rc.adapter.client == nil {
-		atomic.StoreInt32(&rc.state, int32(ConnectionStateNotInitialized))
-		status.State = ConnectionStateNotInitialized
-		status.Error = ErrRedisClientNotInitialized
-		status.Message = "Redis client not initialized"
+	// Ensure client is initialized
+	if err := rc.ensureClient(); err != nil {
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
+		status.Error = err
+		status.Message = fmt.Sprintf("Failed to initialize Redis client: %v", err)
 		status.Latency = time.Since(start)
 
 		return status
 	}
 
-	// Try to ping Redis to check liveness
-	err := rc.adapter.client.Ping(ctx)
+	// Perform ping to check liveness
+	pong, err := rc.adapter.client.Ping(ctx).Result()
 	status.Latency = time.Since(start)
 
 	if err != nil {
@@ -122,30 +166,17 @@ func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
 		return status
 	}
 
-	// Redis ping successful - determine readiness state
-	// For Redis, we can consider it ready if:
-	// 1. Ping is successful (liveness check)
-	// 2. We can perform a basic operation to verify readiness
+	if pong != "PONG" {
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
+		status.Error = ErrRedisUnexpectedPingResponse
+		status.Message = "Unexpected ping response: " + pong
 
-	// Try a simple EXISTS operation to verify readiness
-	testKey := "__connfx_health_check__"
-	_, existsErr := rc.adapter.client.Exists(ctx, testKey)
-
-	if existsErr != nil {
-		// Can ping but cannot perform operations - live but not ready
-		atomic.StoreInt32(&rc.state, int32(ConnectionStateLive))
-		status.State = ConnectionStateLive
-		status.Message = "Redis connection is live but not ready for operations"
-		status.Error = existsErr
-	} else {
-		// Can ping and perform operations - fully ready
-		atomic.StoreInt32(&rc.state, int32(ConnectionStateReady))
-		status.State = ConnectionStateReady
-		status.Message = "Redis connection is live and ready for operations"
-		rc.isInitialized = true
+		return status
 	}
 
-	return status
+	// Check connection pool statistics for health assessment
+	return rc.assessPoolHealth(ctx, status, start)
 }
 
 func (rc *RedisConnection) Close(ctx context.Context) error {
@@ -156,13 +187,165 @@ func (rc *RedisConnection) Close(ctx context.Context) error {
 		if err := rc.adapter.client.Close(); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailedToCloseRedisClient, err)
 		}
+
+		rc.adapter.client = nil
 	}
 
 	return nil
 }
 
 func (rc *RedisConnection) GetRawConnection() any {
-	return rc.adapter
+	return rc.adapter.client
+}
+
+// GetStats returns detailed connection and pool statistics.
+func (rc *RedisConnection) GetStats() map[string]any {
+	if rc.adapter.client == nil {
+		return map[string]any{
+			"status": "disconnected",
+			"state":  rc.GetState().String(),
+		}
+	}
+
+	stats := rc.adapter.client.PoolStats()
+
+	return map[string]any{
+		"status":      "connected",
+		"state":       rc.GetState().String(),
+		"hits":        stats.Hits,
+		"misses":      stats.Misses,
+		"timeouts":    stats.Timeouts,
+		"total_conns": stats.TotalConns,
+		"idle_conns":  stats.IdleConns,
+		"stale_conns": stats.StaleConns,
+		"config": map[string]any{
+			"address":            rc.adapter.config.Address,
+			"db":                 rc.adapter.config.DB,
+			"pool_size":          rc.adapter.config.PoolSize,
+			"min_idle_conns":     rc.adapter.config.MinIdleConns,
+			"max_idle_conns":     rc.adapter.config.MaxIdleConns,
+			"conn_max_idle_time": rc.adapter.config.ConnMaxIdleTime.String(),
+			"pool_timeout":       rc.adapter.config.PoolTimeout.String(),
+			"tls_enabled":        rc.adapter.config.TLSEnabled,
+		},
+	}
+}
+
+// GetClient returns the underlying Redis client for advanced operations.
+func (rc *RedisConnection) GetClient() *redis.Client {
+	return rc.adapter.client
+}
+
+// ensureClient initializes the Redis client if not already done.
+func (rc *RedisConnection) ensureClient() error {
+	if rc.adapter.client != nil {
+		return nil
+	}
+
+	options := &redis.Options{ //nolint:exhaustruct
+		Addr:     rc.adapter.config.Address,
+		Password: rc.adapter.config.Password,
+		DB:       rc.adapter.config.DB,
+
+		// Connection pool configuration
+		PoolSize:        rc.adapter.config.PoolSize,
+		MinIdleConns:    rc.adapter.config.MinIdleConns,
+		MaxIdleConns:    rc.adapter.config.MaxIdleConns,
+		ConnMaxIdleTime: rc.adapter.config.ConnMaxIdleTime,
+		PoolTimeout:     rc.adapter.config.PoolTimeout,
+
+		// Retry configuration
+		MaxRetries:      rc.adapter.config.MaxRetries,
+		MinRetryBackoff: rc.adapter.config.MinRetryBackoff,
+		MaxRetryBackoff: rc.adapter.config.MaxRetryBackoff,
+	}
+
+	// Configure TLS if enabled
+	if rc.adapter.config.TLSEnabled {
+		options.TLSConfig = &tls.Config{ //nolint:exhaustruct
+			InsecureSkipVerify: rc.adapter.config.TLSInsecureSkipVerify, //nolint:gosec
+		}
+	}
+
+	client := redis.NewClient(options)
+	if client == nil {
+		return ErrFailedToCreateRedisClient
+	}
+
+	rc.adapter.client = client
+
+	return nil
+}
+
+// assessPoolHealth analyzes pool statistics to determine connection readiness.
+func (rc *RedisConnection) assessPoolHealth(
+	ctx context.Context,
+	status *HealthStatus,
+	start time.Time,
+) *HealthStatus {
+	stats := rc.adapter.client.PoolStats()
+
+	// Try a simple operation to verify readiness
+	testKey := "__connfx_health_check__"
+	_, existsErr := rc.adapter.client.Exists(ctx, testKey).Result()
+
+	status.Latency = time.Since(start)
+
+	// Check for pool timeouts which indicate connection pressure
+	if stats.Timeouts > 0 {
+		// Connection is live but experiencing timeouts - not ready
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Error = ErrRedisPoolTimeouts
+		status.Message = fmt.Sprintf(
+			"Redis connection pool has timeouts (timeouts=%d, total=%d, idle=%d)",
+			stats.Timeouts,
+			stats.TotalConns,
+			stats.IdleConns,
+		)
+
+		return status
+	}
+
+	if existsErr != nil {
+		// Can ping but cannot perform operations - live but not ready
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Message = "Redis connection is live but not ready for operations"
+		status.Error = existsErr
+
+		return status
+	}
+
+	// Check if pool has available connections
+	poolSizeUint32 := uint32(rc.adapter.config.PoolSize) //nolint:gosec
+	if stats.IdleConns == 0 && stats.TotalConns >= poolSizeUint32 {
+		// Pool is at capacity with no idle connections - live but not ready
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Message = fmt.Sprintf(
+			"Redis connection pool at capacity (total=%d, idle=%d, max=%d)",
+			stats.TotalConns,
+			stats.IdleConns,
+			rc.adapter.config.PoolSize,
+		)
+
+		return status
+	}
+
+	// Connection is ready
+	atomic.StoreInt32(&rc.state, int32(ConnectionStateReady))
+	status.State = ConnectionStateReady
+	status.Message = fmt.Sprintf(
+		"Redis connection is live and ready (total=%d, idle=%d, hits=%d, misses=%d)",
+		stats.TotalConns,
+		stats.IdleConns,
+		stats.Hits,
+		stats.Misses,
+	)
+	rc.isInitialized = true
+
+	return status
 }
 
 // StoreRepository interface implementation.
@@ -171,8 +354,12 @@ func (ra *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 		return nil, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	value, err := ra.client.Get(ctx, key)
+	value, err := ra.client.Get(ctx, key).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil // Key doesn't exist, return nil without error
+		}
+
 		return nil, fmt.Errorf("%w (operation=get, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
@@ -184,7 +371,7 @@ func (ra *RedisAdapter) Set(ctx context.Context, key string, value []byte) error
 		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	err := ra.client.Set(ctx, key, string(value), 0) // 0 means no expiration
+	err := ra.client.Set(ctx, key, string(value), 0).Err() // 0 means no expiration
 	if err != nil {
 		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrRedisOperation, key, err)
 	}
@@ -197,7 +384,7 @@ func (ra *RedisAdapter) Remove(ctx context.Context, key string) error {
 		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	err := ra.client.Del(ctx, key)
+	err := ra.client.Del(ctx, key).Err()
 	if err != nil {
 		return fmt.Errorf("%w (operation=remove, key=%q): %w", ErrRedisOperation, key, err)
 	}
@@ -215,7 +402,7 @@ func (ra *RedisAdapter) Exists(ctx context.Context, key string) (bool, error) {
 		return false, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	count, err := ra.client.Exists(ctx, key)
+	count, err := ra.client.Exists(ctx, key).Result()
 	if err != nil {
 		return false, fmt.Errorf("%w (operation=exists, key=%q): %w", ErrRedisOperation, key, err)
 	}
@@ -234,7 +421,7 @@ func (ra *RedisAdapter) SetWithExpiration(
 		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	err := ra.client.Set(ctx, key, string(value), expiration)
+	err := ra.client.Set(ctx, key, string(value), expiration).Err()
 	if err != nil {
 		return fmt.Errorf(
 			"%w (operation=set_with_expiration, key=%q): %w",
@@ -252,7 +439,7 @@ func (ra *RedisAdapter) GetTTL(ctx context.Context, key string) (time.Duration, 
 		return 0, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	ttl, err := ra.client.TTL(ctx, key)
+	ttl, err := ra.client.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, fmt.Errorf("%w (operation=get_ttl, key=%q): %w", ErrRedisOperation, key, err)
 	}
@@ -265,7 +452,7 @@ func (ra *RedisAdapter) Expire(ctx context.Context, key string, expiration time.
 		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
 	}
 
-	err := ra.client.Expire(ctx, key, expiration)
+	err := ra.client.Expire(ctx, key, expiration).Err()
 	if err != nil {
 		return fmt.Errorf("%w (operation=expire, key=%q): %w", ErrRedisOperation, key, err)
 	}
@@ -273,7 +460,7 @@ func (ra *RedisAdapter) Expire(ctx context.Context, key string, expiration time.
 	return nil
 }
 
-// RedisConnectionFactory creates Redis connections - following the same pattern as SQLConnectionFactory.
+// RedisConnectionFactory creates Redis connections with enhanced configuration.
 type RedisConnectionFactory struct {
 	protocol string
 }
@@ -289,28 +476,753 @@ func (f *RedisConnectionFactory) CreateConnection(
 	ctx context.Context,
 	config *ConfigTarget,
 ) (Connection, error) {
-	// Parse Redis-specific configuration
-	host := config.Host
-	if host == "" {
-		host = "localhost"
-	}
-
-	port := config.Port
-	if port == 0 {
-		port = 6379
-	}
-
-	// For Redis, we can extract password from DSN if needed
-	// For now, use empty password as default
-	password := ""
-	db := 0 // Default Redis DB
+	redisConfig := f.buildRedisConfig(config)
 
 	// Create the connection
-	conn := NewRedisConnection(f.protocol, host, port, password, db)
+	conn := NewRedisConnection(f.protocol, redisConfig)
+
+	// Perform initial connection and health check
+	if err := conn.ensureClient(); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateRedisClient, err)
+	}
+
+	// Test the connection
+	status := conn.HealthCheck(ctx)
+	if status.State == ConnectionStateError {
+		return nil, fmt.Errorf("%w: %w", ErrRedisConnectionFailed, status.Error)
+	}
 
 	return conn, nil
 }
 
 func (f *RedisConnectionFactory) GetProtocol() string {
 	return f.protocol
+}
+
+func (f *RedisConnectionFactory) buildRedisConfig(config *ConfigTarget) *RedisConfig {
+	redisConfig := NewDefaultRedisConfig()
+
+	// Configure address from DSN or individual settings
+	f.configureAddress(redisConfig, config)
+
+	// Extract Redis-specific configuration from properties
+	f.configureFromProperties(redisConfig, config)
+
+	// Apply TLS settings from config
+	f.configureTLS(redisConfig, config)
+
+	return redisConfig
+}
+
+func (f *RedisConnectionFactory) configureAddress(redisConfig *RedisConfig, config *ConfigTarget) {
+	if config.DSN != "" {
+		// TODO: Parse DSN for Redis connection string
+		// For now, use DSN as address
+		redisConfig.Address = config.DSN
+	} else {
+		// Build address from host and port
+		redisConfig.Address = fmt.Sprintf("%s:%d",
+			getOrDefault(config.Host, "localhost"),
+			getOrDefault(config.Port, defaultRedisPort))
+	}
+}
+
+func (f *RedisConnectionFactory) configureFromProperties(
+	redisConfig *RedisConfig,
+	config *ConfigTarget,
+) {
+	if config.Properties == nil {
+		return
+	}
+
+	f.configureBasicProperties(redisConfig, config.Properties)
+	f.configurePoolProperties(redisConfig, config.Properties)
+	f.configureTLSProperties(redisConfig, config.Properties)
+}
+
+func (f *RedisConnectionFactory) configureBasicProperties(
+	redisConfig *RedisConfig,
+	properties map[string]any,
+) {
+	if password, ok := properties["password"].(string); ok {
+		redisConfig.Password = password
+	}
+
+	if db, ok := properties["db"].(int); ok {
+		redisConfig.DB = db
+	}
+
+	if maxRetries, ok := properties["max_retries"].(int); ok {
+		redisConfig.MaxRetries = maxRetries
+	}
+}
+
+func (f *RedisConnectionFactory) configurePoolProperties(
+	redisConfig *RedisConfig,
+	properties map[string]any,
+) {
+	if poolSize, ok := properties["pool_size"].(int); ok {
+		redisConfig.PoolSize = poolSize
+	}
+
+	if minIdleConns, ok := properties["min_idle_conns"].(int); ok {
+		redisConfig.MinIdleConns = minIdleConns
+	}
+
+	if maxIdleConns, ok := properties["max_idle_conns"].(int); ok {
+		redisConfig.MaxIdleConns = maxIdleConns
+	}
+
+	if connMaxIdleTime, ok := properties["conn_max_idle_time"].(time.Duration); ok {
+		redisConfig.ConnMaxIdleTime = connMaxIdleTime
+	}
+
+	if poolTimeout, ok := properties["pool_timeout"].(time.Duration); ok {
+		redisConfig.PoolTimeout = poolTimeout
+	}
+}
+
+func (f *RedisConnectionFactory) configureTLSProperties(
+	redisConfig *RedisConfig,
+	properties map[string]any,
+) {
+	if tlsEnabled, ok := properties["tls_enabled"].(bool); ok {
+		redisConfig.TLSEnabled = tlsEnabled
+	}
+
+	if tlsInsecure, ok := properties["tls_insecure_skip_verify"].(bool); ok {
+		redisConfig.TLSInsecureSkipVerify = tlsInsecure
+	}
+}
+
+func (f *RedisConnectionFactory) configureTLS(redisConfig *RedisConfig, config *ConfigTarget) {
+	if config.TLS {
+		redisConfig.TLSEnabled = true
+	}
+
+	if config.TLSSkipVerify {
+		redisConfig.TLSInsecureSkipVerify = true
+	}
+}
+
+// Helper function to get value or default.
+func getOrDefault[T comparable](value, defaultValue T) T {
+	var zero T
+	if value == zero {
+		return defaultValue
+	}
+
+	return value
+}
+
+// QueueRepository interface implementation for Redis Streams.
+func (ra *RedisAdapter) QueueDeclare(ctx context.Context, name string) (string, error) {
+	if ra.client == nil {
+		return "", fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, name)
+	}
+
+	// For Redis Streams, we don't need to explicitly create the stream
+	// It will be created when the first message is added
+	// We just return the stream name
+	return name, nil
+}
+
+func (ra *RedisAdapter) QueueDeclareWithConfig(
+	ctx context.Context,
+	name string,
+	config QueueConfig,
+) (string, error) {
+	if ra.client == nil {
+		return "", fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, name)
+	}
+
+	// For Redis Streams, we can optionally trim the stream if MaxLength is specified
+	if config.MaxLength > 0 {
+		err := ra.client.XTrimMaxLen(ctx, name, config.MaxLength).Err()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return "", fmt.Errorf("%w (operation=trim, queue=%q): %w", ErrRedisOperation, name, err)
+		}
+	}
+
+	return name, nil
+}
+
+func (ra *RedisAdapter) Publish(ctx context.Context, queueName string, body []byte) error {
+	return ra.PublishWithHeaders(ctx, queueName, body, nil)
+}
+
+func (ra *RedisAdapter) PublishWithHeaders(
+	ctx context.Context,
+	queueName string,
+	body []byte,
+	headers map[string]any,
+) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, queueName)
+	}
+
+	values := map[string]any{
+		"data": string(body),
+	}
+
+	// Add headers to the stream entry
+	if headers != nil {
+		maps.Copy(values, headers)
+	}
+
+	args := &redis.XAddArgs{ //nolint:exhaustruct
+		Stream: queueName,
+		Values: values,
+	}
+
+	_, err := ra.client.XAdd(ctx, args).Result()
+	if err != nil {
+		return fmt.Errorf("%w (operation=publish, queue=%q): %w", ErrRedisOperation, queueName, err)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) Consume(
+	ctx context.Context,
+	queueName string,
+	config ConsumerConfig,
+) (<-chan Message, <-chan error) {
+	messages := make(chan Message)
+	errors := make(chan error)
+
+	go func() {
+		defer close(messages)
+		defer close(errors)
+
+		ra.consumeLoop(ctx, queueName, "", "", config, messages, errors)
+	}()
+
+	return messages, errors
+}
+
+func (ra *RedisAdapter) ConsumeWithGroup(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+) (<-chan Message, <-chan error) {
+	messages := make(chan Message)
+	errors := make(chan error)
+
+	go func() {
+		defer close(messages)
+		defer close(errors)
+
+		ra.consumeLoop(ctx, queueName, consumerGroup, consumerName, config, messages, errors)
+	}()
+
+	return messages, errors
+}
+
+// ClaimPendingMessages claims pending messages from a consumer group.
+func (ra *RedisAdapter) ClaimPendingMessages(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	minIdleTime time.Duration,
+	count int,
+) ([]Message, error) {
+	if ra.client == nil {
+		return nil, fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, queueName)
+	}
+
+	// Get pending messages
+	pendingMsgs, err := ra.fetchPendingMessages(ctx, queueName, consumerGroup, count)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pendingMsgs) == 0 {
+		return []Message{}, nil
+	}
+
+	// Claim idle messages
+	return ra.claimMessages(ctx, queueName, consumerGroup, consumerName, minIdleTime, pendingMsgs)
+}
+
+// StreamRepository interface implementation.
+func (ra *RedisAdapter) CreateConsumerGroup(
+	ctx context.Context,
+	streamName, consumerGroup, startID string,
+) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (stream=%q)", ErrRedisClientNotInitialized, streamName)
+	}
+
+	err := ra.client.XGroupCreateMkStream(ctx, streamName, consumerGroup, startID).Err()
+	if err != nil && !errors.Is(err, redis.Nil) &&
+		err.Error() != "BUSYGROUP Consumer Group name already exists" {
+		return fmt.Errorf(
+			"%w (operation=create_group, stream=%q, group=%q): %w",
+			ErrRedisOperation,
+			streamName,
+			consumerGroup,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) StreamInfo(ctx context.Context, streamName string) (StreamInfo, error) {
+	if ra.client == nil {
+		return StreamInfo{}, fmt.Errorf("%w (stream=%q)", ErrRedisClientNotInitialized, streamName)
+	}
+
+	info, err := ra.client.XInfoStream(ctx, streamName).Result()
+	if err != nil {
+		return StreamInfo{}, fmt.Errorf(
+			"%w (operation=stream_info, stream=%q): %w",
+			ErrRedisOperation,
+			streamName,
+			err,
+		)
+	}
+
+	streamInfo := StreamInfo{
+		Length:          info.Length,
+		RadixTreeKeys:   info.RadixTreeKeys,
+		RadixTreeNodes:  info.RadixTreeNodes,
+		Groups:          info.Groups,
+		LastGeneratedID: info.LastGeneratedID,
+		MaxDeletedID:    info.MaxDeletedEntryID,
+		EntriesAdded:    info.EntriesAdded,
+		RecordedFirstID: info.RecordedFirstEntryID,
+		FirstEntry:      nil,
+		LastEntry:       nil,
+		Metadata:        make(map[string]string),
+	}
+
+	// Handle FirstEntry and LastEntry properly - they might be nil or have different structure
+	if len(info.FirstEntry.Values) > 0 {
+		streamInfo.FirstEntry = &StreamEntry{
+			ID:     info.FirstEntry.ID,
+			Fields: convertValues(info.FirstEntry.Values),
+		}
+	}
+
+	if len(info.LastEntry.Values) > 0 {
+		streamInfo.LastEntry = &StreamEntry{
+			ID:     info.LastEntry.ID,
+			Fields: convertValues(info.LastEntry.Values),
+		}
+	}
+
+	return streamInfo, nil
+}
+
+func (ra *RedisAdapter) ConsumerGroupInfo(
+	ctx context.Context,
+	streamName string,
+) ([]ConsumerGroupInfo, error) {
+	if ra.client == nil {
+		return nil, fmt.Errorf("%w (stream=%q)", ErrRedisClientNotInitialized, streamName)
+	}
+
+	groups, err := ra.client.XInfoGroups(ctx, streamName).Result()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w (operation=group_info, stream=%q): %w",
+			ErrRedisOperation,
+			streamName,
+			err,
+		)
+	}
+
+	groupInfos := make([]ConsumerGroupInfo, len(groups))
+	for i, group := range groups {
+		groupInfos[i] = ConsumerGroupInfo{
+			Name:            group.Name,
+			Consumers:       group.Consumers,
+			Pending:         group.Pending,
+			LastDeliveredID: group.LastDeliveredID,
+			EntriesRead:     group.EntriesRead,
+			Lag:             group.Lag,
+		}
+	}
+
+	return groupInfos, nil
+}
+
+func (ra *RedisAdapter) TrimStream(ctx context.Context, streamName string, maxLen int64) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (stream=%q)", ErrRedisClientNotInitialized, streamName)
+	}
+
+	err := ra.client.XTrimMaxLen(ctx, streamName, maxLen).Err()
+	if err != nil {
+		return fmt.Errorf(
+			"%w (operation=trim, stream=%q, maxLen=%d): %w",
+			ErrRedisOperation,
+			streamName,
+			maxLen,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) AckMessage(
+	ctx context.Context,
+	queueName, consumerGroup, receiptHandle string,
+) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, queueName)
+	}
+
+	_, err := ra.client.XAck(ctx, queueName, consumerGroup, receiptHandle).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return fmt.Errorf(
+			"%w (operation=ack, queue=%q, group=%q, handle=%q): %w",
+			ErrRedisOperation,
+			queueName,
+			consumerGroup,
+			receiptHandle,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) DeleteMessage(ctx context.Context, queueName, receiptHandle string) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, queueName)
+	}
+
+	// For Redis Streams, deleting individual messages is done via XDEL
+	_, err := ra.client.XDel(ctx, queueName, receiptHandle).Result()
+	if err != nil {
+		return fmt.Errorf(
+			"%w (operation=delete, queue=%q, handle=%q): %w",
+			ErrRedisOperation,
+			queueName,
+			receiptHandle,
+			err,
+		)
+	}
+
+	return nil
+}
+
+// Helper methods for Redis Streams consumption.
+func (ra *RedisAdapter) consumeLoop(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+	messages chan<- Message,
+	errors chan<- error,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := ra.processStreamMessages(
+				ctx,
+				queueName,
+				consumerGroup,
+				consumerName,
+				config,
+				messages,
+				errors,
+			); err != nil {
+				select {
+				case errors <- err:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+}
+
+// processStreamMessages handles reading messages from Redis streams with reduced complexity.
+func (ra *RedisAdapter) processStreamMessages(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+	messages chan<- Message,
+	_ chan<- error, // Remove unused parameter
+) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (queue=%q)", ErrRedisClientNotInitialized, queueName)
+	}
+
+	// Read messages from stream
+	streams, err := ra.readFromStream(ctx, queueName, consumerGroup, consumerName, config)
+	if err != nil {
+		return err
+	}
+
+	// Process received messages
+	ra.deliverMessages(ctx, streams, consumerGroup, queueName, messages)
+
+	return nil
+}
+
+// readFromStream reads messages from Redis stream.
+func (ra *RedisAdapter) readFromStream(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+) ([]redis.XStream, error) {
+	var streams []redis.XStream
+
+	var err error
+
+	if consumerGroup != "" && consumerName != "" {
+		streams, err = ra.readFromConsumerGroup(ctx, queueName, consumerGroup, consumerName, config)
+	} else {
+		streams, err = ra.readDirectly(ctx, queueName, config)
+	}
+
+	if err != nil {
+		if errors.Is(err, redis.Nil) || errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) {
+			// Timeout or context cancellation - not an error
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf(
+			"%w (operation=read, queue=%q, group=%q): %w",
+			ErrRedisOperation,
+			queueName,
+			consumerGroup,
+			err,
+		)
+	}
+
+	return streams, nil
+}
+
+// readFromConsumerGroup reads messages as part of a consumer group.
+func (ra *RedisAdapter) readFromConsumerGroup(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	config ConsumerConfig,
+) ([]redis.XStream, error) {
+	args := &redis.XReadGroupArgs{ //nolint:exhaustruct
+		Group:    consumerGroup,
+		Consumer: consumerName,
+		Streams:  []string{queueName, ">"},
+		Count:    getOrDefault(int64(config.PrefetchCount), DefaultPrefetchCount),
+		Block:    config.BlockTimeout,
+	}
+
+	streams, err := ra.client.XReadGroup(ctx, args).Result()
+	if err != nil {
+		return nil, fmt.Errorf("%w (operation=read_group): %w", ErrRedisOperation, err)
+	}
+
+	return streams, nil
+}
+
+// readDirectly reads messages directly from stream.
+func (ra *RedisAdapter) readDirectly(
+	ctx context.Context,
+	queueName string,
+	config ConsumerConfig,
+) ([]redis.XStream, error) {
+	args := &redis.XReadArgs{ //nolint:exhaustruct
+		Streams: []string{queueName, "$"},
+		Count:   getOrDefault(int64(config.PrefetchCount), DefaultPrefetchCount),
+		Block:   config.BlockTimeout,
+	}
+
+	streams, err := ra.client.XRead(ctx, args).Result()
+	if err != nil {
+		return nil, fmt.Errorf("%w (operation=read_direct): %w", ErrRedisOperation, err)
+	}
+
+	return streams, nil
+}
+
+// deliverMessages sends messages to the output channel.
+func (ra *RedisAdapter) deliverMessages(
+	ctx context.Context,
+	streams []redis.XStream,
+	consumerGroup string,
+	queueName string,
+	messages chan<- Message,
+) {
+	for _, stream := range streams {
+		for _, msg := range stream.Messages {
+			message := ra.createMessageFromStreamEntry(ctx, msg, consumerGroup, queueName)
+
+			select {
+			case messages <- message:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func (ra *RedisAdapter) createMessageFromStreamEntry(
+	ctx context.Context,
+	entry redis.XMessage,
+	consumerGroup string,
+	streamName string,
+) Message {
+	// Extract the main body from the "data" field
+	var body []byte
+	if data, ok := entry.Values["data"].(string); ok {
+		body = []byte(data)
+	}
+
+	// Convert headers (exclude the "data" field)
+	headers := make(map[string]any)
+
+	for k, v := range entry.Values {
+		if k != "data" {
+			headers[k] = v
+		}
+	}
+
+	msg := Message{ //nolint:exhaustruct
+		Body:          body,
+		Headers:       headers,
+		ReceiptHandle: entry.ID,
+		MessageID:     entry.ID,
+		ConsumerGroup: consumerGroup,
+		StreamName:    streamName,
+		Timestamp:     time.Now(), // Redis doesn't provide message timestamp in streams
+	}
+
+	// Set acknowledgment functions with context
+	if consumerGroup != "" {
+		msg.SetAckFunc(func() error {
+			return ra.AckMessage(ctx, streamName, consumerGroup, entry.ID)
+		})
+		msg.SetNackFunc(func(requeue bool) error {
+			// For Redis Streams, nack with requeue means not acknowledging the message
+			// The message will remain in the pending list and can be claimed later
+			if !requeue {
+				// If not requeuing, we acknowledge the message
+				return ra.AckMessage(ctx, streamName, consumerGroup, entry.ID)
+			}
+
+			return nil // Do nothing for nack with requeue
+		})
+	} else {
+		// For direct stream consumption, there's no acknowledgment mechanism
+		msg.SetAckFunc(func() error { return nil })
+		msg.SetNackFunc(func(requeue bool) error { return nil })
+	}
+
+	return msg
+}
+
+// Helper function to convert Redis values to string map.
+func convertValues(values map[string]any) map[string]string {
+	result := make(map[string]string)
+
+	for k, v := range values {
+		if str, ok := v.(string); ok {
+			result[k] = str
+		} else {
+			result[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	return result
+}
+
+// Private helper methods for Redis operations.
+
+// fetchPendingMessages retrieves pending messages from Redis.
+func (ra *RedisAdapter) fetchPendingMessages(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	count int,
+) ([]redis.XPendingExt, error) {
+	pendingArgs := &redis.XPendingExtArgs{ //nolint:exhaustruct
+		Stream: queueName,
+		Group:  consumerGroup,
+		Start:  "-",
+		End:    "+",
+		Count:  int64(count),
+	}
+
+	pendingMsgs, err := ra.client.XPendingExt(ctx, pendingArgs).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return nil, fmt.Errorf(
+			"%w (operation=pending, queue=%q, group=%q): %w",
+			ErrRedisOperation,
+			queueName,
+			consumerGroup,
+			err,
+		)
+	}
+
+	return pendingMsgs, nil
+}
+
+// claimMessages filters and claims messages that are idle.
+func (ra *RedisAdapter) claimMessages(
+	ctx context.Context,
+	queueName string,
+	consumerGroup string,
+	consumerName string,
+	minIdleTime time.Duration,
+	pendingMsgs []redis.XPendingExt,
+) ([]Message, error) {
+	// Filter messages that are idle for longer than minIdleTime
+	var messageIDs []string
+
+	for _, p := range pendingMsgs {
+		if p.Idle > minIdleTime {
+			messageIDs = append(messageIDs, p.ID)
+		}
+	}
+
+	if len(messageIDs) == 0 {
+		return []Message{}, nil
+	}
+
+	// Claim the messages
+	claimArgs := &redis.XClaimArgs{
+		Stream:   queueName,
+		Group:    consumerGroup,
+		Consumer: consumerName,
+		MinIdle:  minIdleTime,
+		Messages: messageIDs,
+	}
+
+	claimedMsgs, err := ra.client.XClaim(ctx, claimArgs).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return nil, fmt.Errorf(
+			"%w (operation=claim, queue=%q, group=%q): %w",
+			ErrRedisOperation,
+			queueName,
+			consumerGroup,
+			err,
+		)
+	}
+
+	messages := make([]Message, len(claimedMsgs))
+	for i, msg := range claimedMsgs {
+		messages[i] = ra.createMessageFromStreamEntry(ctx, msg, consumerGroup, queueName)
+	}
+
+	return messages, nil
 }

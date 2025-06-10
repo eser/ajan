@@ -307,7 +307,7 @@ rawData, err := cache.GetRaw(ctx, "session:abc")
 
 ### Queue Operations
 
-For connections that support message queues (e.g., AMQP/RabbitMQ):
+For connections that support message queues (e.g., AMQP/RabbitMQ, Redis Streams):
 
 ```go
 import (
@@ -316,6 +316,7 @@ import (
     "github.com/eser/ajan/connfx/adapters"
     "github.com/eser/ajan/datafx"
     "github.com/eser/ajan/logfx"
+    "time"
 )
 
 func main() {
@@ -345,8 +346,13 @@ func main() {
         log.Fatal(err)
     }
 
-    // Declare a queue
-    queueName, err := queue.DeclareQueue(ctx, "user-events")
+    // Declare a queue with configuration
+    queueConfig := connfx.DefaultQueueConfig()
+    queueConfig.Durable = true
+    queueConfig.MaxLength = 1000
+    queueConfig.MessageTTL = 24 * time.Hour
+
+    queueName, err := queue.DeclareQueueWithConfig(ctx, "user-events", queueConfig)
     if err != nil {
         log.Fatal(err)
     }
@@ -364,11 +370,60 @@ func main() {
         log.Fatal(err)
     }
 
-    // Consume messages with custom configuration
-    config := connfx.DefaultConsumerConfig()
-    config.AutoAck = false // Manual acknowledgment
+    // Publish with headers
+    headers := map[string]any{
+        "content-type": "application/json",
+        "priority":     "high",
+        "source":       "order-service",
+    }
 
-    messages, errors := queue.Consume(ctx, queueName, config)
+    err = queue.PublishWithHeaders(ctx, queueName, orderEvent, headers)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Configure consumer
+    consumerConfig := connfx.DefaultConsumerConfig()
+    consumerConfig.AutoAck = false // Manual acknowledgment
+    consumerConfig.PrefetchCount = 10
+    consumerConfig.MaxRetries = 3
+
+    // Consumer group processing (for Redis Streams)
+    if queue.IsStreamSupported() {
+        messages, errors := queue.ConsumeWithGroup(ctx, queueName, "order-processors", "worker-1", consumerConfig)
+
+        // Handle messages
+        go func() {
+            for {
+                select {
+                case msg := <-messages:
+                    var event OrderEvent
+                    if err := json.Unmarshal(msg.Body, &event); err != nil {
+                        log.Printf("Failed to unmarshal message: %v", err)
+                        msg.Nack(false) // Don't requeue invalid messages
+                        continue
+                    }
+
+                    // Process the event
+                    log.Printf("Processing order: %s for customer: %s",
+                        event.OrderID, event.CustomerID)
+
+                    // Acknowledge successful processing
+                    if err := msg.Ack(); err != nil {
+                        log.Printf("Failed to ack message: %v", err)
+                    }
+
+                case err := <-errors:
+                    log.Printf("Queue error: %v", err)
+                case <-ctx.Done():
+                    return
+                }
+            }
+        }()
+    }
+
+    // Standard queue consumption
+    messages, errors := queue.Consume(ctx, queueName, consumerConfig)
 
     // Handle messages
     go func() {
@@ -400,7 +455,7 @@ func main() {
     }()
 
     // Or use the convenient ProcessMessages method
-    err = queue.ProcessMessages(ctx, queueName, config,
+    err = queue.ProcessMessages(ctx, queueName, consumerConfig,
         func(ctx context.Context, message any) bool {
             event := message.(*OrderEvent)
             log.Printf("Processing order: %s", event.OrderID)
@@ -413,19 +468,360 @@ func main() {
 }
 ```
 
+#### Consumer Group Processing with Retry Logic
+
+For advanced queue systems like Redis Streams that support consumer groups:
+
+```go
+func ProcessMessagesWithRetry(ctx context.Context, queue *datafx.Queue) error {
+    queueName := "orders-stream"
+    consumerGroup := "order-processors"
+    consumerName := "worker-1"
+
+    // Configure consumer with retry settings
+    config := connfx.DefaultConsumerConfig()
+    config.AutoAck = false
+    config.PrefetchCount = 5
+    config.BlockTimeout = 2 * time.Second
+    config.MaxRetries = 3
+    config.RetryDelay = 1 * time.Second
+
+    // Create consumer group if using streams
+    if queue.IsStreamSupported() {
+        streamRepo, err := queue.GetStreamRepository()
+        if err != nil {
+            return err
+        }
+
+        // Create consumer group (starts from latest messages)
+        err = streamRepo.CreateConsumerGroup(ctx, queueName, consumerGroup, "$")
+        if err != nil {
+            log.Printf("Consumer group might already exist: %v", err)
+        }
+    }
+
+    // Background goroutine for claiming pending messages
+    go func() {
+        ticker := time.NewTicker(30 * time.Second)
+        defer ticker.Stop()
+
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case <-ticker.C:
+                // Claim messages that have been pending for more than 1 minute
+                pendingMessages, err := queue.ClaimPendingMessages(
+                    ctx, queueName, consumerGroup, consumerName,
+                    1*time.Minute, 10,
+                )
+                if err != nil {
+                    log.Printf("Failed to claim pending messages: %v", err)
+                    continue
+                }
+
+                log.Printf("Claimed %d pending messages for retry", len(pendingMessages))
+
+                // Process claimed messages
+                for _, msg := range pendingMessages {
+                    // Process and acknowledge the message
+                    if processMessage(msg) {
+                        msg.Ack()
+                    } else {
+                        msg.Nack(true) // Requeue for retry
+                    }
+                }
+            }
+        }
+    }()
+
+    // Main message processing loop
+    return queue.ProcessMessagesWithGroup(
+        ctx, queueName, consumerGroup, consumerName, config,
+        func(ctx context.Context, message any) bool {
+            return processMessage(message)
+        },
+        &OrderEvent{},
+    )
+}
+
+func processMessage(message any) bool {
+    // Simulate message processing with potential failures
+    event, ok := message.(*OrderEvent)
+    if !ok {
+        log.Printf("Invalid message type")
+        return false // Don't requeue malformed messages
+    }
+
+    log.Printf("Processing order: %s", event.OrderID)
+
+    // Simulate processing logic
+    if event.Amount > 1000 {
+        log.Printf("High-value order requires manual review: %s", event.OrderID)
+        return false // Nack - will be retried
+    }
+
+    // Process successfully
+    log.Printf("Order processed successfully: %s", event.OrderID)
+    return true
+}
+```
+
+#### Queue Stream Operations
+
+For advanced streaming capabilities (Redis Streams, Kafka):
+
+```go
+func StreamOperationsExample(ctx context.Context) error {
+    // Setup Redis connection for streams
+    redisConfig := connfx.NewDefaultRedisConfig()
+    redisConfig.Address = "localhost:6379"
+    redisConn := connfx.NewRedisConnection("redis", redisConfig)
+
+    // Create queue stream instance
+    stream, err := datafx.NewQueueStream(redisConn)
+    if err != nil {
+        return fmt.Errorf("failed to create queue stream: %w", err)
+    }
+
+    streamName := "user-activity"
+    consumerGroup := "analytics-group"
+
+    // Create consumer group
+    err = stream.CreateConsumerGroup(ctx, streamName, consumerGroup, "0")
+    if err != nil {
+        log.Printf("Consumer group might already exist: %v", err)
+    }
+
+    // Send messages to stream
+    for i := 1; i <= 10; i++ {
+        messageID, err := stream.SendMessage(ctx, streamName, map[string]any{
+            "userID":    fmt.Sprintf("user-%d", i),
+            "action":    "login",
+            "timestamp": time.Now(),
+            "metadata":  map[string]any{"ip": "192.168.1.1", "device": "mobile"},
+        })
+        if err != nil {
+            return err
+        }
+        log.Printf("Message sent with ID: %s", messageID)
+    }
+
+    // Send message with headers
+    messageID, err := stream.SendMessageWithHeaders(ctx, streamName,
+        map[string]any{
+            "userID": "premium-user-1",
+            "action": "purchase",
+            "amount": 299.99,
+        },
+        map[string]any{
+            "priority": "high",
+            "category": "revenue",
+            "region":   "us-west",
+        },
+    )
+    if err != nil {
+        return err
+    }
+    log.Printf("Priority message sent with ID: %s", messageID)
+
+    // Process messages from consumer group
+    config := connfx.DefaultConsumerConfig()
+    config.PrefetchCount = 5
+    config.BlockTimeout = 2 * time.Second
+
+    processCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+
+    err = stream.ProcessMessagesFromGroup(
+        processCtx, streamName, consumerGroup, "analytics-worker-1", config,
+        func(ctx context.Context, message any) bool {
+            msgMap := message.(map[string]any)
+            log.Printf("Processing user activity: %v", msgMap)
+
+            // Simulate analytics processing
+            userID := msgMap["userID"].(string)
+            action := msgMap["action"].(string)
+
+            log.Printf("Analytics: User %s performed %s", userID, action)
+            return true // Acknowledge
+        },
+        map[string]any{}, // Message type template
+    )
+
+    if err != nil && err != datafx.ErrContextCanceled {
+        return err
+    }
+
+    // Get stream statistics
+    info, err := stream.GetStreamInfo(ctx, streamName)
+    if err != nil {
+        return err
+    }
+
+    log.Printf("Stream info - Length: %d, Groups: %d, Last ID: %s",
+        info.Length, info.Groups, info.LastGeneratedID)
+
+    // Get consumer group information
+    groupInfo, err := stream.GetConsumerGroupInfo(ctx, streamName)
+    if err != nil {
+        return err
+    }
+
+    for _, group := range groupInfo {
+        log.Printf("Group: %s, Consumers: %d, Pending: %d, Lag: %d",
+            group.Name, group.Consumers, group.Pending, group.Lag)
+    }
+
+    // Trim stream to keep only last 1000 messages
+    err = stream.TrimStream(ctx, streamName, 1000)
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+```
+
+#### Reliable Message Processing with Error Handling
+
+```go
+func ReliableProcessingExample(ctx context.Context) error {
+    // Setup connection
+    redisConfig := connfx.NewDefaultRedisConfig()
+    redisConn := connfx.NewRedisConnection("redis", redisConfig)
+
+    stream, err := datafx.NewQueueStream(redisConn)
+    if err != nil {
+        return err
+    }
+
+    streamName := "critical-orders"
+    consumerGroup := "order-processors"
+    consumerName := "processor-1"
+
+    // Create consumer group
+    stream.CreateConsumerGroup(ctx, streamName, consumerGroup, "0")
+
+    // Configure for reliable processing
+    config := connfx.DefaultConsumerConfig()
+    config.AutoAck = false
+    config.PrefetchCount = 3
+    config.BlockTimeout = 1 * time.Second
+    config.MaxRetries = 5
+    config.RetryDelay = 2 * time.Second
+
+    // Statistics tracking
+    stats := struct {
+        processed int
+        failed    int
+        retried   int
+    }{}
+
+    // Background pending message claimer
+    go func() {
+        ticker := time.NewTicker(10 * time.Second)
+        defer ticker.Stop()
+
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case <-ticker.C:
+                claimed, err := stream.ClaimPendingMessages(
+                    ctx, streamName, consumerGroup, consumerName,
+                    30*time.Second, 10,
+                )
+                if err != nil {
+                    continue
+                }
+
+                if len(claimed) > 0 {
+                    log.Printf("Claimed %d pending messages for retry", len(claimed))
+                    stats.retried += len(claimed)
+                }
+            }
+        }
+    }()
+
+    // Send test messages
+    for i := 1; i <= 20; i++ {
+        stream.SendMessage(ctx, streamName, map[string]any{
+            "orderID":     fmt.Sprintf("order-%d", i),
+            "amount":      float64(i * 10),
+            "customerID":  fmt.Sprintf("customer-%d", i%5),
+            "timestamp":   time.Now(),
+            "shouldFail":  i%7 == 0, // Every 7th message will fail
+        })
+    }
+
+    // Process with timeout
+    processCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+    defer cancel()
+
+    err = stream.ProcessMessagesFromGroup(
+        processCtx, streamName, consumerGroup, consumerName, config,
+        func(ctx context.Context, message any) bool {
+            order := message.(map[string]any)
+            orderID := order["orderID"].(string)
+            shouldFail, _ := order["shouldFail"].(bool)
+
+            log.Printf("Processing order: %s", orderID)
+
+            // Simulate processing that might fail
+            if shouldFail {
+                log.Printf("Order processing failed: %s", orderID)
+                stats.failed++
+                return false // Nack - will be retried
+            }
+
+            // Simulate processing time
+            time.Sleep(100 * time.Millisecond)
+
+            log.Printf("Order processed successfully: %s", orderID)
+            stats.processed++
+            return true // Ack
+        },
+        map[string]any{},
+    )
+
+    if err != nil && err != datafx.ErrContextCanceled {
+        return err
+    }
+
+    log.Printf("Processing complete - Processed: %d, Failed: %d, Retried: %d",
+        stats.processed, stats.failed, stats.retried)
+
+    return nil
+}
+```
+
 #### Queue Consumer Configuration
 
 ```go
 // Default configuration
 config := connfx.DefaultConsumerConfig()
 
-// Custom configuration
+// Custom configuration for high-throughput processing
 config := connfx.ConsumerConfig{
-    AutoAck:   false, // Manual acknowledgment
-    Exclusive: true,  // Exclusive access to queue
-    NoLocal:   false, // Receive messages from this connection
-    NoWait:    false, // Wait for server response
-    Args:      nil,   // Additional arguments
+    AutoAck:       false,          // Manual acknowledgment for reliability
+    Exclusive:     true,           // Exclusive access to queue
+    NoLocal:       false,          // Receive messages from this connection
+    NoWait:        false,          // Wait for server response
+    PrefetchCount: 50,             // Prefetch more messages for performance
+    BlockTimeout:  5 * time.Second, // Wait up to 5 seconds for new messages
+    MaxRetries:    5,              // Retry failed messages up to 5 times
+    RetryDelay:    2 * time.Second, // Wait 2 seconds between retries
+    Args:          nil,            // Additional arguments
+}
+
+// Custom configuration for low-latency processing
+config := connfx.ConsumerConfig{
+    AutoAck:       true,           // Auto-acknowledge for speed
+    PrefetchCount: 1,              // Process one message at a time
+    BlockTimeout:  100 * time.Millisecond, // Short timeout for responsiveness
+    MaxRetries:    1,              // Minimal retries for speed
+    RetryDelay:    100 * time.Millisecond,
 }
 
 // Start consuming with configuration
@@ -439,6 +835,13 @@ messages, errors := queue.Consume(ctx, "my-queue", config)
 rawData := []byte(`{"type": "raw", "data": "some data"}`)
 err = queue.PublishRaw(ctx, queueName, rawData)
 
+// Publish raw bytes with headers
+headers := map[string]any{
+    "encoding": "gzip",
+    "version":  "1.0",
+}
+err = queue.PublishRawWithHeaders(ctx, queueName, rawData, headers)
+
 // Consume with defaults
 messages, errors := queue.ConsumeWithDefaults(ctx, queueName)
 
@@ -447,9 +850,13 @@ for msg := range messages {
     log.Printf("Received raw message: %s", string(msg.Body))
 
     // Access headers
-    if contentType, ok := msg.Headers["content-type"]; ok {
-        log.Printf("Content-Type: %v", contentType)
+    if encoding, ok := msg.Headers["encoding"]; ok {
+        log.Printf("Encoding: %v", encoding)
     }
+
+    // Check message metadata
+    log.Printf("Message ID: %s, Timestamp: %v, Delivery Count: %d",
+        msg.MessageID, msg.Timestamp, msg.DeliveryCount)
 
     // Acknowledge message
     msg.Ack()
@@ -512,6 +919,8 @@ func (kc *KafkaConnection) GetBehaviors() []connfx.ConnectionBehavior {
         connfx.ConnectionBehaviorQueue,
     }
 }
+
+
 // ... implement other Connection methods
 ```
 
