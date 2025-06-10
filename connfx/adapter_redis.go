@@ -12,7 +12,7 @@ var (
 	ErrFailedToCloseRedisClient  = errors.New("failed to close Redis client")
 )
 
-// RedisAdapter is an example adapter that implements the DataRepository interface.
+// RedisAdapter is an example adapter that implements the Repository interface.
 // This would typically wrap a real Redis client like go-redis/redis.
 type RedisAdapter struct {
 	client   RedisClient // This would be a real Redis client
@@ -121,7 +121,7 @@ func (rc *RedisConnection) GetRawConnection() any {
 	return rc.adapter
 }
 
-// DataRepository interface implementation.
+// StoreRepository interface implementation.
 func (ra *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 	if ra.client == nil {
 		return nil, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)

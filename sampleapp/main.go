@@ -31,7 +31,7 @@ func business(ctx context.Context, appContext *AppContext) error {
 	// Example: Basic data operations using Redis connection
 	redisConnection := appContext.Connections.GetNamed("redis-cache")
 	if redisConnection != nil {
-		data, err := datafx.New(redisConnection)
+		data, err := datafx.NewCache(redisConnection)
 		if err != nil {
 			appContext.Logger.Warn("failed to create data instance from Redis", "error", err)
 		} else {
@@ -71,7 +71,7 @@ func business(ctx context.Context, appContext *AppContext) error {
 	return nil
 }
 
-func performBasicOperations(ctx context.Context, data *datafx.Data) error {
+func performBasicOperations(ctx context.Context, store *datafx.Store) error {
 	// Example data operations
 	user := &datafx.User{
 		ID:    "user123",
@@ -80,18 +80,18 @@ func performBasicOperations(ctx context.Context, data *datafx.Data) error {
 	}
 
 	// Set data
-	if err := data.Set(ctx, "user:123", user); err != nil {
+	if err := store.Set(ctx, "user:123", user); err != nil {
 		return fmt.Errorf("failed to set user: %w", err)
 	}
 
 	// Get data
 	var retrievedUser datafx.User
-	if err := data.Get(ctx, "user:123", &retrievedUser); err != nil {
+	if err := store.Get(ctx, "user:123", &retrievedUser); err != nil {
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 
 	// Check existence
-	exists, err := data.Exists(ctx, "user:123")
+	exists, err := store.Exists(ctx, "user:123")
 	if err != nil {
 		return fmt.Errorf("failed to check existence: %w", err)
 	}
@@ -99,7 +99,7 @@ func performBasicOperations(ctx context.Context, data *datafx.Data) error {
 	if exists {
 		// Update data
 		retrievedUser.Name = "John Smith"
-		if err := data.Update(ctx, "user:123", &retrievedUser); err != nil {
+		if err := store.Update(ctx, "user:123", &retrievedUser); err != nil {
 			return fmt.Errorf("failed to update user: %w", err)
 		}
 	}
@@ -108,14 +108,14 @@ func performBasicOperations(ctx context.Context, data *datafx.Data) error {
 }
 
 func performTransactionalOperations(ctx context.Context, connection connfx.Connection) error {
-	// Try to create transactional data instance
-	txData, err := datafx.NewTransactional(connection)
+	// Try to create transactional store instance
+	txData, err := datafx.NewTransactionalStore(connection)
 	if err != nil {
 		return fmt.Errorf("transactional operations not supported: %w", err)
 	}
 
 	// Execute operations within a transaction
-	err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionData) error {
+	err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionStore) error {
 		// All operations within this function are transactional
 		user := &datafx.User{ID: "tx-user-123", Name: "Transaction User", Email: "tx@example.com"}
 		if err := tx.Set(ctx, "tx-user:123", user); err != nil {

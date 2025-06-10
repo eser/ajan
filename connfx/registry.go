@@ -343,8 +343,8 @@ func (registry *Registry) Close(ctx context.Context) error {
 	return nil
 }
 
-// GetDataRepository returns a DataRepository from a connection if it supports it.
-func (registry *Registry) GetDataRepository(name string) (DataRepository, error) {
+// GetRepository returns a Repository from a connection if it supports it.
+func (registry *Registry) GetRepository(name string) (Repository, error) {
 	registry.mu.RLock()
 	defer registry.mu.RUnlock()
 
@@ -363,10 +363,10 @@ func (registry *Registry) GetDataRepository(name string) (DataRepository, error)
 	}
 
 	// Try to get the repository from the raw connection
-	repo, ok := conn.GetRawConnection().(DataRepository)
+	repo, ok := conn.GetRawConnection().(Repository)
 	if !ok {
 		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
-			ErrInterfaceNotImplemented, name, "DataRepository")
+			ErrInterfaceNotImplemented, name, "Repository")
 	}
 
 	return repo, nil

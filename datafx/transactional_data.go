@@ -15,17 +15,17 @@ var (
 	ErrTransactionFailed       = errors.New("transaction failed")
 )
 
-// TransactionalData provides transactional data operations.
-type TransactionalData struct {
-	*Data
+// TransactionalStore provides transactional store operations.
+type TransactionalStore struct {
+	*Store
 	transactionalRepo connfx.TransactionalRepository
 }
 
-// NewTransactional creates a new TransactionalData instance from a connfx connection.
+// NewTransactionalStore creates a new TransactionalStore instance from a connfx connection.
 // The connection must support transactional operations.
-func NewTransactional(conn connfx.Connection) (*TransactionalData, error) {
+func NewTransactionalStore(conn connfx.Connection) (*TransactionalStore, error) {
 	// First create a regular Data instance
-	data, err := New(conn)
+	store, err := NewStore(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +52,8 @@ func NewTransactional(conn connfx.Connection) (*TransactionalData, error) {
 		)
 	}
 
-	return &TransactionalData{
-		Data:              data,
+	return &TransactionalStore{
+		Store:             store,
 		transactionalRepo: txRepo,
 	}, nil
 }
@@ -61,19 +61,19 @@ func NewTransactional(conn connfx.Connection) (*TransactionalData, error) {
 // ExecuteTransaction executes a function within a transaction context.
 // If the function returns an error, the transaction is rolled back.
 // If the function succeeds, the transaction is committed.
-func (td *TransactionalData) ExecuteTransaction(
+func (ts *TransactionalStore) ExecuteTransaction(
 	ctx context.Context,
-	fn func(*TransactionData) error,
+	fn func(*TransactionStore) error,
 ) error {
 	// Begin transaction
-	txCtx, err := td.transactionalRepo.BeginTransaction(ctx)
+	txCtx, err := ts.transactionalRepo.BeginTransaction(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: failed to begin transaction: %w", ErrTransactionFailed, err)
 	}
 
 	// Create transaction-scoped data instance
-	txData := &TransactionData{
-		repository: txCtx.GetRepository(),
+	txData := &TransactionStore{
+		Repository: txCtx.GetRepository(),
 	}
 
 	// Execute the function
@@ -95,14 +95,14 @@ func (td *TransactionalData) ExecuteTransaction(
 	return nil
 }
 
-// TransactionData provides data operations within a transaction context.
-type TransactionData struct {
-	repository connfx.DataRepository
+// TransactionStore provides data operations within a transaction context.
+type TransactionStore struct {
+	Repository connfx.Repository
 }
 
 // Get retrieves a value by key and unmarshals it into the provided destination.
-func (td *TransactionData) Get(ctx context.Context, key string, dest any) error {
-	data, err := td.repository.Get(ctx, key)
+func (ts *TransactionStore) Get(ctx context.Context, key string, dest any) error {
+	data, err := ts.Repository.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("failed to get key %q: %w", key, err)
 	}
@@ -119,8 +119,8 @@ func (td *TransactionData) Get(ctx context.Context, key string, dest any) error 
 }
 
 // GetRaw retrieves raw bytes by key.
-func (td *TransactionData) GetRaw(ctx context.Context, key string) ([]byte, error) {
-	data, err := td.repository.Get(ctx, key)
+func (ts *TransactionStore) GetRaw(ctx context.Context, key string) ([]byte, error) {
+	data, err := ts.Repository.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get raw key %q: %w", key, err)
 	}
@@ -133,13 +133,13 @@ func (td *TransactionData) GetRaw(ctx context.Context, key string) ([]byte, erro
 }
 
 // Set stores a value with the given key after marshaling it to JSON.
-func (td *TransactionData) Set(ctx context.Context, key string, value any) error {
+func (ts *TransactionStore) Set(ctx context.Context, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("%w (key=%q): %w", ErrFailedToMarshal, key, err)
 	}
 
-	if err := td.repository.Set(ctx, key, data); err != nil {
+	if err := ts.Repository.Set(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to set key %q: %w", key, err)
 	}
 
@@ -147,8 +147,8 @@ func (td *TransactionData) Set(ctx context.Context, key string, value any) error
 }
 
 // SetRaw stores raw bytes with the given key.
-func (td *TransactionData) SetRaw(ctx context.Context, key string, value []byte) error {
-	if err := td.repository.Set(ctx, key, value); err != nil {
+func (ts *TransactionStore) SetRaw(ctx context.Context, key string, value []byte) error {
+	if err := ts.Repository.Set(ctx, key, value); err != nil {
 		return fmt.Errorf("failed to set raw key %q: %w", key, err)
 	}
 
@@ -156,13 +156,13 @@ func (td *TransactionData) SetRaw(ctx context.Context, key string, value []byte)
 }
 
 // Update updates an existing value by key after marshaling it to JSON.
-func (td *TransactionData) Update(ctx context.Context, key string, value any) error {
+func (ts *TransactionStore) Update(ctx context.Context, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("%w (key=%q): %w", ErrFailedToMarshal, key, err)
 	}
 
-	if err := td.repository.Update(ctx, key, data); err != nil {
+	if err := ts.Repository.Update(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to update key %q: %w", key, err)
 	}
 
@@ -170,8 +170,8 @@ func (td *TransactionData) Update(ctx context.Context, key string, value any) er
 }
 
 // UpdateRaw updates an existing value with raw bytes by key.
-func (td *TransactionData) UpdateRaw(ctx context.Context, key string, value []byte) error {
-	if err := td.repository.Update(ctx, key, value); err != nil {
+func (ts *TransactionStore) UpdateRaw(ctx context.Context, key string, value []byte) error {
+	if err := ts.Repository.Update(ctx, key, value); err != nil {
 		return fmt.Errorf("failed to update raw key %q: %w", key, err)
 	}
 
@@ -179,8 +179,8 @@ func (td *TransactionData) UpdateRaw(ctx context.Context, key string, value []by
 }
 
 // Remove deletes a value by key.
-func (td *TransactionData) Remove(ctx context.Context, key string) error {
-	if err := td.repository.Remove(ctx, key); err != nil {
+func (ts *TransactionStore) Remove(ctx context.Context, key string) error {
+	if err := ts.Repository.Remove(ctx, key); err != nil {
 		return fmt.Errorf("failed to remove key %q: %w", key, err)
 	}
 
@@ -188,8 +188,8 @@ func (td *TransactionData) Remove(ctx context.Context, key string) error {
 }
 
 // Exists checks if a key exists.
-func (td *TransactionData) Exists(ctx context.Context, key string) (bool, error) {
-	exists, err := td.repository.Exists(ctx, key)
+func (ts *TransactionStore) Exists(ctx context.Context, key string) (bool, error) {
+	exists, err := ts.Repository.Exists(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if key %q exists: %w", key, err)
 	}

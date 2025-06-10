@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// DataRepository defines the port for data access operations.
+// Repository defines the port for data access operations.
 // This interface will be implemented by adapters in connfx for different storage technologies.
-type DataRepository interface {
+type Repository interface {
 	// Get retrieves a value by key
 	Get(ctx context.Context, key string) ([]byte, error)
 
@@ -24,9 +24,9 @@ type DataRepository interface {
 	Exists(ctx context.Context, key string) (bool, error)
 }
 
-// CacheRepository extends DataRepository with cache-specific operations.
+// CacheRepository extends Repository with cache-specific operations.
 type CacheRepository interface {
-	DataRepository
+	Repository
 
 	// SetWithExpiration stores a value with the given key and expiration time
 	SetWithExpiration(ctx context.Context, key string, value []byte, expiration time.Duration) error
@@ -38,9 +38,9 @@ type CacheRepository interface {
 	Expire(ctx context.Context, key string, expiration time.Duration) error
 }
 
-// TransactionalRepository extends DataRepository with transaction support.
+// TransactionalRepository extends Repository with transaction support.
 type TransactionalRepository interface {
-	DataRepository
+	Repository
 
 	// BeginTransaction starts a new transaction
 	BeginTransaction(ctx context.Context) (TransactionContext, error)
@@ -55,7 +55,7 @@ type TransactionContext interface {
 	Rollback() error
 
 	// GetRepository returns a repository bound to this transaction
-	GetRepository() DataRepository
+	GetRepository() Repository
 }
 
 // QueryRepository defines the port for query operations (for SQL-like storages).

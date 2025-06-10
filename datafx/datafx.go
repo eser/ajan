@@ -17,15 +17,15 @@ var (
 	ErrInvalidData            = errors.New("invalid data")
 )
 
-// Data provides high-level data persistence operations.
-type Data struct {
+// Store provides high-level data persistence operations.
+type Store struct {
 	conn       connfx.Connection
-	repository connfx.DataRepository
+	repository connfx.Repository
 }
 
-// New creates a new Data instance from a connfx connection.
+// New creates a new Store instance from a connfx connection.
 // The connection must support data repository operations.
-func New(conn connfx.Connection) (*Data, error) {
+func NewStore(conn connfx.Connection) (*Store, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("%w: connection is nil", ErrConnectionNotSupported)
 	}
@@ -50,24 +50,24 @@ func New(conn connfx.Connection) (*Data, error) {
 	}
 
 	// Get the data repository from the raw connection
-	repo, ok := conn.GetRawConnection().(connfx.DataRepository)
+	repo, ok := conn.GetRawConnection().(connfx.Repository)
 	if !ok {
 		return nil, fmt.Errorf(
-			"%w: connection does not implement DataRepository interface (protocol=%q)",
+			"%w: connection does not implement Repository interface (protocol=%q)",
 			ErrConnectionNotSupported,
 			conn.GetProtocol(),
 		)
 	}
 
-	return &Data{
+	return &Store{
 		conn:       conn,
 		repository: repo,
 	}, nil
 }
 
 // Get retrieves a value by key and unmarshals it into the provided destination.
-func (d *Data) Get(ctx context.Context, key string, dest any) error {
-	data, err := d.repository.Get(ctx, key)
+func (s *Store) Get(ctx context.Context, key string, dest any) error {
+	data, err := s.repository.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("failed to get key %q: %w", key, err)
 	}
@@ -84,8 +84,8 @@ func (d *Data) Get(ctx context.Context, key string, dest any) error {
 }
 
 // GetRaw retrieves raw bytes by key.
-func (d *Data) GetRaw(ctx context.Context, key string) ([]byte, error) {
-	data, err := d.repository.Get(ctx, key)
+func (s *Store) GetRaw(ctx context.Context, key string) ([]byte, error) {
+	data, err := s.repository.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get raw key %q: %w", key, err)
 	}
@@ -98,13 +98,13 @@ func (d *Data) GetRaw(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Set stores a value with the given key after marshaling it to JSON.
-func (d *Data) Set(ctx context.Context, key string, value any) error {
+func (s *Store) Set(ctx context.Context, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("%w (key=%q): %w", ErrFailedToMarshal, key, err)
 	}
 
-	if err := d.repository.Set(ctx, key, data); err != nil {
+	if err := s.repository.Set(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to set key %q: %w", key, err)
 	}
 
@@ -112,8 +112,8 @@ func (d *Data) Set(ctx context.Context, key string, value any) error {
 }
 
 // SetRaw stores raw bytes with the given key.
-func (d *Data) SetRaw(ctx context.Context, key string, value []byte) error {
-	if err := d.repository.Set(ctx, key, value); err != nil {
+func (s *Store) SetRaw(ctx context.Context, key string, value []byte) error {
+	if err := s.repository.Set(ctx, key, value); err != nil {
 		return fmt.Errorf("failed to set raw key %q: %w", key, err)
 	}
 
@@ -121,13 +121,13 @@ func (d *Data) SetRaw(ctx context.Context, key string, value []byte) error {
 }
 
 // Update updates an existing value by key after marshaling it to JSON.
-func (d *Data) Update(ctx context.Context, key string, value any) error {
+func (s *Store) Update(ctx context.Context, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("%w (key=%q): %w", ErrFailedToMarshal, key, err)
 	}
 
-	if err := d.repository.Update(ctx, key, data); err != nil {
+	if err := s.repository.Update(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to update key %q: %w", key, err)
 	}
 
@@ -135,8 +135,8 @@ func (d *Data) Update(ctx context.Context, key string, value any) error {
 }
 
 // UpdateRaw updates an existing value with raw bytes by key.
-func (d *Data) UpdateRaw(ctx context.Context, key string, value []byte) error {
-	if err := d.repository.Update(ctx, key, value); err != nil {
+func (s *Store) UpdateRaw(ctx context.Context, key string, value []byte) error {
+	if err := s.repository.Update(ctx, key, value); err != nil {
 		return fmt.Errorf("failed to update raw key %q: %w", key, err)
 	}
 
@@ -144,8 +144,8 @@ func (d *Data) UpdateRaw(ctx context.Context, key string, value []byte) error {
 }
 
 // Remove deletes a value by key.
-func (d *Data) Remove(ctx context.Context, key string) error {
-	if err := d.repository.Remove(ctx, key); err != nil {
+func (s *Store) Remove(ctx context.Context, key string) error {
+	if err := s.repository.Remove(ctx, key); err != nil {
 		return fmt.Errorf("failed to remove key %q: %w", key, err)
 	}
 
@@ -153,8 +153,8 @@ func (d *Data) Remove(ctx context.Context, key string) error {
 }
 
 // Exists checks if a key exists.
-func (d *Data) Exists(ctx context.Context, key string) (bool, error) {
-	exists, err := d.repository.Exists(ctx, key)
+func (s *Store) Exists(ctx context.Context, key string) (bool, error) {
+	exists, err := s.repository.Exists(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if key %q exists: %w", key, err)
 	}
@@ -163,11 +163,11 @@ func (d *Data) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 // GetConnection returns the underlying connfx connection.
-func (d *Data) GetConnection() connfx.Connection {
-	return d.conn
+func (s *Store) GetConnection() connfx.Connection {
+	return s.conn
 }
 
 // GetRepository returns the underlying data repository.
-func (d *Data) GetRepository() connfx.DataRepository {
-	return d.repository
+func (s *Store) GetRepository() connfx.Repository {
+	return s.repository
 }

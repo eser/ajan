@@ -133,7 +133,7 @@ The application demonstrates various data persistence patterns using the modern 
 
 ```go
 // Create data instance from connection
-data, err := datafx.New(connection)
+data, err := datafx.NewStore(connection)
 if err != nil {
     return fmt.Errorf("failed to create data instance: %w", err)
 }
@@ -166,14 +166,14 @@ err = data.Remove(ctx, "user:123")
 For storage backends that support ACID transactions:
 
 ```go
-// Create transactional data instance
-txData, err := datafx.NewTransactional(connection)
+// Create transactional store instance
+txData, err := datafx.NewTransactionalStore(connection)
 if err != nil {
     return fmt.Errorf("transactions not supported: %w", err)
 }
 
 // Execute operations within a transaction
-err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionData) error {
+err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionStore) error {
     // All operations within this function are transactional
     user := &datafx.User{ID: "tx-user-123", Name: "Transaction User"}
     if err := tx.Set(ctx, "tx-user:123", user); err != nil {

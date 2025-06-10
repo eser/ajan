@@ -141,8 +141,8 @@ func main() {
     // Get connection
     conn := registry.GetDefault()
 
-    // Create datafx instance
-    data, err := datafx.New(conn)
+    // Create datafx.Store instance
+    data, err := datafx.NewStore(conn)
     if err != nil {
         log.Fatal(err)
     }
@@ -211,14 +211,14 @@ err := data.UpdateRaw(ctx, "key", []byte("updated raw data"))
 For storage backends that support transactions:
 
 ```go
-// Create transactional data instance
-txData, err := datafx.NewTransactional(conn)
+// Create transactional store instance
+txData, err := datafx.NewTransactionalStore(conn)
 if err != nil {
     log.Fatal(err)
 }
 
 // Execute operations within a transaction
-err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionData) error {
+err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionStore) error {
     // All operations within this function are transactional
     user := &User{ID: "123", Name: "John"}
 
@@ -251,8 +251,8 @@ cacheConn := registry.GetNamed("redis-cache")
 dbConn := registry.GetNamed("postgres-main")
 
 // Create separate data instances
-cache, _ := datafx.New(cacheConn)
-database, _ := datafx.New(dbConn)
+cache, _ := datafx.NewCache(cacheConn)
+database, _ := datafx.NewStore(dbConn)
 
 // Use them independently
 cache.Set(ctx, "session:abc", sessionData)  // Goes to Redis
@@ -273,7 +273,7 @@ sqlConnections := registry.GetByBehavior(connfx.ConnectionBehaviorRelational)
 
 // Use the first available key-value store
 if len(kvConnections) > 0 {
-    cache, _ := datafx.New(kvConnections[0])
+    cache, _ := datafx.NewStore(kvConnections[0])
     cache.Set(ctx, "temp:data", someData)
 }
 ```
