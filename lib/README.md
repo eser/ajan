@@ -119,7 +119,7 @@ go server.ListenAndServeTLS("", "")
 
 #### EnvGetCurrent
 
-Gets the current environment name from ENV environment variable.
+Gets the current environment name from `env` environment variable.
 
 ```go
 func EnvGetCurrent() string
@@ -129,10 +129,10 @@ func EnvGetCurrent() string
 ```go
 // Get current environment (defaults to "development")
 env := lib.EnvGetCurrent()
-fmt.Printf("Running in %s environment\n", env)
+fmt.Printf("Running in %q environment\n", env)
 
 // Set environment
-os.Setenv("ENV", "production")
+os.Setenv("env", "production")
 env = lib.EnvGetCurrent() // Returns "production"
 ```
 

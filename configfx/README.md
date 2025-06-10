@@ -115,7 +115,7 @@ server__host=localhost
 server__port=8080
 database__url=postgres://localhost/myapp_dev
 database__max_conns=15
-DEBUG=true
+debug=true
 ```
 
 **Loading Environment Files:**

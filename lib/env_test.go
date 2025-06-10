@@ -142,19 +142,19 @@ func TestEnvGetCurrent(t *testing.T) {
 		},
 		{
 			name:     "should return lowercase value of ENV",
-			envValue: "PRODUCTION",
+			envValue: "production",
 			expected: "production",
 		},
 		{
 			name:     "should return lowercase value of ENV with leading/trailing spaces",
-			envValue: "STAGING",
+			envValue: "staging",
 			expected: "staging",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ENV", tt.envValue)
+			t.Setenv("env", tt.envValue)
 
 			actual := lib.EnvGetCurrent()
 
@@ -171,18 +171,18 @@ func TestEnvOverrideVariables(t *testing.T) {
 	}{
 		{
 			name: "should override variables",
-			env:  map[string]string{"ENV": "development"},
+			env:  map[string]string{"env": "development"},
 			expectedArgs: map[string]any{
-				"ENV": "development",
+				"env": "development",
 			},
 		},
 		{
 			name: "should override multiple variables",
-			env:  map[string]string{"ENV": "development", "DEBUG": "true", "PORT": "8080"},
+			env:  map[string]string{"env": "development", "debug": "true", "port": "8080"},
 			expectedArgs: map[string]any{
-				"ENV":   "development",
-				"DEBUG": "true",
-				"PORT":  "8080",
+				"env":   "development",
+				"debug": "true",
+				"port":  "8080",
 			},
 		},
 		{

@@ -7,7 +7,7 @@ import (
 
 func EnvGetCurrent() string {
 	// FIXME(@eser) no need to use os.Lookupenv here
-	env := strings.ToLower(os.Getenv("ENV"))
+	env := strings.ToLower(os.Getenv("env"))
 
 	if env == "" {
 		env = "development"
