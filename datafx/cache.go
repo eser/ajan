@@ -14,6 +14,7 @@ import (
 var (
 	ErrCacheNotSupported = errors.New("connection does not support cache operations")
 	ErrKeyExpired        = errors.New("key has expired")
+	ErrCacheOperation    = errors.New("cache operation failed")
 )
 
 // Cache provides high-level cache operations with expiration support.
@@ -62,7 +63,7 @@ func (c *Cache) Set(ctx context.Context, key string, value any, expiration time.
 	}
 
 	if err := c.repository.SetWithExpiration(ctx, key, data, expiration); err != nil {
-		return fmt.Errorf("failed to set cache key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return nil
@@ -76,7 +77,7 @@ func (c *Cache) SetRaw(
 	expiration time.Duration,
 ) error {
 	if err := c.repository.SetWithExpiration(ctx, key, value, expiration); err != nil {
-		return fmt.Errorf("failed to set raw cache key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set_raw, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return nil
@@ -86,7 +87,7 @@ func (c *Cache) SetRaw(
 func (c *Cache) Get(ctx context.Context, key string, dest any) error {
 	data, err := c.repository.Get(ctx, key)
 	if err != nil {
-		return fmt.Errorf("failed to get cache key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	if data == nil {
@@ -104,7 +105,7 @@ func (c *Cache) Get(ctx context.Context, key string, dest any) error {
 func (c *Cache) GetRaw(ctx context.Context, key string) ([]byte, error) {
 	data, err := c.repository.Get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get raw cache key %q: %w", key, err)
+		return nil, fmt.Errorf("%w (operation=get_raw, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	if data == nil {
@@ -117,7 +118,7 @@ func (c *Cache) GetRaw(ctx context.Context, key string) ([]byte, error) {
 // Delete removes a key from the cache.
 func (c *Cache) Delete(ctx context.Context, key string) error {
 	if err := c.repository.Remove(ctx, key); err != nil {
-		return fmt.Errorf("failed to delete cache key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=delete, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return nil
@@ -127,7 +128,7 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 	exists, err := c.repository.Exists(ctx, key)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if cache key %q exists: %w", key, err)
+		return false, fmt.Errorf("%w (operation=exists, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return exists, nil
@@ -137,7 +138,7 @@ func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 func (c *Cache) GetTTL(ctx context.Context, key string) (time.Duration, error) {
 	ttl, err := c.repository.GetTTL(ctx, key)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get TTL for cache key %q: %w", key, err)
+		return 0, fmt.Errorf("%w (operation=get_ttl, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return ttl, nil
@@ -146,7 +147,7 @@ func (c *Cache) GetTTL(ctx context.Context, key string) (time.Duration, error) {
 // Expire sets an expiration time for an existing key.
 func (c *Cache) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	if err := c.repository.Expire(ctx, key, expiration); err != nil {
-		return fmt.Errorf("failed to set expiration for cache key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=expire, key=%q): %w", ErrCacheOperation, key, err)
 	}
 
 	return nil

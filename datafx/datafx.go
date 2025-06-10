@@ -15,6 +15,7 @@ var (
 	ErrFailedToMarshal        = errors.New("failed to marshal data")
 	ErrFailedToUnmarshal      = errors.New("failed to unmarshal data")
 	ErrInvalidData            = errors.New("invalid data")
+	ErrRepositoryOperation    = errors.New("repository operation failed")
 )
 
 // Store provides high-level data persistence operations.
@@ -69,7 +70,7 @@ func NewStore(conn connfx.Connection) (*Store, error) {
 func (s *Store) Get(ctx context.Context, key string, dest any) error {
 	data, err := s.repository.Get(ctx, key)
 	if err != nil {
-		return fmt.Errorf("failed to get key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	if data == nil {
@@ -87,7 +88,12 @@ func (s *Store) Get(ctx context.Context, key string, dest any) error {
 func (s *Store) GetRaw(ctx context.Context, key string) ([]byte, error) {
 	data, err := s.repository.Get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get raw key %q: %w", key, err)
+		return nil, fmt.Errorf(
+			"%w (operation=get_raw, key=%q): %w",
+			ErrRepositoryOperation,
+			key,
+			err,
+		)
 	}
 
 	if data == nil {
@@ -105,7 +111,7 @@ func (s *Store) Set(ctx context.Context, key string, value any) error {
 	}
 
 	if err := s.repository.Set(ctx, key, data); err != nil {
-		return fmt.Errorf("failed to set key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	return nil
@@ -114,7 +120,7 @@ func (s *Store) Set(ctx context.Context, key string, value any) error {
 // SetRaw stores raw bytes with the given key.
 func (s *Store) SetRaw(ctx context.Context, key string, value []byte) error {
 	if err := s.repository.Set(ctx, key, value); err != nil {
-		return fmt.Errorf("failed to set raw key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set_raw, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	return nil
@@ -128,7 +134,7 @@ func (s *Store) Update(ctx context.Context, key string, value any) error {
 	}
 
 	if err := s.repository.Update(ctx, key, data); err != nil {
-		return fmt.Errorf("failed to update key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=update, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	return nil
@@ -137,7 +143,7 @@ func (s *Store) Update(ctx context.Context, key string, value any) error {
 // UpdateRaw updates an existing value with raw bytes by key.
 func (s *Store) UpdateRaw(ctx context.Context, key string, value []byte) error {
 	if err := s.repository.Update(ctx, key, value); err != nil {
-		return fmt.Errorf("failed to update raw key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=update_raw, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	return nil
@@ -146,7 +152,7 @@ func (s *Store) UpdateRaw(ctx context.Context, key string, value []byte) error {
 // Remove deletes a value by key.
 func (s *Store) Remove(ctx context.Context, key string) error {
 	if err := s.repository.Remove(ctx, key); err != nil {
-		return fmt.Errorf("failed to remove key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=remove, key=%q): %w", ErrRepositoryOperation, key, err)
 	}
 
 	return nil
@@ -156,7 +162,12 @@ func (s *Store) Remove(ctx context.Context, key string) error {
 func (s *Store) Exists(ctx context.Context, key string) (bool, error) {
 	exists, err := s.repository.Exists(ctx, key)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if key %q exists: %w", key, err)
+		return false, fmt.Errorf(
+			"%w (operation=exists, key=%q): %w",
+			ErrRepositoryOperation,
+			key,
+			err,
+		)
 	}
 
 	return exists, nil

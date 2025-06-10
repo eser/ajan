@@ -319,7 +319,10 @@ func (registry *Registry) Close(ctx context.Context) error {
 
 	for name, conn := range registry.connections {
 		if err := conn.Close(ctx); err != nil {
-			errors = append(errors, fmt.Errorf("failed to close connection %q: %w", name, err))
+			errors = append(
+				errors,
+				fmt.Errorf("%w (name=%q): %w", ErrFailedToCloseConnection, name, err),
+			)
 		}
 	}
 
@@ -327,15 +330,13 @@ func (registry *Registry) Close(ctx context.Context) error {
 	registry.connections = make(map[string]Connection)
 
 	if len(errors) > 0 {
-		// Combine all errors into one
-		errMsg := "errors closing connections: " + strings.Join(func() []string {
-			errStrs := make([]string, len(errors))
-			for i, err := range errors {
-				errStrs[i] = err.Error()
-			}
+		errStrs := make([]string, len(errors))
+		for i, err := range errors {
+			errStrs[i] = err.Error()
+		}
 
-			return errStrs
-		}(), "; ")
+		// Combine all errors into one
+		errMsg := strings.Join(errStrs, "; ")
 
 		return fmt.Errorf("%w: %s", ErrFailedToCloseConnections, errMsg)
 	}

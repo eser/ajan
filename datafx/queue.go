@@ -14,6 +14,7 @@ var (
 	ErrQueueNotSupported = errors.New("connection does not support queue operations")
 	ErrMessageProcessing = errors.New("message processing failed")
 	ErrContextCanceled   = errors.New("context canceled")
+	ErrQueueOperation    = errors.New("queue operation failed")
 )
 
 // Queue provides high-level message queue operations.
@@ -58,7 +59,7 @@ func NewQueue(conn connfx.Connection) (*Queue, error) {
 func (q *Queue) DeclareQueue(ctx context.Context, name string) (string, error) {
 	queueName, err := q.repository.QueueDeclare(ctx, name)
 	if err != nil {
-		return "", fmt.Errorf("failed to declare queue %q: %w", name, err)
+		return "", fmt.Errorf("%w (operation=declare, queue=%q): %w", ErrQueueOperation, name, err)
 	}
 
 	return queueName, nil
@@ -72,7 +73,7 @@ func (q *Queue) Publish(ctx context.Context, queueName string, message any) erro
 	}
 
 	if err := q.repository.Publish(ctx, queueName, data); err != nil {
-		return fmt.Errorf("failed to publish message to queue %q: %w", queueName, err)
+		return fmt.Errorf("%w (operation=publish, queue=%q): %w", ErrQueueOperation, queueName, err)
 	}
 
 	return nil
@@ -81,7 +82,12 @@ func (q *Queue) Publish(ctx context.Context, queueName string, message any) erro
 // PublishRaw sends raw bytes to a queue.
 func (q *Queue) PublishRaw(ctx context.Context, queueName string, data []byte) error {
 	if err := q.repository.Publish(ctx, queueName, data); err != nil {
-		return fmt.Errorf("failed to publish raw message to queue %q: %w", queueName, err)
+		return fmt.Errorf(
+			"%w (operation=publish_raw, queue=%q): %w",
+			ErrQueueOperation,
+			queueName,
+			err,
+		)
 	}
 
 	return nil
@@ -175,7 +181,7 @@ func (q *Queue) processMessage(
 	if err := json.Unmarshal(msg.Body, &messageValue); err != nil {
 		// Nack the message due to unmarshalling error
 		if nackErr := msg.Nack(false); nackErr != nil {
-			return fmt.Errorf("failed to nack message after unmarshal error: %w", nackErr)
+			return fmt.Errorf("%w (operation=nack_after_unmarshal): %w", ErrQueueOperation, nackErr)
 		}
 
 		return nil // Continue processing other messages
@@ -203,11 +209,11 @@ func (q *Queue) createMessageInstance(messageType any) any {
 func (q *Queue) acknowledgeMessage(msg connfx.Message, success bool) error {
 	if success {
 		if err := msg.Ack(); err != nil {
-			return fmt.Errorf("failed to acknowledge message: %w", err)
+			return fmt.Errorf("%w (operation=ack): %w", ErrQueueOperation, err)
 		}
 	} else {
 		if err := msg.Nack(true); err != nil { // Requeue on failure
-			return fmt.Errorf("failed to nack message: %w", err)
+			return fmt.Errorf("%w (operation=nack): %w", ErrQueueOperation, err)
 		}
 	}
 

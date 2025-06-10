@@ -10,6 +10,7 @@ import (
 var (
 	ErrRedisClientNotInitialized = errors.New("redis client not initialized")
 	ErrFailedToCloseRedisClient  = errors.New("failed to close Redis client")
+	ErrRedisOperation            = errors.New("redis operation failed")
 )
 
 // RedisAdapter is an example adapter that implements the Repository interface.
@@ -129,7 +130,7 @@ func (ra *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 
 	value, err := ra.client.Get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get key %q from Redis: %w", key, err)
+		return nil, fmt.Errorf("%w (operation=get, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return []byte(value), nil
@@ -142,7 +143,7 @@ func (ra *RedisAdapter) Set(ctx context.Context, key string, value []byte) error
 
 	err := ra.client.Set(ctx, key, string(value), 0) // 0 means no expiration
 	if err != nil {
-		return fmt.Errorf("failed to set key %q in Redis: %w", key, err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return nil
@@ -155,7 +156,7 @@ func (ra *RedisAdapter) Remove(ctx context.Context, key string) error {
 
 	err := ra.client.Del(ctx, key)
 	if err != nil {
-		return fmt.Errorf("failed to delete key %q from Redis: %w", key, err)
+		return fmt.Errorf("%w (operation=remove, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return nil
@@ -173,7 +174,7 @@ func (ra *RedisAdapter) Exists(ctx context.Context, key string) (bool, error) {
 
 	count, err := ra.client.Exists(ctx, key)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if key %q exists in Redis: %w", key, err)
+		return false, fmt.Errorf("%w (operation=exists, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return count > 0, nil
@@ -192,7 +193,12 @@ func (ra *RedisAdapter) SetWithExpiration(
 
 	err := ra.client.Set(ctx, key, string(value), expiration)
 	if err != nil {
-		return fmt.Errorf("failed to set key %q with expiration in Redis: %w", key, err)
+		return fmt.Errorf(
+			"%w (operation=set_with_expiration, key=%q): %w",
+			ErrRedisOperation,
+			key,
+			err,
+		)
 	}
 
 	return nil
@@ -205,7 +211,7 @@ func (ra *RedisAdapter) GetTTL(ctx context.Context, key string) (time.Duration, 
 
 	ttl, err := ra.client.TTL(ctx, key)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get TTL for key %q from Redis: %w", key, err)
+		return 0, fmt.Errorf("%w (operation=get_ttl, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return ttl, nil
@@ -218,7 +224,7 @@ func (ra *RedisAdapter) Expire(ctx context.Context, key string, expiration time.
 
 	err := ra.client.Expire(ctx, key, expiration)
 	if err != nil {
-		return fmt.Errorf("failed to set expiration for key %q in Redis: %w", key, err)
+		return fmt.Errorf("%w (operation=expire, key=%q): %w", ErrRedisOperation, key, err)
 	}
 
 	return nil

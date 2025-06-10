@@ -2,11 +2,23 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/eser/ajan/connfx"
 	"github.com/eser/ajan/datafx"
+)
+
+var (
+	ErrInitializationFailed = errors.New("initialization failed")
+	ErrBusinessLogicFailed  = errors.New("business logic failed")
+	ErrDataOperationFailed  = errors.New("data operation failed")
+	ErrCacheOperationFailed = errors.New("cache operation failed")
+	ErrQueueOperationFailed = errors.New("queue operation failed")
+	ErrTransactionFailed    = errors.New("transaction failed")
+	ErrUnsupportedOperation = errors.New("unsupported operation")
+	ErrServiceNotAvailable  = errors.New("service not available")
 )
 
 func main() {
@@ -31,11 +43,11 @@ func business(ctx context.Context, appContext *AppContext) error {
 	// Example: Basic data operations using Redis connection
 	redisConnection := appContext.Connections.GetNamed("redis-cache")
 	if redisConnection != nil {
-		data, err := datafx.NewCache(redisConnection)
+		store, err := datafx.NewStore(redisConnection)
 		if err != nil {
-			appContext.Logger.Warn("failed to create data instance from Redis", "error", err)
+			appContext.Logger.Warn("failed to create store instance from Redis", "error", err)
 		} else {
-			if err := performBasicOperations(ctx, data); err != nil {
+			if err := performBasicOperations(ctx, store); err != nil {
 				appContext.Logger.Warn("basic data operations failed", "error", err)
 			}
 		}
@@ -81,26 +93,26 @@ func performBasicOperations(ctx context.Context, store *datafx.Store) error {
 
 	// Set data
 	if err := store.Set(ctx, "user:123", user); err != nil {
-		return fmt.Errorf("failed to set user: %w", err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrDataOperationFailed, "user:123", err)
 	}
 
 	// Get data
 	var retrievedUser datafx.User
 	if err := store.Get(ctx, "user:123", &retrievedUser); err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
+		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrDataOperationFailed, "user:123", err)
 	}
 
 	// Check existence
 	exists, err := store.Exists(ctx, "user:123")
 	if err != nil {
-		return fmt.Errorf("failed to check existence: %w", err)
+		return fmt.Errorf("%w (operation=exists, key=%q): %w", ErrDataOperationFailed, "user:123", err)
 	}
 
 	if exists {
 		// Update data
 		retrievedUser.Name = "John Smith"
 		if err := store.Update(ctx, "user:123", &retrievedUser); err != nil {
-			return fmt.Errorf("failed to update user: %w", err)
+			return fmt.Errorf("%w (operation=update, key=%q): %w", ErrDataOperationFailed, "user:123", err)
 		}
 	}
 
@@ -111,7 +123,7 @@ func performTransactionalOperations(ctx context.Context, connection connfx.Conne
 	// Try to create transactional store instance
 	txData, err := datafx.NewTransactionalStore(connection)
 	if err != nil {
-		return fmt.Errorf("transactional operations not supported: %w", err)
+		return fmt.Errorf("%w (protocol=%q): %w", ErrUnsupportedOperation, connection.GetProtocol(), err)
 	}
 
 	// Execute operations within a transaction
@@ -131,7 +143,7 @@ func performTransactionalOperations(ctx context.Context, connection connfx.Conne
 	})
 
 	if err != nil {
-		return fmt.Errorf("transaction failed: %w", err)
+		return fmt.Errorf("%w (protocol=%q): %w", ErrTransactionFailed, connection.GetProtocol(), err)
 	}
 
 	return nil
@@ -141,7 +153,7 @@ func performCacheOperations(ctx context.Context, connection connfx.Connection, a
 	// Try to create cache instance
 	cache, err := datafx.NewCache(connection)
 	if err != nil {
-		return fmt.Errorf("cache operations not supported: %w", err)
+		return fmt.Errorf("%w (protocol=%q): %w", ErrUnsupportedOperation, connection.GetProtocol(), err)
 	}
 
 	appContext.Logger.Info("performing cache operations")
@@ -154,19 +166,19 @@ func performCacheOperations(ctx context.Context, connection connfx.Connection, a
 	}
 
 	if err := cache.Set(ctx, "session:abc123", sessionData, 5*time.Minute); err != nil {
-		return fmt.Errorf("failed to cache session: %w", err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrCacheOperationFailed, "session:abc123", err)
 	}
 
 	// Retrieve cached session
 	var retrievedSession map[string]any
 	if err := cache.Get(ctx, "session:abc123", &retrievedSession); err != nil {
-		return fmt.Errorf("failed to get cached session: %w", err)
+		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrCacheOperationFailed, "session:abc123", err)
 	}
 
 	// Check TTL
 	ttl, err := cache.GetTTL(ctx, "session:abc123")
 	if err != nil {
-		return fmt.Errorf("failed to get TTL: %w", err)
+		return fmt.Errorf("%w (operation=get_ttl, key=%q): %w", ErrCacheOperationFailed, "session:abc123", err)
 	}
 
 	appContext.Logger.Info("cache session retrieved",
@@ -175,13 +187,13 @@ func performCacheOperations(ctx context.Context, connection connfx.Connection, a
 
 	// Extend expiration
 	if err := cache.Expire(ctx, "session:abc123", 10*time.Minute); err != nil {
-		return fmt.Errorf("failed to extend expiration: %w", err)
+		return fmt.Errorf("%w (operation=expire, key=%q): %w", ErrCacheOperationFailed, "session:abc123", err)
 	}
 
 	// Cache raw data
 	rawData := []byte("temporary data")
 	if err := cache.SetRaw(ctx, "temp:data", rawData, 1*time.Minute); err != nil {
-		return fmt.Errorf("failed to cache raw data: %w", err)
+		return fmt.Errorf("%w (operation=set_raw, key=%q): %w", ErrCacheOperationFailed, "temp:data", err)
 	}
 
 	return nil
@@ -191,7 +203,7 @@ func performQueueOperations(ctx context.Context, connection connfx.Connection, a
 	// Try to create queue instance
 	queue, err := datafx.NewQueue(connection)
 	if err != nil {
-		return fmt.Errorf("queue operations not supported: %w", err)
+		return fmt.Errorf("%w (protocol=%q): %w", ErrUnsupportedOperation, connection.GetProtocol(), err)
 	}
 
 	appContext.Logger.Info("performing queue operations")
@@ -199,7 +211,7 @@ func performQueueOperations(ctx context.Context, connection connfx.Connection, a
 	// Declare a queue
 	queueName, err := queue.DeclareQueue(ctx, "app-events")
 	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+		return fmt.Errorf("%w (operation=declare, queue=%q): %w", ErrQueueOperationFailed, "app-events", err)
 	}
 
 	// Publish a message
@@ -214,7 +226,7 @@ func performQueueOperations(ctx context.Context, connection connfx.Connection, a
 	}
 
 	if err := queue.Publish(ctx, queueName, eventMessage); err != nil {
-		return fmt.Errorf("failed to publish message: %w", err)
+		return fmt.Errorf("%w (operation=publish, queue=%q): %w", ErrQueueOperationFailed, queueName, err)
 	}
 
 	appContext.Logger.Info("message published", "queue", queueName, "event_type", "user_login")
@@ -222,7 +234,7 @@ func performQueueOperations(ctx context.Context, connection connfx.Connection, a
 	// Publish raw message
 	rawMessage := []byte(`{"raw": "event", "data": "some binary data"}`)
 	if err := queue.PublishRaw(ctx, queueName, rawMessage); err != nil {
-		return fmt.Errorf("failed to publish raw message: %w", err)
+		return fmt.Errorf("%w (operation=publish_raw, queue=%q): %w", ErrQueueOperationFailed, queueName, err)
 	}
 
 	// Example: Start a consumer (commented out to avoid blocking in sample app)

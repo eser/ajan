@@ -13,6 +13,7 @@ import (
 var (
 	ErrTransactionNotSupported = errors.New("connection does not support transactions")
 	ErrTransactionFailed       = errors.New("transaction failed")
+	ErrTransactionOperation    = errors.New("transaction operation failed")
 )
 
 // TransactionalStore provides transactional store operations.
@@ -104,7 +105,7 @@ type TransactionStore struct {
 func (ts *TransactionStore) Get(ctx context.Context, key string, dest any) error {
 	data, err := ts.Repository.Get(ctx, key)
 	if err != nil {
-		return fmt.Errorf("failed to get key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrTransactionOperation, key, err)
 	}
 
 	if data == nil {
@@ -122,7 +123,12 @@ func (ts *TransactionStore) Get(ctx context.Context, key string, dest any) error
 func (ts *TransactionStore) GetRaw(ctx context.Context, key string) ([]byte, error) {
 	data, err := ts.Repository.Get(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get raw key %q: %w", key, err)
+		return nil, fmt.Errorf(
+			"%w (operation=get_raw, key=%q): %w",
+			ErrTransactionOperation,
+			key,
+			err,
+		)
 	}
 
 	if data == nil {
@@ -140,7 +146,7 @@ func (ts *TransactionStore) Set(ctx context.Context, key string, value any) erro
 	}
 
 	if err := ts.Repository.Set(ctx, key, data); err != nil {
-		return fmt.Errorf("failed to set key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set, key=%q): %w", ErrTransactionOperation, key, err)
 	}
 
 	return nil
@@ -149,7 +155,7 @@ func (ts *TransactionStore) Set(ctx context.Context, key string, value any) erro
 // SetRaw stores raw bytes with the given key.
 func (ts *TransactionStore) SetRaw(ctx context.Context, key string, value []byte) error {
 	if err := ts.Repository.Set(ctx, key, value); err != nil {
-		return fmt.Errorf("failed to set raw key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=set_raw, key=%q): %w", ErrTransactionOperation, key, err)
 	}
 
 	return nil
@@ -163,7 +169,7 @@ func (ts *TransactionStore) Update(ctx context.Context, key string, value any) e
 	}
 
 	if err := ts.Repository.Update(ctx, key, data); err != nil {
-		return fmt.Errorf("failed to update key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=update, key=%q): %w", ErrTransactionOperation, key, err)
 	}
 
 	return nil
@@ -172,7 +178,12 @@ func (ts *TransactionStore) Update(ctx context.Context, key string, value any) e
 // UpdateRaw updates an existing value with raw bytes by key.
 func (ts *TransactionStore) UpdateRaw(ctx context.Context, key string, value []byte) error {
 	if err := ts.Repository.Update(ctx, key, value); err != nil {
-		return fmt.Errorf("failed to update raw key %q: %w", key, err)
+		return fmt.Errorf(
+			"%w (operation=update_raw, key=%q): %w",
+			ErrTransactionOperation,
+			key,
+			err,
+		)
 	}
 
 	return nil
@@ -181,7 +192,7 @@ func (ts *TransactionStore) UpdateRaw(ctx context.Context, key string, value []b
 // Remove deletes a value by key.
 func (ts *TransactionStore) Remove(ctx context.Context, key string) error {
 	if err := ts.Repository.Remove(ctx, key); err != nil {
-		return fmt.Errorf("failed to remove key %q: %w", key, err)
+		return fmt.Errorf("%w (operation=remove, key=%q): %w", ErrTransactionOperation, key, err)
 	}
 
 	return nil
@@ -191,7 +202,12 @@ func (ts *TransactionStore) Remove(ctx context.Context, key string) error {
 func (ts *TransactionStore) Exists(ctx context.Context, key string) (bool, error) {
 	exists, err := ts.Repository.Exists(ctx, key)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if key %q exists: %w", key, err)
+		return false, fmt.Errorf(
+			"%w (operation=exists, key=%q): %w",
+			ErrTransactionOperation,
+			key,
+			err,
+		)
 	}
 
 	return exists, nil

@@ -25,6 +25,7 @@ var (
 	ErrInvalidConfigTypeHTTP    = errors.New("invalid config type for HTTP connection")
 	ErrUnsupportedBodyType      = errors.New("unsupported body type")
 	ErrFailedToCreateRequest    = errors.New("failed to create HTTP request")
+	ErrFailedToLoadCertificate  = errors.New("failed to load client certificate")
 )
 
 // HTTPConnection represents an HTTP API connection.
@@ -104,7 +105,13 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 		if config.CertFile != "" && config.KeyFile != "" {
 			cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to load client certificate: %w", err)
+				return nil, nil, fmt.Errorf(
+					"%w (cert_file=%q, key_file=%q): %w",
+					ErrFailedToLoadCertificate,
+					config.CertFile,
+					config.KeyFile,
+					err,
+				)
 			}
 
 			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
