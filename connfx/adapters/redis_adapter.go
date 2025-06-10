@@ -4,92 +4,270 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"sync/atomic"
 	"time"
 
 	"github.com/eser/ajan/connfx"
 )
 
-const (
-	DefaultRedisPort        = 6379
-	DefaultRedisTimeout     = 5 * time.Second
-	RedisHealthCheckTimeout = 2 * time.Second
-)
-
 var (
-	ErrFailedToConnectRedis = errors.New("failed to connect to Redis")
-	ErrRedisNotImplemented  = errors.New(
-		"redis client not implemented - placeholder for demonstration",
-	)
-	ErrInvalidConfigTypeRedis  = errors.New("invalid config type for Redis connection")
-	ErrFailedToCloseConnection = errors.New("failed to close connection")
+	ErrRedisClientNotInitialized = errors.New("redis client not initialized")
+	ErrFailedToCloseRedisClient  = errors.New("failed to close Redis client")
 )
 
-// RedisConnection represents a Redis connection that supports both stateful and streaming behaviors.
-type RedisConnection struct {
-	lastHealth time.Time
-	conn       net.Conn // Simplified for demonstration - would use Redis client library
-	protocol   string
-	host       string
-	port       int
-	state      int32 // atomic field for connection state
+// RedisAdapter is an example adapter that implements the DataRepository interface.
+// This would typically wrap a real Redis client like go-redis/redis.
+type RedisAdapter struct {
+	client   RedisClient // This would be a real Redis client
+	host     string
+	password string
+	port     int
+	db       int
 }
 
-// RedisConnectionFactory creates Redis connections.
+// RedisClient represents a Redis client interface (would be implemented by actual Redis library).
+type RedisClient interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value string, expiration time.Duration) error
+	Del(ctx context.Context, keys ...string) error
+	Exists(ctx context.Context, keys ...string) (int64, error)
+	Close() error
+	Ping(ctx context.Context) error
+	TTL(ctx context.Context, key string) (time.Duration, error)
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+}
+
+// RedisConnection implements the connfx.Connection interface.
+type RedisConnection struct {
+	adapter  *RedisAdapter
+	protocol string
+	state    connfx.ConnectionState
+}
+
+// NewRedisConnection creates a new Redis connection.
+func NewRedisConnection(protocol, host string, port int, password string, db int) *RedisConnection {
+	adapter := &RedisAdapter{
+		host:     host,
+		port:     port,
+		password: password,
+		db:       db,
+		client:   nil, // Will be initialized with real Redis client
+	}
+
+	return &RedisConnection{
+		adapter:  adapter,
+		protocol: protocol,
+		state:    connfx.ConnectionStateConnected,
+	}
+}
+
+// Connection interface implementation.
+func (rc *RedisConnection) GetBehaviors() []connfx.ConnectionBehavior {
+	return []connfx.ConnectionBehavior{
+		connfx.ConnectionBehaviorStateful,
+		connfx.ConnectionBehaviorStreaming,
+		connfx.ConnectionBehaviorKeyValue,
+		connfx.ConnectionBehaviorCache,
+	}
+}
+
+func (rc *RedisConnection) GetProtocol() string {
+	return rc.protocol
+}
+
+func (rc *RedisConnection) GetState() connfx.ConnectionState {
+	return rc.state
+}
+
+func (rc *RedisConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
+	start := time.Now()
+
+	status := &connfx.HealthStatus{
+		Timestamp: start,
+		State:     rc.state,
+		Error:     nil,
+		Message:   "",
+		Latency:   0,
+	}
+
+	if rc.adapter.client != nil {
+		err := rc.adapter.client.Ping(ctx)
+		if err != nil {
+			status.Error = err
+			status.Message = "Redis ping failed"
+			status.State = connfx.ConnectionStateError
+		} else {
+			status.Message = "Redis connection healthy"
+		}
+	} else {
+		status.Error = ErrRedisClientNotInitialized
+		status.Message = "Redis client not initialized"
+		status.State = connfx.ConnectionStateError
+	}
+
+	status.Latency = time.Since(start)
+
+	return status
+}
+
+func (rc *RedisConnection) Close(ctx context.Context) error {
+	if rc.adapter.client != nil {
+		if err := rc.adapter.client.Close(); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToCloseRedisClient, err)
+		}
+	}
+
+	return nil
+}
+
+func (rc *RedisConnection) GetRawConnection() any {
+	return rc.adapter
+}
+
+// DataRepository interface implementation.
+func (ra *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
+	if ra.client == nil {
+		return nil, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	value, err := ra.client.Get(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key %q from Redis: %w", key, err)
+	}
+
+	return []byte(value), nil
+}
+
+func (ra *RedisAdapter) Set(ctx context.Context, key string, value []byte) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	err := ra.client.Set(ctx, key, string(value), 0) // 0 means no expiration
+	if err != nil {
+		return fmt.Errorf("failed to set key %q in Redis: %w", key, err)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) Remove(ctx context.Context, key string) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	err := ra.client.Del(ctx, key)
+	if err != nil {
+		return fmt.Errorf("failed to delete key %q from Redis: %w", key, err)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) Update(ctx context.Context, key string, value []byte) error {
+	// For Redis, update is the same as set
+	return ra.Set(ctx, key, value)
+}
+
+func (ra *RedisAdapter) Exists(ctx context.Context, key string) (bool, error) {
+	if ra.client == nil {
+		return false, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	count, err := ra.client.Exists(ctx, key)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if key %q exists in Redis: %w", key, err)
+	}
+
+	return count > 0, nil
+}
+
+// CacheRepository interface implementation.
+func (ra *RedisAdapter) SetWithExpiration(
+	ctx context.Context,
+	key string,
+	value []byte,
+	expiration time.Duration,
+) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	err := ra.client.Set(ctx, key, string(value), expiration)
+	if err != nil {
+		return fmt.Errorf("failed to set key %q with expiration in Redis: %w", key, err)
+	}
+
+	return nil
+}
+
+func (ra *RedisAdapter) GetTTL(ctx context.Context, key string) (time.Duration, error) {
+	if ra.client == nil {
+		return 0, fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	ttl, err := ra.client.TTL(ctx, key)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get TTL for key %q from Redis: %w", key, err)
+	}
+
+	return ttl, nil
+}
+
+func (ra *RedisAdapter) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if ra.client == nil {
+		return fmt.Errorf("%w (key=%q)", ErrRedisClientNotInitialized, key)
+	}
+
+	err := ra.client.Expire(ctx, key, expiration)
+	if err != nil {
+		return fmt.Errorf("failed to set expiration for key %q in Redis: %w", key, err)
+	}
+
+	return nil
+}
+
+// RedisConnectionFactory creates Redis connections - following the same pattern as SQLConnectionFactory.
 type RedisConnectionFactory struct {
 	protocol string
 }
 
-// NewRedisConnectionFactory creates a new Redis connection factory.
+// NewRedisConnectionFactory creates a new Redis connection factory for a specific protocol.
 func NewRedisConnectionFactory(protocol string) *RedisConnectionFactory {
 	return &RedisConnectionFactory{
 		protocol: protocol,
 	}
 }
 
+// NewRedisFactory creates a new Redis factory with default "redis" protocol.
+// This function maintains compatibility with the new datafx pattern.
+func NewRedisFactory() *RedisConnectionFactory {
+	return NewRedisConnectionFactory("redis")
+}
+
 func (f *RedisConnectionFactory) CreateConnection(
 	ctx context.Context,
 	config *connfx.ConfigTarget,
 ) (connfx.Connection, error) {
-	// Default Redis port
-	port := DefaultRedisPort
-	if config.Port > 0 {
-		port = config.Port
+	// Parse Redis-specific configuration
+	host := config.Host
+	if host == "" {
+		host = "localhost"
 	}
 
-	host := "localhost"
-	if config.Host != "" {
-		host = config.Host
+	port := config.Port
+	if port == 0 {
+		port = 6379
 	}
 
-	// For demonstration - create a simple TCP connection to Redis
-	// In a real implementation, you'd use a Redis client library like go-redis
-	address := fmt.Sprintf("%s:%d", host, port)
+	// For Redis, we can extract password from DSN if needed
+	// For now, use empty password as default
+	password := ""
+	db := 0 // Default Redis DB
 
-	// Set timeout for connection attempt
-	timeout := DefaultRedisTimeout
-	if config.Timeout > 0 {
-		timeout = config.Timeout
-	}
+	// Create the connection
+	conn := NewRedisConnection(f.protocol, host, port, password, db)
 
-	dialer := net.Dialer{Timeout: timeout} //nolint:exhaustruct
-
-	conn, err := dialer.DialContext(ctx, "tcp", address)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToConnectRedis, err)
-	}
-
-	redisConn := &RedisConnection{
-		protocol:   f.protocol,
-		host:       host,
-		port:       port,
-		state:      int32(connfx.ConnectionStateConnected),
-		conn:       conn,
-		lastHealth: time.Time{},
-	}
-
-	return redisConn, nil
+	return conn, nil
 }
 
 func (f *RedisConnectionFactory) GetProtocol() string {
@@ -97,120 +275,9 @@ func (f *RedisConnectionFactory) GetProtocol() string {
 }
 
 func (f *RedisConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-	// Redis supports both stateful (key-value operations) and streaming (pub/sub) behaviors
 	return []connfx.ConnectionBehavior{
 		connfx.ConnectionBehaviorStateful,
 		connfx.ConnectionBehaviorStreaming,
+		connfx.ConnectionBehaviorKeyValue,
 	}
-}
-
-// Connection interface implementation
-
-func (c *RedisConnection) GetBehaviors() []connfx.ConnectionBehavior {
-	// Redis connections support both stateful and streaming behaviors
-	return []connfx.ConnectionBehavior{
-		connfx.ConnectionBehaviorStateful,  // For GET/SET/HGET operations
-		connfx.ConnectionBehaviorStreaming, // For PUBLISH/SUBSCRIBE operations
-	}
-}
-
-func (c *RedisConnection) GetProtocol() string {
-	return c.protocol
-}
-
-func (c *RedisConnection) GetState() connfx.ConnectionState {
-	state := atomic.LoadInt32(&c.state)
-
-	return connfx.ConnectionState(state)
-}
-
-func (c *RedisConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
-	start := time.Now()
-	status := &connfx.HealthStatus{ //nolint:exhaustruct
-		Timestamp: start,
-	}
-
-	// Simple ping test by checking if connection is alive
-	if c.conn == nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateDisconnected))
-		status.State = connfx.ConnectionStateDisconnected
-		status.Message = "Connection is nil"
-		status.Latency = time.Since(start)
-
-		return status
-	}
-
-	// Set a short deadline for the health check
-	deadline := time.Now().Add(RedisHealthCheckTimeout)
-	if err := c.conn.SetDeadline(deadline); err != nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
-		status.Error = err
-		status.Message = fmt.Sprintf("Failed to set deadline: %v", err)
-		status.Latency = time.Since(start)
-
-		return status
-	}
-
-	// Send a PING command (simplified)
-	_, err := c.conn.Write([]byte("PING\r\n"))
-	status.Latency = time.Since(start)
-
-	if err != nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
-		status.Error = err
-		status.Message = fmt.Sprintf("Health check failed: %v", err)
-
-		return status
-	}
-
-	// In a real implementation, you'd read the response
-	// For demo purposes, assume success if write succeeded
-	atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateConnected))
-	status.State = connfx.ConnectionStateConnected
-	status.Message = fmt.Sprintf("Connected to Redis at %s:%d (supports: stateful + streaming)",
-		c.host, c.port)
-
-	c.lastHealth = start
-
-	return status
-}
-
-func (c *RedisConnection) Close(ctx context.Context) error {
-	atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateDisconnected))
-
-	if c.conn != nil {
-		if err := c.conn.Close(); err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToCloseConnection, err)
-		}
-	}
-
-	return nil
-}
-
-func (c *RedisConnection) GetRawConnection() any {
-	return c.conn
-}
-
-// Additional Redis-specific methods (simplified for demonstration)
-
-// GetTCPConnection returns the underlying TCP connection (for demo purposes).
-func (c *RedisConnection) GetTCPConnection() net.Conn {
-	return c.conn
-}
-
-// GetAddress returns the Redis server address.
-func (c *RedisConnection) GetAddress() string {
-	return fmt.Sprintf("%s:%d", c.host, c.port)
-}
-
-// IsStatefulReady returns true if the connection can handle stateful operations.
-func (c *RedisConnection) IsStatefulReady() bool {
-	return c.GetState() == connfx.ConnectionStateConnected
-}
-
-// IsStreamingReady returns true if the connection can handle streaming operations.
-func (c *RedisConnection) IsStreamingReady() bool {
-	return c.GetState() == connfx.ConnectionStateConnected
 }

@@ -49,8 +49,18 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 
 	// connections
 	appContext.Connections = connfx.NewRegistry(appContext.Logger)
-	// Register SQLite adapter
-	appContext.Connections.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+
+	// Register factory for SQLite
+	sqliteFactory := adapters.NewSQLConnectionFactory("sqlite")
+	appContext.Connections.RegisterFactory(sqliteFactory)
+
+	// Register factory for Redis (cache operations)
+	redisFactory := adapters.NewRedisFactory()
+	appContext.Connections.RegisterFactory(redisFactory)
+
+	// Register factory for AMQP (queue operations)
+	amqpFactory := adapters.NewAMQPFactory()
+	appContext.Connections.RegisterFactory(amqpFactory)
 
 	err = appContext.Connections.LoadFromConfig(ctx, &appContext.Config.Conn)
 	if err != nil {

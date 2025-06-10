@@ -1,174 +1,287 @@
-# SampleApp
+# Sample Application
 
-SampleApp is a complete example application that demonstrates how to build a production-ready Go application using the ajan framework. It showcases best practices for application structure, configuration management, logging, metrics, and database integration.
+A comprehensive example application demonstrating the ajan framework capabilities, including modern connection management, data persistence, caching, message queues, logging, and metrics collection.
 
-## Features
+## Architecture
 
-- **Complete Application Structure**: Demonstrates proper layering and organization of a Go application
-- **Configuration Management**: Shows how to use configfx for environment-aware configuration
-- **Structured Logging**: Integrates logfx for comprehensive application logging
-- **Metrics Collection**: Uses metricsfx for application observability
-- **Database Integration**: Demonstrates datafx for database connection management and transactions
-- **Docker Support**: Includes multi-stage Dockerfile for development and production builds
-- **Docker Compose**: Complete development environment setup
-- **Graceful Error Handling**: Proper error handling patterns throughout the application
+This sample application showcases the **separation of concerns** principle in ajan:
+
+```
+Application Layer (main.go)
+    ↓ uses
+Business Layer (datafx)
+    ↓ depends on
+Adapter Layer (connfx)
+    ↓ implements
+Infrastructure (SQLite, Redis, AMQP, etc.)
+```
+
+## Features Demonstrated
+
+- **🔌 Connection Management**: Multi-protocol connection registry with health checks
+- **📊 Data Operations**: Technology-agnostic CRUD operations with automatic JSON marshaling
+- **💾 Transaction Support**: ACID transactions for compatible storage backends
+- **⚡ Cache Operations**: High-performance caching with TTL/expiration support
+- **📨 Message Queues**: Reliable message publishing and consumption with acknowledgments
+- **📝 Structured Logging**: JSON-formatted logs with configurable levels
+- **📈 Metrics Collection**: Runtime and custom metrics with Prometheus integration
+- **🐳 Docker Support**: Multi-stage builds for development and production
 
 ## Quick Start
 
-### Prerequisites
+### Local Development
 
-- Go 1.24 or later
-- Docker and Docker Compose (for containerized setup)
-- Postgres database (for database examples)
-
-### Running Locally
-
-1. **Clone and navigate to the sample app:**
 ```bash
-cd sampleapp
-```
+# Clone and enter directory
+git clone <repository>
+cd ajan/sampleapp
 
-2. **Install dependencies:**
-```bash
+# Install dependencies
 go mod download
-```
 
-3. **Set up the database (using Docker Compose):**
-```bash
-docker-compose up -d postgres
-```
-
-4. **Run the application:**
-```bash
+# Run the application
 go run .
 ```
 
-### Running with Docker
+### Docker Development
 
-**Development mode:**
 ```bash
-docker-compose up app-dev
+# Start with hot-reloading
+docker compose up --build
+
+# Or run detached
+docker compose up -d
 ```
 
-**Production mode:**
-```bash
-docker-compose up app-prod
-```
-
-## Application Structure
-
-### Core Components
-
-The application demonstrates the layered architecture pattern:
+## Project Structure
 
 ```
 sampleapp/
-├── main.go              # Application entry point
-├── appcontext.go        # Application context and dependency setup
+├── main.go              # Application entry point and business logic
+├── appcontext.go        # Application context initialization
 ├── appconfig.go         # Configuration structure
-├── config.json          # Base configuration file
+├── config.json          # Default configuration
 ├── Dockerfile           # Multi-stage Docker build
-├── compose.yml          # Development environment
-└── volumes/             # Docker volumes for data persistence
-```
-
-### Application Context
-
-The `AppContext` struct centralizes all application dependencies:
-
-```go
-type AppContext struct {
-    Config  *AppConfig                    // Application configuration
-    Logger  *logfx.Logger                // Structured logger
-    Metrics *metricsfx.MetricsProvider   // Metrics collection
-    Data    *datafx.Registry             // Database connections
-}
+├── compose.yml          # Docker Compose setup
+├── go.mod               # Go module dependencies
+└── README.md            # This file
 ```
 
 ## Configuration
 
-The application uses the ajan configfx module for configuration management with support for multiple sources.
+The application uses a layered configuration system supporting JSON files and environment variables.
 
-### Configuration Structure
+### Configuration File (config.json)
 
-```go
-type AppConfig struct {
-    ajan.BaseConfig  // Includes common ajan framework configuration
-}
-```
-
-The `BaseConfig` includes:
-- `AppName`: Application name
-- `AppEnv`: Environment (development, production, etc.)
-- `Log`: Logging configuration
-- `Data`: Database configuration
-- `Metrics`: Metrics configuration
-
-### Configuration Files
-
-**config.json** (base configuration):
 ```json
 {
-  "data": {
-    "sources": {
+  "app_name": "sample-app",
+  "app_env": "development",
+  "log": {
+    "level": "info",
+    "pretty": true,
+    "add_source": false
+  },
+  "conn": {
+    "targets": {
       "default": {
-        "provider": "postgres",
-        "dsn": "postgres://user:user123@localhost:5432/userdb?sslmode=disable"
+        "protocol": "sqlite",
+        "dsn": ":memory:"
+      },
+      "redis-cache": {
+        "protocol": "redis",
+        "host": "localhost",
+        "port": 6379,
+        "dsn": "redis://localhost:6379"
+      },
+      "amqp-queue": {
+        "protocol": "amqp",
+        "host": "localhost",
+        "port": 5672,
+        "dsn": "amqp://guest:guest@localhost:5672/"
       }
     }
   }
 }
 ```
 
-**Environment-specific overrides:**
-- `config.development.json` - Development settings
-- `config.production.json` - Production settings
-- `config.local.json` - Local developer overrides
+### Environment Variables
 
-**Environment variables:**
+Override any configuration using environment variables with double underscore notation:
+
 ```bash
-export APP_NAME=MyApplication
-export APP_ENV=production
-export LOG__LEVEL=info
-export DATA__SOURCES__DEFAULT__DSN=postgres://prod-host:5432/proddb
+# Application
+export app_name=my-app
+export app_env=production
+
+# Logging
+export log__level=debug
+export log__pretty=false
+export log__add_source=true
+
+# Connections
+export conn__targets__default__dsn="file:app.db?cache=shared&mode=rwc"
+export conn__targets__redis_cache__host=redis.example.com
+export conn__targets__redis_cache__port=6380
 ```
 
-## Database Integration
+## Data Operations
 
-The application demonstrates proper database integration using DataFX:
+The application demonstrates various data persistence patterns using the modern datafx API.
 
-### Connection Management
+### Basic CRUD Operations
 
 ```go
-// Database registry setup
-appContext.Data = datafx.NewRegistry(appContext.Logger)
-err = appContext.Data.LoadFromConfig(ctx, &appContext.Config.Data)
+// Create data instance from connection
+data, err := datafx.New(connection)
+if err != nil {
+    return fmt.Errorf("failed to create data instance: %w", err)
+}
+
+// Set data (automatic JSON marshaling)
+user := &datafx.User{
+    ID:    "user123",
+    Name:  "John Doe",
+    Email: "john@example.com",
+}
+err = data.Set(ctx, "user:123", user)
+
+// Get data (automatic JSON unmarshalling)
+var retrievedUser datafx.User
+err = data.Get(ctx, "user:123", &retrievedUser)
+
+// Update existing data
+retrievedUser.Name = "John Smith"
+err = data.Update(ctx, "user:123", &retrievedUser)
+
+// Check existence
+exists, err := data.Exists(ctx, "user:123")
+
+// Remove data
+err = data.Remove(ctx, "user:123")
 ```
 
 ### Transaction Management
 
-Using the Unit of Work pattern for database operations:
+For storage backends that support ACID transactions:
 
 ```go
-func business(ctx context.Context, appContext *AppContext) {
-    datasource := appContext.Data.GetDefault()
-
-    err := datasource.ExecuteUnitOfWork(ctx, func(uow *datafx.UnitOfWork) error {
-        // All database operations within this function
-        // are part of a single transaction
-
-        // service1.DoSomething(uow)
-        // service2.DoSomething(uow)
-
-        return nil // Transaction commits automatically
-        // return err // Transaction rolls back on error
-    })
-
-    if err != nil {
-        // Handle transaction failure
-        log.Printf("Transaction failed: %v", err)
-    }
+// Create transactional data instance
+txData, err := datafx.NewTransactional(connection)
+if err != nil {
+    return fmt.Errorf("transactions not supported: %w", err)
 }
+
+// Execute operations within a transaction
+err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionData) error {
+    // All operations within this function are transactional
+    user := &datafx.User{ID: "tx-user-123", Name: "Transaction User"}
+    if err := tx.Set(ctx, "tx-user:123", user); err != nil {
+        return err // Transaction will be rolled back
+    }
+
+    product := &datafx.Product{ID: "tx-product-456", Name: "Widget", Price: 19.99}
+    if err := tx.Set(ctx, "tx-product:456", product); err != nil {
+        return err // Transaction will be rolled back
+    }
+
+    return nil // Transaction will be committed
+})
+```
+
+## Cache Operations
+
+For connections that support caching (Redis, Memcached, etc.):
+
+```go
+// Create cache instance
+cache, err := datafx.NewCache(connection)
+if err != nil {
+    return fmt.Errorf("cache operations not supported: %w", err)
+}
+
+// Set with expiration
+sessionData := map[string]any{
+    "user_id":    "user123",
+    "session_id": "sess_abc123",
+    "expires_at": time.Now().Add(5 * time.Minute),
+}
+err = cache.Set(ctx, "session:abc123", sessionData, 5*time.Minute)
+
+// Get cached value
+var retrievedSession map[string]any
+err = cache.Get(ctx, "session:abc123", &retrievedSession)
+
+// Check TTL
+ttl, err := cache.GetTTL(ctx, "session:abc123")
+
+// Extend expiration
+err = cache.Expire(ctx, "session:abc123", 10*time.Minute)
+
+// Cache raw data
+rawData := []byte("temporary data")
+err = cache.SetRaw(ctx, "temp:data", rawData, 1*time.Minute)
+
+// Delete from cache
+err = cache.Delete(ctx, "session:abc123")
+```
+
+## Message Queue Operations
+
+For connections that support message queues (AMQP/RabbitMQ, Kafka, etc.):
+
+```go
+// Create queue instance
+queue, err := datafx.NewQueue(connection)
+if err != nil {
+    return fmt.Errorf("queue operations not supported: %w", err)
+}
+
+// Declare a queue
+queueName, err := queue.DeclareQueue(ctx, "app-events")
+
+// Publish structured message (automatic JSON marshaling)
+eventMessage := map[string]any{
+    "event_type": "user_login",
+    "user_id":    "user123",
+    "timestamp":  time.Now(),
+    "metadata": map[string]string{
+        "ip_address": "192.168.1.100",
+        "user_agent": "Mozilla/5.0...",
+    },
+}
+err = queue.Publish(ctx, queueName, eventMessage)
+
+// Publish raw message
+rawMessage := []byte(`{"raw": "event", "data": "some binary data"}`)
+err = queue.PublishRaw(ctx, queueName, rawMessage)
+
+// Consume messages
+messages, errors := queue.ConsumeWithDefaults(ctx, queueName)
+
+go func() {
+    for {
+        select {
+        case msg := <-messages:
+            var event map[string]any
+            if err := json.Unmarshal(msg.Body, &event); err != nil {
+                logger.Error("failed to unmarshal message", "error", err)
+                msg.Nack(false) // Don't requeue invalid messages
+                continue
+            }
+
+            logger.Info("processing event", "event", event)
+
+            // Process the event...
+            msg.Ack() // Acknowledge successful processing
+
+        case err := <-errors:
+            logger.Error("queue error", "error", err)
+        case <-ctx.Done():
+            return
+        }
+    }
+}()
 ```
 
 ## Logging
@@ -179,7 +292,7 @@ The application uses structured logging with LogFX:
 
 ```go
 // Create logger with configuration
-logger, err := logfx.NewLoggerAsDefault(os.Stdout, &config.Log)
+logger := logfx.NewLoggerAsDefault(os.Stdout, &config.Log)
 
 // Use throughout the application
 logger.Info("Application started",
@@ -204,9 +317,9 @@ Configure log level via configuration:
 
 Or environment variables:
 ```bash
-export LOG__LEVEL=debug
-export LOG__PRETTY=false
-export LOG__ADD_SOURCE=true
+export log__level=debug
+export log__pretty=false
+export log__add_source=true
 ```
 
 ## Metrics
@@ -239,253 +352,114 @@ The application automatically collects:
 The application includes a production-ready multi-stage Dockerfile:
 
 - **Development Stage**: Hot-reloading with `go run`
-- **Production Stage**: Optimized binary in distroless container
+- **Build Stage**: Optimized binary compilation
+- **Production Stage**: Minimal runtime container
 
-### Development Environment
+### Docker Compose
 
-The Docker Compose setup provides:
-
-```yaml
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: userdb
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: user123
-    ports:
-      - "5432:5432"
-
-  app-dev:
-    build:
-      target: runner-development
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-
-  app-prod:
-    build:
-      target: runner-production
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-```
-
-### Running Services
+The `compose.yml` provides:
+- **Application**: Hot-reloading development environment
+- **Dependencies**: Redis, RabbitMQ for testing cache and queue operations
 
 ```bash
-# Start database only
-docker-compose up -d postgres
+# Start all services
+docker compose up
 
-# Start development environment
-docker-compose up app-dev
-
-# Start production environment
-docker-compose up app-prod
+# Start specific services
+docker compose up redis rabbitmq
 
 # View logs
-docker-compose logs -f app-dev
+docker compose logs -f app
 ```
+
+## Connection Behaviors
+
+The application automatically detects and works with different storage capabilities:
+
+- **Key-Value Storage**: Redis, Memcached
+- **Document Storage**: MongoDB, CouchDB
+- **Relational Database**: PostgreSQL, MySQL, SQLite
+- **Transactional**: Any storage supporting ACID transactions
+- **Cache**: Redis, Memcached (with TTL/expiration support)
+- **Message Queue**: RabbitMQ, Apache Kafka, AWS SQS
 
 ## Error Handling
 
-The application demonstrates proper error handling patterns:
-
-### Initialization Errors
+The application demonstrates proper error handling using ajan's sentinel errors:
 
 ```go
-func NewAppContext(ctx context.Context) (*AppContext, error) {
-    // ... initialization code ...
+import "errors"
 
-    if err != nil {
-        return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-    }
-
-    return appContext, nil
-}
-```
-
-### Business Logic Errors
-
-```go
-func main() {
-    appContext, err := NewAppContext(ctx)
-    if err != nil {
-        panic(fmt.Sprintf("failed to initialize app context: %v", err))
-    }
-
-    // Continue with business logic
-    business(ctx, appContext)
-}
-```
-
-## Extending the Sample App
-
-### Adding Services
-
-1. **Create service interface and implementation:**
-```go
-type UserService interface {
-    CreateUser(ctx context.Context, user *User) error
-    GetUser(ctx context.Context, id string) (*User, error)
+// Check for specific errors
+if errors.Is(err, datafx.ErrKeyNotFound) {
+    // Handle key not found
 }
 
-type userService struct {
-    data *datafx.Registry
-    logger *logfx.Logger
+if errors.Is(err, datafx.ErrConnectionNotSupported) {
+    // Handle unsupported connection
 }
-```
 
-2. **Add to application context:**
-```go
-type AppContext struct {
-    // ... existing fields ...
-    UserService UserService
+if errors.Is(err, datafx.ErrTransactionFailed) {
+    // Handle transaction failure
 }
-```
 
-3. **Initialize in NewAppContext:**
-```go
-appContext.UserService = NewUserService(appContext.Data, appContext.Logger)
-```
-
-### Adding HTTP API
-
-1. **Add HTTP server configuration:**
-```go
-type AppConfig struct {
-    ajan.BaseConfig
-    HTTP httpfx.Config `conf:"http"`
+if errors.Is(err, datafx.ErrCacheNotSupported) {
+    // Handle cache not supported
 }
-```
 
-2. **Add HTTP server to context:**
-```go
-type AppContext struct {
-    // ... existing fields ...
-    HTTP *httpfx.Server
+if errors.Is(err, datafx.ErrQueueNotSupported) {
+    // Handle queue not supported
 }
-```
-
-3. **Set up routes:**
-```go
-server := httpfx.NewServer(&config.HTTP, logger)
-server.GET("/users/:id", userHandler.GetUser)
-server.POST("/users", userHandler.CreateUser)
-```
-
-### Adding Background Workers
-
-1. **Use processfx for worker management:**
-```go
-import "github.com/eser/ajan/processfx"
-
-process := processfx.New(ctx, logger)
-
-// Start background worker
-process.StartGoroutine("data-processor", func(ctx context.Context) error {
-    // Worker logic here
-    return nil
-})
 ```
 
 ## Best Practices Demonstrated
 
-1. **Dependency Injection**: All dependencies are injected through the AppContext
-2. **Configuration Management**: Environment-aware configuration with sensible defaults
-3. **Error Handling**: Consistent error wrapping and propagation
-4. **Logging**: Structured logging with context
-5. **Database Transactions**: Proper transaction management with Unit of Work
-6. **Container Ready**: Production-ready Docker setup
-7. **Observability**: Built-in metrics and logging
-
-## Development Workflow
-
-### Local Development
-
-1. **Start dependencies:**
-```bash
-docker-compose up -d postgres
-```
-
-2. **Run application:**
-```bash
-go run .
-```
-
-3. **Make changes and restart**
-
-### Testing
-
-```bash
-# Run tests
-go test ./...
-
-# Run with coverage
-go test -cover ./...
-
-# Run with race detection
-go test -race ./...
-```
-
-### Building
-
-```bash
-# Local build
-go build -o app .
-
-# Docker build
-docker build -t sampleapp .
-
-# Multi-architecture build
-docker buildx build --platform linux/amd64,linux/arm64 -t sampleapp .
-```
+1. **Separation of Concerns**: Clean architecture with distinct layers
+2. **Configuration Management**: Environment-based configuration with defaults
+3. **Error Handling**: Comprehensive error context with sentinel errors
+4. **Structured Logging**: Consistent, queryable log output
+5. **Metrics Collection**: Observability for production monitoring
+6. **Resource Management**: Proper connection lifecycle management
+7. **Technology Agnostic**: Same API across different storage types
+8. **Type Safety**: Compile-time interface verification
 
 ## Production Deployment
 
-### Environment Variables
-
-Set these environment variables for production:
+### Build Production Image
 
 ```bash
-export APP_ENV=production
-export LOG__LEVEL=info
-export LOG__PRETTY=false
-export DATA__SOURCES__DEFAULT__DSN=postgres://prod-host:5432/proddb
+# Build optimized production image
+docker build --target production -t sample-app:latest .
+
+# Run production container
+docker run -p 8080:8080 sample-app:latest
 ```
 
-### Health Checks
+### Environment Configuration
 
-The application automatically includes health checks for:
-- Database connections
-- Application metrics
+```bash
+# Production environment variables
+export app_env=production
+export log__level=warn
+export log__pretty=false
+export conn__targets__default__dsn="postgres://user:pass@db:5432/app"
+export conn__targets__redis_cache__host=redis-cluster
+export conn__targets__amqp_queue__host=rabbitmq-cluster
+```
 
-### Monitoring
+## Extending the Sample
 
-Access metrics at runtime:
-- Application logs: Structured JSON output
-- Runtime metrics: Available via metricsfx integration
+To add new functionality:
 
-## Dependencies
+1. **New Storage Type**: Register additional connection factories in `appcontext.go`
+2. **New Operations**: Add business logic functions in `main.go`
+3. **Custom Metrics**: Register application-specific metrics collectors
+4. **Additional Logging**: Use structured logging throughout business logic
 
-- **github.com/eser/ajan**: Main ajan framework
-- **github.com/eser/ajan/configfx**: Configuration management
-- **github.com/eser/ajan/logfx**: Structured logging
-- **github.com/eser/ajan/datafx**: Database integration
-- **github.com/eser/ajan/metricsfx**: Metrics collection
+## Learning Resources
 
-## Contributing
-
-This sample application serves as a reference implementation. When contributing:
-
-1. Follow the established patterns
-2. Add comprehensive error handling
-3. Include appropriate logging
-4. Update configuration as needed
-5. Add tests for new functionality
-
-## License
-
-This sample application is part of the ajan framework and follows the same license terms.
+- [ajan Documentation](../README.md)
+- [datafx Guide](../datafx/README.md)
+- [connfx Architecture](../connfx/README.md)
+- [Configuration System](../configfx/README.md)
+- [Logging Framework](../logfx/README.md)

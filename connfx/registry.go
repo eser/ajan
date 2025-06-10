@@ -20,6 +20,8 @@ var (
 	ErrUnsupportedProtocol      = errors.New("unsupported protocol")
 	ErrFailedToCloseConnections = errors.New("failed to close connections")
 	ErrFailedToAddConnection    = errors.New("failed to add connection")
+	ErrConnectionNotSupported   = errors.New("connection does not support required operations")
+	ErrInterfaceNotImplemented  = errors.New("connection does not implement required interface")
 )
 
 const DefaultConnection = "default"
@@ -318,4 +320,141 @@ func (registry *Registry) Close(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetDataRepository returns a DataRepository from a connection if it supports it.
+func (registry *Registry) GetDataRepository(name string) (DataRepository, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	conn := registry.connections[name]
+	if conn == nil {
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+	}
+
+	// Check if the connection supports key-value behavior
+	behaviors := conn.GetBehaviors()
+	if !slices.Contains(behaviors, ConnectionBehaviorKeyValue) &&
+		!slices.Contains(behaviors, ConnectionBehaviorDocument) &&
+		!slices.Contains(behaviors, ConnectionBehaviorRelational) {
+		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
+			ErrConnectionNotSupported, name, "data repository operations")
+	}
+
+	// Try to get the repository from the raw connection
+	repo, ok := conn.GetRawConnection().(DataRepository)
+	if !ok {
+		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
+			ErrInterfaceNotImplemented, name, "DataRepository")
+	}
+
+	return repo, nil
+}
+
+// GetTransactionalRepository returns a TransactionalRepository from a connection if it supports it.
+func (registry *Registry) GetTransactionalRepository(name string) (TransactionalRepository, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	conn := registry.connections[name]
+	if conn == nil {
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+	}
+
+	// Check if the connection supports transactional behavior
+	behaviors := conn.GetBehaviors()
+	if !slices.Contains(behaviors, ConnectionBehaviorTransactional) {
+		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
+			ErrConnectionNotSupported, name, "transactional operations")
+	}
+
+	// Try to get the repository from the raw connection
+	repo, ok := conn.GetRawConnection().(TransactionalRepository)
+	if !ok {
+		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
+			ErrInterfaceNotImplemented, name, "TransactionalRepository")
+	}
+
+	return repo, nil
+}
+
+// GetQueryRepository returns a QueryRepository from a connection if it supports it.
+func (registry *Registry) GetQueryRepository(name string) (QueryRepository, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	conn := registry.connections[name]
+	if conn == nil {
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+	}
+
+	// Check if the connection supports relational behavior
+	behaviors := conn.GetBehaviors()
+	if !slices.Contains(behaviors, ConnectionBehaviorRelational) {
+		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
+			ErrConnectionNotSupported, name, "query operations")
+	}
+
+	// Try to get the repository from the raw connection
+	repo, ok := conn.GetRawConnection().(QueryRepository)
+	if !ok {
+		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
+			ErrInterfaceNotImplemented, name, "QueryRepository")
+	}
+
+	return repo, nil
+}
+
+// GetCacheRepository returns a CacheRepository from a connection if it supports it.
+func (registry *Registry) GetCacheRepository(name string) (CacheRepository, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	conn := registry.connections[name]
+	if conn == nil {
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+	}
+
+	// Check if the connection supports cache behavior
+	behaviors := conn.GetBehaviors()
+	if !slices.Contains(behaviors, ConnectionBehaviorCache) {
+		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
+			ErrConnectionNotSupported, name, "cache operations")
+	}
+
+	// Try to get the cache repository from the raw connection
+	repo, ok := conn.GetRawConnection().(CacheRepository)
+	if !ok {
+		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
+			ErrInterfaceNotImplemented, name, "CacheRepository")
+	}
+
+	return repo, nil
+}
+
+// GetQueueRepository returns a QueueRepository from a connection if it supports it.
+func (registry *Registry) GetQueueRepository(name string) (QueueRepository, error) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	conn := registry.connections[name]
+	if conn == nil {
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
+	}
+
+	// Check if the connection supports queue behavior
+	behaviors := conn.GetBehaviors()
+	if !slices.Contains(behaviors, ConnectionBehaviorQueue) {
+		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
+			ErrConnectionNotSupported, name, "queue operations")
+	}
+
+	// Try to get the queue repository from the raw connection
+	repo, ok := conn.GetRawConnection().(QueueRepository)
+	if !ok {
+		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
+			ErrInterfaceNotImplemented, name, "QueueRepository")
+	}
+
+	return repo, nil
 }

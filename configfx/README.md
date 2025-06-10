@@ -150,9 +150,7 @@ config.local.json        # Local developer overrides
 
 Set the environment using:
 ```bash
-export ENVIRONMENT=production
-# or
-export ENV=development
+export env=production
 ```
 
 The loading order will be:

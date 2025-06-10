@@ -1,21 +1,20 @@
 package datafx
 
-import (
-	"context"
-	"database/sql"
+// This file contains shared types used across the datafx package.
+// The main data access interfaces are now defined in connfx/data_ports.go
+// as they represent the ports that connfx adapters must implement.
 
-	"github.com/eser/ajan/connfx"
-)
-
-type SQLExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+// User represents a basic user structure for examples.
+type User struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
-type DataConnection interface {
-	connfx.Connection
-	// GetDB() *sql.DB
-	// ExecuteUnitOfWork(ctx context.Context, fn func(uow *UnitOfWork) error) error
+// Product represents a basic product structure for examples.
+type Product struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Category string  `json:"category"`
+	Price    float64 `json:"price"`
 }
