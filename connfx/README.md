@@ -72,7 +72,7 @@ func main() {
     }
 
     // Use connections
-    dbConn := registry.GetNamed("default")
+    dbConn := registry.GetDefault()
     if dbConn == nil {
         log.Fatal("Database connection not found")
     }
@@ -357,12 +357,9 @@ for name, status := range statuses {
 }
 
 // Check specific connection
-status, err := registry.HealthCheckNamed(ctx, "primary")
-if err != nil {
-    log.Printf("Health check failed: %v", err)
-} else {
-    fmt.Printf("Status: %s, Message: %s\n", status.State, status.Message)
-}
+conn := registry.GetNamed("primary")
+status := conn.HealthCheck(ctx)
+fmt.Printf("Status: %s, Message: %s\n", status.State, status.Message)
 ```
 
 ## Available Adapters
@@ -481,13 +478,12 @@ func (r *Registry) GetByBehavior(behavior ConnectionBehavior) []Connection
 func (r *Registry) GetByProtocol(protocol string) []Connection
 
 // Connection management
-func (r *Registry) AddConnection(ctx context.Context, config *ConnectionConfig) error
+func (r *Registry) AddConnection(ctx context.Context, config *ConnectionConfig) (Connection, error)
 func (r *Registry) RemoveConnection(ctx context.Context, name string) error
 func (r *Registry) LoadFromConfig(ctx context.Context, config *Config) error
 
 // Health monitoring
 func (r *Registry) HealthCheck(ctx context.Context) map[string]*HealthStatus
-func (r *Registry) HealthCheckNamed(ctx context.Context, name string) (*HealthStatus, error)
 
 // Administrative methods
 func (r *Registry) ListConnections() []string

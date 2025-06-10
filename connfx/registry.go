@@ -166,19 +166,19 @@ func (registry *Registry) AddConnection(
 	ctx context.Context,
 	name string,
 	config *ConfigTarget,
-) error {
+) (Connection, error) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 
 	// Check if connection already exists
 	if _, exists := registry.connections[name]; exists {
-		return fmt.Errorf("%w (name=%q)", ErrConnectionAlreadyExists, name)
+		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionAlreadyExists, name)
 	}
 
 	// Get factory for this protocol
 	factory, exists := registry.factories[config.Protocol]
 	if !exists {
-		return fmt.Errorf("%w (protocol=%q)", ErrUnsupportedProtocol, config.Protocol)
+		return nil, fmt.Errorf("%w (protocol=%q)", ErrUnsupportedProtocol, config.Protocol)
 	}
 
 	registry.logger.Info(
@@ -197,7 +197,7 @@ func (registry *Registry) AddConnection(
 			slog.String("protocol", config.Protocol),
 		)
 
-		return fmt.Errorf("%w (name=%q): %w", ErrFailedToCreateConnection, name, err)
+		return nil, fmt.Errorf("%w (name=%q): %w", ErrFailedToCreateConnection, name, err)
 	}
 
 	registry.connections[name] = conn
@@ -217,7 +217,7 @@ func (registry *Registry) AddConnection(
 		slog.Any("behaviors", behaviorStrs),
 	)
 
-	return nil
+	return conn, nil
 }
 
 // RemoveConnection removes a connection from the registry.
@@ -251,7 +251,7 @@ func (registry *Registry) RemoveConnection(ctx context.Context, name string) err
 
 func (registry *Registry) LoadFromConfig(ctx context.Context, config *Config) error {
 	for name, target := range config.Targets {
-		if err := registry.AddConnection(ctx, name, &target); err != nil {
+		if _, err := registry.AddConnection(ctx, name, &target); err != nil {
 			return fmt.Errorf("%w (name=%q): %w", ErrFailedToAddConnection, name, err)
 		}
 	}
@@ -292,22 +292,6 @@ func (registry *Registry) HealthCheck(ctx context.Context) map[string]*HealthSta
 	}
 
 	return results
-}
-
-// HealthCheckNamed performs a health check on a specific connection.
-func (registry *Registry) HealthCheckNamed(
-	ctx context.Context,
-	name string,
-) (*HealthStatus, error) {
-	registry.mu.RLock()
-	conn, exists := registry.connections[name]
-	registry.mu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
-	}
-
-	return conn.HealthCheck(ctx), nil
 }
 
 // Close closes all connections in the registry.
@@ -368,114 +352,6 @@ func (registry *Registry) GetRepository(name string) (Repository, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
 			ErrInterfaceNotImplemented, name, "Repository")
-	}
-
-	return repo, nil
-}
-
-// GetTransactionalRepository returns a TransactionalRepository from a connection if it supports it.
-func (registry *Registry) GetTransactionalRepository(name string) (TransactionalRepository, error) {
-	registry.mu.RLock()
-	defer registry.mu.RUnlock()
-
-	conn := registry.connections[name]
-	if conn == nil {
-		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
-	}
-
-	// Check if the connection supports transactional behavior
-	behaviors := conn.GetBehaviors()
-	if !slices.Contains(behaviors, ConnectionBehaviorTransactional) {
-		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
-			ErrConnectionNotSupported, name, "transactional operations")
-	}
-
-	// Try to get the repository from the raw connection
-	repo, ok := conn.GetRawConnection().(TransactionalRepository)
-	if !ok {
-		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
-			ErrInterfaceNotImplemented, name, "TransactionalRepository")
-	}
-
-	return repo, nil
-}
-
-// GetQueryRepository returns a QueryRepository from a connection if it supports it.
-func (registry *Registry) GetQueryRepository(name string) (QueryRepository, error) {
-	registry.mu.RLock()
-	defer registry.mu.RUnlock()
-
-	conn := registry.connections[name]
-	if conn == nil {
-		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
-	}
-
-	// Check if the connection supports relational behavior
-	behaviors := conn.GetBehaviors()
-	if !slices.Contains(behaviors, ConnectionBehaviorRelational) {
-		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
-			ErrConnectionNotSupported, name, "query operations")
-	}
-
-	// Try to get the repository from the raw connection
-	repo, ok := conn.GetRawConnection().(QueryRepository)
-	if !ok {
-		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
-			ErrInterfaceNotImplemented, name, "QueryRepository")
-	}
-
-	return repo, nil
-}
-
-// GetCacheRepository returns a CacheRepository from a connection if it supports it.
-func (registry *Registry) GetCacheRepository(name string) (CacheRepository, error) {
-	registry.mu.RLock()
-	defer registry.mu.RUnlock()
-
-	conn := registry.connections[name]
-	if conn == nil {
-		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
-	}
-
-	// Check if the connection supports cache behavior
-	behaviors := conn.GetBehaviors()
-	if !slices.Contains(behaviors, ConnectionBehaviorCache) {
-		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
-			ErrConnectionNotSupported, name, "cache operations")
-	}
-
-	// Try to get the cache repository from the raw connection
-	repo, ok := conn.GetRawConnection().(CacheRepository)
-	if !ok {
-		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
-			ErrInterfaceNotImplemented, name, "CacheRepository")
-	}
-
-	return repo, nil
-}
-
-// GetQueueRepository returns a QueueRepository from a connection if it supports it.
-func (registry *Registry) GetQueueRepository(name string) (QueueRepository, error) {
-	registry.mu.RLock()
-	defer registry.mu.RUnlock()
-
-	conn := registry.connections[name]
-	if conn == nil {
-		return nil, fmt.Errorf("%w (name=%q)", ErrConnectionNotFound, name)
-	}
-
-	// Check if the connection supports queue behavior
-	behaviors := conn.GetBehaviors()
-	if !slices.Contains(behaviors, ConnectionBehaviorQueue) {
-		return nil, fmt.Errorf("%w (name=%q, operation=%q)",
-			ErrConnectionNotSupported, name, "queue operations")
-	}
-
-	// Try to get the queue repository from the raw connection
-	repo, ok := conn.GetRawConnection().(QueueRepository)
-	if !ok {
-		return nil, fmt.Errorf("%w (name=%q, interface=%q)",
-			ErrInterfaceNotImplemented, name, "QueueRepository")
 	}
 
 	return repo, nil

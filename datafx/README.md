@@ -133,13 +133,10 @@ func main() {
     }
 
     // Add connection to registry
-    err := registry.AddConnection(ctx, connfx.DefaultConnection, config)
+    conn, err := registry.AddConnection(ctx, connfx.DefaultConnection, config)
     if err != nil {
         log.Fatal(err)
     }
-
-    // Get connection
-    conn := registry.GetDefault()
 
     // Create datafx.Store instance
     data, err := datafx.NewStore(conn)
@@ -243,12 +240,8 @@ if err != nil {
 
 ```go
 // Add multiple connections
-err = registry.AddConnection(ctx, "redis-cache", redisConfig)
-err = registry.AddConnection(ctx, "postgres-main", postgresConfig)
-
-// Get specific connections
-cacheConn := registry.GetNamed("redis-cache")
-dbConn := registry.GetNamed("postgres-main")
+cacheConn, err = registry.AddConnection(ctx, "redis-cache", redisConfig)
+dbConn, err = registry.AddConnection(ctx, "postgres-main", postgresConfig)
 
 // Create separate data instances
 cache, _ := datafx.NewCache(cacheConn)
@@ -341,13 +334,10 @@ func main() {
     }
 
     // Add connection to registry
-    err := registry.AddConnection(ctx, "message-broker", config)
+    conn, err := registry.AddConnection(ctx, "message-broker", config)
     if err != nil {
         log.Fatal(err)
     }
-
-    // Get connection
-    conn := registry.GetNamed("message-broker")
 
     // Create queue instance
     queue, err := datafx.NewQueue(conn)

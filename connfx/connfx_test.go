@@ -40,25 +40,22 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 		DSN:      ":memory:",
 	}
 
-	err := registry.AddConnection(ctx, "test", config)
+	conn, err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
-
-	// Test GetNamed method
-	connNamed := registry.GetNamed("test")
-	require.NotNil(t, connNamed)
+	require.NotNil(t, conn)
 
 	// Test connection properties
-	assert.Contains(t, connNamed.GetBehaviors(), connfx.ConnectionBehaviorStateful)
-	assert.Equal(t, "sqlite", connNamed.GetProtocol())
-	assert.Equal(t, connfx.ConnectionStateConnected, connNamed.GetState())
+	assert.Contains(t, conn.GetBehaviors(), connfx.ConnectionBehaviorStateful)
+	assert.Equal(t, "sqlite", conn.GetProtocol())
+	assert.Equal(t, connfx.ConnectionStateConnected, conn.GetState())
 
 	// Test health check
-	status := connNamed.HealthCheck(ctx)
+	status := conn.HealthCheck(ctx)
 	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
 	assert.NotZero(t, status.Timestamp)
 
 	// Test type-safe connection extraction (should be *sql.DB)
-	db, err := connfx.GetTypedConnection[*sql.DB](connNamed)
+	db, err := connfx.GetTypedConnection[*sql.DB](conn)
 	require.NoError(t, err)
 	assert.NotNil(t, db)
 
@@ -67,7 +64,7 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	// Close connection
-	err = connNamed.Close(ctx)
+	err = conn.Close(ctx)
 	require.NoError(t, err)
 }
 
@@ -88,16 +85,16 @@ func TestRegistry_GetDefaultConnection(t *testing.T) {
 		DSN:      ":memory:",
 	}
 
-	err := registry.AddConnection(ctx, "default", config)
+	conn, err := registry.AddConnection(ctx, connfx.DefaultConnection, config)
 	require.NoError(t, err)
+	require.NotNil(t, conn)
 
 	// Test GetDefault method
 	defaultConn := registry.GetDefault()
 	require.NotNil(t, defaultConn)
 
-	// Test GetDefaultConnection method
-	defaultConnWithErr := registry.GetDefault()
-	assert.Equal(t, defaultConn, defaultConnWithErr)
+	// Test that the default connection is the one we added
+	assert.Equal(t, conn, defaultConn)
 }
 
 func TestRegistry_LoadFromConfig(t *testing.T) {
@@ -113,7 +110,7 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 
 	config := &connfx.Config{
 		Targets: map[string]connfx.ConfigTarget{
-			"default": { //nolint:exhaustruct
+			connfx.DefaultConnection: { //nolint:exhaustruct
 				Protocol: "sqlite",
 				DSN:      ":memory:",
 			},
@@ -125,10 +122,10 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 
 	// Verify connection was loaded
 	connections := registry.ListConnections()
-	assert.Contains(t, connections, "default")
+	assert.Contains(t, connections, connfx.DefaultConnection)
 
 	// Get the connection
-	conn := registry.GetNamed("default")
+	conn := registry.GetNamed(connfx.DefaultConnection)
 	assert.NotNil(t, conn)
 }
 
@@ -149,8 +146,9 @@ func TestRegistry_HealthCheck(t *testing.T) {
 		DSN:      ":memory:",
 	}
 
-	err := registry.AddConnection(ctx, "sql_test", config)
+	conn, err := registry.AddConnection(ctx, "sql_test", config)
 	require.NoError(t, err)
+	require.NotNil(t, conn)
 
 	// Test health check for all connections
 	statuses := registry.HealthCheck(ctx)
@@ -158,15 +156,13 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	assert.Contains(t, statuses, "sql_test")
 	assert.Equal(t, connfx.ConnectionStateConnected, statuses["sql_test"].State)
 
-	// Test named health check
-	status, err := registry.HealthCheckNamed(ctx, "sql_test")
-	require.NoError(t, err)
+	// Test health check solely for the connection we added
+	status := conn.HealthCheck(ctx)
 	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
 
 	// Test health check for non-existent connection
-	_, err = registry.HealthCheckNamed(ctx, "nonexistent")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, connfx.ErrConnectionNotFound)
+	conn = registry.GetNamed("nonexistent")
+	assert.Nil(t, conn)
 }
 
 func TestRegistry_RemoveConnection(t *testing.T) {
@@ -186,7 +182,7 @@ func TestRegistry_RemoveConnection(t *testing.T) {
 		DSN:      ":memory:",
 	}
 
-	err := registry.AddConnection(ctx, "test", config)
+	_, err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
 
 	// Verify connection exists
@@ -223,7 +219,7 @@ func TestRegistry_Close(t *testing.T) {
 		DSN:      ":memory:",
 	}
 
-	err := registry.AddConnection(ctx, "test", config)
+	_, err := registry.AddConnection(ctx, "test", config)
 	require.NoError(t, err)
 
 	// Close all connections
@@ -284,7 +280,7 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 		Protocol: "sqlite",
 		DSN:      ":memory:",
 	}
-	err := registry.AddConnection(ctx, "db", sqlConfig)
+	_, err := registry.AddConnection(ctx, "db", sqlConfig)
 	require.NoError(t, err)
 
 	// Test behavior filtering
@@ -331,11 +327,9 @@ func TestGetTypedConnection(t *testing.T) {
 		Protocol: "sqlite",
 		DSN:      ":memory:",
 	}
-	err := registry.AddConnection(ctx, "db", config)
-	require.NoError(t, err)
 
-	// Get connection
-	conn := registry.GetNamed("db")
+	conn, err := registry.AddConnection(ctx, "db", config)
+	require.NoError(t, err)
 	require.NotNil(t, conn)
 
 	// Test successful type extraction
@@ -376,7 +370,7 @@ func TestRegistry_ErrorHandling(t *testing.T) {
 		DSN:      "test.db",
 	}
 
-	err := registry.AddConnection(ctx, "test", config)
+	_, err := registry.AddConnection(ctx, "test", config)
 	require.Error(t, err)
 	require.ErrorIs(t, err, connfx.ErrUnsupportedProtocol)
 

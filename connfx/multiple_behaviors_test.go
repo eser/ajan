@@ -60,8 +60,9 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 			Protocol: "sqlite",
 			DSN:      ":memory:",
 		}
-		err := registry.AddConnection(ctx, "database", sqlConfig)
+		statefulConn, err := registry.AddConnection(ctx, "database", sqlConfig)
 		require.NoError(t, err)
+		require.NotNil(t, statefulConn)
 
 		// Note: We can't test Redis connection without a Redis server,
 		// but we can demonstrate the concept with SQL and HTTP
@@ -77,10 +78,6 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		assert.Contains(t, behaviors, connfx.ConnectionBehaviorStateful)
 		assert.NotContains(t, behaviors, connfx.ConnectionBehaviorStateless)
 		assert.NotContains(t, behaviors, connfx.ConnectionBehaviorStreaming)
-
-		// Test behavior-specific connection retrieval
-		statefulConn := registry.GetNamed("database")
-		assert.NotNil(t, statefulConn)
 	})
 
 	t.Run("demonstrate_redis_multiple_behaviors", func(t *testing.T) {
@@ -102,7 +99,7 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 
 		// This will fail because no Redis server is running, but that's expected
 		// We're demonstrating the configuration and behavior setup
-		err := registry.AddConnection(ctx, "cache", redisConfig)
+		_, err := registry.AddConnection(ctx, "cache", redisConfig)
 
 		// The connection will fail, but we can show what behaviors it would support
 		t.Logf("Redis connection attempt failed as expected (no server): %v", err)
