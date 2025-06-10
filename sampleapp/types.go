@@ -1,8 +1,4 @@
-package datafx
-
-// This file contains shared types used across the datafx package.
-// The main data access interfaces are now defined in connfx/data_ports.go
-// as they represent the ports that connfx adapters must implement.
+package main
 
 // User represents a basic user structure for examples.
 type User struct {

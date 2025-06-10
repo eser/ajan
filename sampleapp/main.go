@@ -129,12 +129,12 @@ func performTransactionalOperations(ctx context.Context, connection connfx.Conne
 	// Execute operations within a transaction
 	err = txData.ExecuteTransaction(ctx, func(tx *datafx.TransactionStore) error {
 		// All operations within this function are transactional
-		user := &datafx.User{ID: "tx-user-123", Name: "Transaction User", Email: "tx@example.com"}
+		user := &User{ID: "tx-user-123", Name: "Transaction User", Email: "tx@example.com"}
 		if err := tx.Set(ctx, "tx-user:123", user); err != nil {
 			return err // Transaction will be rolled back
 		}
 
-		product := &datafx.Product{ID: "tx-product-456", Name: "Transaction Widget", Price: 19.99}
+		product := &Product{ID: "tx-product-456", Name: "Transaction Widget", Price: 19.99}
 		if err := tx.Set(ctx, "tx-product:456", product); err != nil {
 			return err // Transaction will be rolled back
 		}

@@ -209,19 +209,10 @@ func (registry *Registry) AddConnection(
 
 	registry.connections[name] = conn
 
-	// Log the behaviors supported by this connection
-	behaviors := conn.GetBehaviors()
-	behaviorStrs := make([]string, len(behaviors))
-
-	for i, b := range behaviors {
-		behaviorStrs[i] = string(b)
-	}
-
 	registry.logger.Info(
 		"successfully added connection",
 		slog.String("name", name),
 		slog.String("protocol", config.Protocol),
-		slog.Any("behaviors", behaviorStrs),
 	)
 
 	return conn, nil
