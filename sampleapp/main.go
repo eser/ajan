@@ -85,7 +85,7 @@ func business(ctx context.Context, appContext *AppContext) error {
 
 func performBasicOperations(ctx context.Context, store *datafx.Store) error {
 	// Example data operations
-	user := &datafx.User{
+	user := &User{
 		ID:    "user123",
 		Name:  "John Doe",
 		Email: "john@example.com",
@@ -97,7 +97,7 @@ func performBasicOperations(ctx context.Context, store *datafx.Store) error {
 	}
 
 	// Get data
-	var retrievedUser datafx.User
+	var retrievedUser User
 	if err := store.Get(ctx, "user:123", &retrievedUser); err != nil {
 		return fmt.Errorf("%w (operation=get, key=%q): %w", ErrDataOperationFailed, "user:123", err)
 	}
