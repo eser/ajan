@@ -8,7 +8,6 @@ import (
 
 	"github.com/eser/ajan/configfx"
 	"github.com/eser/ajan/connfx"
-	"github.com/eser/ajan/connfx/adapters"
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/ajan/metricsfx"
 	_ "modernc.org/sqlite"
@@ -48,19 +47,7 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	}
 
 	// connections
-	appContext.Connections = connfx.NewRegistry(appContext.Logger)
-
-	// Register factory for SQLite
-	sqliteFactory := adapters.NewSQLConnectionFactory("sqlite")
-	appContext.Connections.RegisterFactory(sqliteFactory)
-
-	// Register factory for Redis (cache operations)
-	redisFactory := adapters.NewRedisFactory()
-	appContext.Connections.RegisterFactory(redisFactory)
-
-	// Register factory for AMQP (queue operations)
-	amqpFactory := adapters.NewAMQPFactory()
-	appContext.Connections.RegisterFactory(amqpFactory)
+	appContext.Connections = connfx.NewRegistryWithDefaults(appContext.Logger)
 
 	err = appContext.Connections.LoadFromConfig(ctx, &appContext.Config.Conn)
 	if err != nil {

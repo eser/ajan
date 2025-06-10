@@ -1,12 +1,10 @@
-package adapters
+package connfx
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/eser/ajan/connfx"
 )
 
 var (
@@ -40,7 +38,7 @@ type RedisClient interface {
 type RedisConnection struct {
 	adapter  *RedisAdapter
 	protocol string
-	state    connfx.ConnectionState
+	state    ConnectionState
 }
 
 // NewRedisConnection creates a new Redis connection.
@@ -56,17 +54,17 @@ func NewRedisConnection(protocol, host string, port int, password string, db int
 	return &RedisConnection{
 		adapter:  adapter,
 		protocol: protocol,
-		state:    connfx.ConnectionStateConnected,
+		state:    ConnectionStateConnected,
 	}
 }
 
 // Connection interface implementation.
-func (rc *RedisConnection) GetBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{
-		connfx.ConnectionBehaviorStateful,
-		connfx.ConnectionBehaviorStreaming,
-		connfx.ConnectionBehaviorKeyValue,
-		connfx.ConnectionBehaviorCache,
+func (rc *RedisConnection) GetBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{
+		ConnectionBehaviorStateful,
+		ConnectionBehaviorStreaming,
+		ConnectionBehaviorKeyValue,
+		ConnectionBehaviorCache,
 	}
 }
 
@@ -74,14 +72,14 @@ func (rc *RedisConnection) GetProtocol() string {
 	return rc.protocol
 }
 
-func (rc *RedisConnection) GetState() connfx.ConnectionState {
+func (rc *RedisConnection) GetState() ConnectionState {
 	return rc.state
 }
 
-func (rc *RedisConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
+func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
 	start := time.Now()
 
-	status := &connfx.HealthStatus{
+	status := &HealthStatus{
 		Timestamp: start,
 		State:     rc.state,
 		Error:     nil,
@@ -94,14 +92,14 @@ func (rc *RedisConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus
 		if err != nil {
 			status.Error = err
 			status.Message = "Redis ping failed"
-			status.State = connfx.ConnectionStateError
+			status.State = ConnectionStateError
 		} else {
 			status.Message = "Redis connection healthy"
 		}
 	} else {
 		status.Error = ErrRedisClientNotInitialized
 		status.Message = "Redis client not initialized"
-		status.State = connfx.ConnectionStateError
+		status.State = ConnectionStateError
 	}
 
 	status.Latency = time.Since(start)
@@ -238,16 +236,10 @@ func NewRedisConnectionFactory(protocol string) *RedisConnectionFactory {
 	}
 }
 
-// NewRedisFactory creates a new Redis factory with default "redis" protocol.
-// This function maintains compatibility with the new datafx pattern.
-func NewRedisFactory() *RedisConnectionFactory {
-	return NewRedisConnectionFactory("redis")
-}
-
 func (f *RedisConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config *connfx.ConfigTarget,
-) (connfx.Connection, error) {
+	config *ConfigTarget,
+) (Connection, error) {
 	// Parse Redis-specific configuration
 	host := config.Host
 	if host == "" {
@@ -274,10 +266,10 @@ func (f *RedisConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *RedisConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{
-		connfx.ConnectionBehaviorStateful,
-		connfx.ConnectionBehaviorStreaming,
-		connfx.ConnectionBehaviorKeyValue,
+func (f *RedisConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{
+		ConnectionBehaviorStateful,
+		ConnectionBehaviorStreaming,
+		ConnectionBehaviorKeyValue,
 	}
 }

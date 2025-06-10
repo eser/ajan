@@ -1,4 +1,4 @@
-package adapters
+package connfx
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
-
-	"github.com/eser/ajan/connfx"
 )
 
 var (
@@ -17,7 +15,6 @@ var (
 	ErrInvalidConfigTypeSQL      = errors.New("invalid config type for SQL connection")
 	ErrUnsupportedSQLProtocol    = errors.New("unsupported SQL protocol")
 	ErrFailedToCloseSQLDB        = errors.New("failed to close SQL database")
-	ErrInvalidDSN                = errors.New("invalid or empty DSN")
 )
 
 // SQLConnection represents a SQL database connection.
@@ -42,12 +39,8 @@ func NewSQLConnectionFactory(protocol string) *SQLConnectionFactory {
 
 func (f *SQLConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config *connfx.ConfigTarget,
-) (connfx.Connection, error) {
-	if config.DSN == "" {
-		return nil, fmt.Errorf("%w (protocol=%q)", ErrInvalidDSN, f.protocol)
-	}
-
+	config *ConfigTarget,
+) (Connection, error) {
 	db, err := sql.Open(f.protocol, config.DSN)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -74,7 +67,7 @@ func (f *SQLConnectionFactory) CreateConnection(
 	conn := &SQLConnection{
 		protocol:   f.protocol,
 		db:         db,
-		state:      int32(connfx.ConnectionStateConnected),
+		state:      int32(ConnectionStateConnected),
 		lastHealth: time.Time{},
 	}
 
@@ -85,29 +78,29 @@ func (f *SQLConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *SQLConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateful}
+func (f *SQLConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{ConnectionBehaviorStateful}
 }
 
 // Connection interface implementation
 
-func (c *SQLConnection) GetBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateful}
+func (c *SQLConnection) GetBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{ConnectionBehaviorStateful}
 }
 
 func (c *SQLConnection) GetProtocol() string {
 	return c.protocol
 }
 
-func (c *SQLConnection) GetState() connfx.ConnectionState {
+func (c *SQLConnection) GetState() ConnectionState {
 	state := atomic.LoadInt32(&c.state)
 
-	return connfx.ConnectionState(state)
+	return ConnectionState(state)
 }
 
-func (c *SQLConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
+func (c *SQLConnection) HealthCheck(ctx context.Context) *HealthStatus {
 	start := time.Now()
-	status := &connfx.HealthStatus{ //nolint:exhaustruct
+	status := &HealthStatus{ //nolint:exhaustruct
 		Timestamp: start,
 	}
 
@@ -116,8 +109,8 @@ func (c *SQLConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
 	status.Latency = time.Since(start)
 
 	if err != nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
 		status.Error = err
 		status.Message = fmt.Sprintf("Health check failed: %v", err)
 
@@ -127,12 +120,12 @@ func (c *SQLConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
 	// Check connection stats
 	stats := c.db.Stats()
 	if stats.OpenConnections == 0 {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateDisconnected))
-		status.State = connfx.ConnectionStateDisconnected
+		atomic.StoreInt32(&c.state, int32(ConnectionStateDisconnected))
+		status.State = ConnectionStateDisconnected
 		status.Message = "No open connections"
 	} else {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateConnected))
-		status.State = connfx.ConnectionStateConnected
+		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
+		status.State = ConnectionStateConnected
 		status.Message = fmt.Sprintf("Connected (protocol=%s, open=%d, idle=%d)",
 			c.protocol, stats.OpenConnections, stats.Idle)
 	}
@@ -143,7 +136,7 @@ func (c *SQLConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
 }
 
 func (c *SQLConnection) Close(ctx context.Context) error {
-	atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateDisconnected))
+	atomic.StoreInt32(&c.state, int32(ConnectionStateDisconnected))
 
 	if err := c.db.Close(); err != nil {
 		return fmt.Errorf("%w: %w", ErrFailedToCloseSQLDB, err)

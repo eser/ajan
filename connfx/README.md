@@ -50,15 +50,7 @@ func main() {
     })
 
     // Create connection registry
-    registry := connfx.NewRegistry(logger)
-
-    // Register adapters - they define their own behaviors
-    if err := adapters.RegisterSQLiteAdapter(registry); err != nil {
-        log.Fatal(err)
-    }
-    if err := adapters.RegisterHTTPAdapter(registry); err != nil {
-        log.Fatal(err)
-    }
+    registry := connfx.NewRegistryWithDefaults(logger)
 
     // Load configuration - no behavior field needed!
     config := &connfx.Config{
@@ -118,9 +110,9 @@ func NewService(logger *logfx.Logger) *Service {
     registry := connfx.NewRegistry(logger)
 
     // Register required adapters
-    adapters.RegisterSQLiteAdapter(registry)
-    adapters.RegisterHTTPAdapter(registry)
-    adapters.RegisterRedisAdapter(registry) // Supports both stateful + streaming
+    registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+    registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
+    registry.RegisterFactory(connfx.NewRedisConnectionFactory("redis")) // Supports both stateful + streaming
 
     // Load config
     registry.LoadFromConfig(ctx, config)

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/eser/ajan/connfx"
-	"github.com/eser/ajan/connfx/adapters"
 	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,7 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -79,7 +78,7 @@ func TestRegistry_GetDefaultConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -108,7 +107,7 @@ func TestRegistry_LoadFromConfig(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -140,7 +139,7 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -177,7 +176,7 @@ func TestRegistry_RemoveConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -214,7 +213,7 @@ func TestRegistry_Close(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 
@@ -275,8 +274,8 @@ func TestRegistry_BehaviorFiltering(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register adapters
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
-	registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
 	ctx := t.Context()
 
@@ -307,8 +306,8 @@ func TestRegistry_AdapterRegistration(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Test registering adapters
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
-	registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
 	// Test listing protocols
 	protocols := registry.ListRegisteredProtocols()
@@ -323,7 +322,7 @@ func TestGetTypedConnection(t *testing.T) {
 	registry := connfx.NewRegistry(logger)
 
 	// Register SQLite adapter
-	registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
 
 	ctx := t.Context()
 

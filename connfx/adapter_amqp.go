@@ -1,4 +1,4 @@
-package adapters
+package connfx
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/eser/ajan/connfx"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -37,7 +36,7 @@ type AMQPAdapter struct {
 type AMQPConnection struct {
 	adapter  *AMQPAdapter
 	protocol string
-	state    connfx.ConnectionState
+	state    ConnectionState
 }
 
 // NewAMQPConnection creates a new AMQP connection.
@@ -51,16 +50,16 @@ func NewAMQPConnection(protocol, dsn string) *AMQPConnection {
 	return &AMQPConnection{
 		adapter:  adapter,
 		protocol: protocol,
-		state:    connfx.ConnectionStateConnected,
+		state:    ConnectionStateConnected,
 	}
 }
 
 // Connection interface implementation.
-func (ac *AMQPConnection) GetBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{
-		connfx.ConnectionBehaviorStateful,
-		connfx.ConnectionBehaviorStreaming,
-		connfx.ConnectionBehaviorQueue,
+func (ac *AMQPConnection) GetBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{
+		ConnectionBehaviorStateful,
+		ConnectionBehaviorStreaming,
+		ConnectionBehaviorQueue,
 	}
 }
 
@@ -68,14 +67,14 @@ func (ac *AMQPConnection) GetProtocol() string {
 	return ac.protocol
 }
 
-func (ac *AMQPConnection) GetState() connfx.ConnectionState {
+func (ac *AMQPConnection) GetState() ConnectionState {
 	return ac.state
 }
 
-func (ac *AMQPConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus {
+func (ac *AMQPConnection) HealthCheck(ctx context.Context) *HealthStatus {
 	start := time.Now()
 
-	status := &connfx.HealthStatus{
+	status := &HealthStatus{
 		Timestamp: start,
 		State:     ac.state,
 		Error:     nil,
@@ -88,7 +87,7 @@ func (ac *AMQPConnection) HealthCheck(ctx context.Context) *connfx.HealthStatus 
 	} else {
 		status.Error = ErrAMQPClientNotInitialized
 		status.Message = "AMQP connection not initialized or closed"
-		status.State = connfx.ConnectionStateError
+		status.State = ConnectionStateError
 	}
 
 	status.Latency = time.Since(start)
@@ -174,9 +173,9 @@ func (aa *AMQPAdapter) Publish(ctx context.Context, queueName string, body []byt
 func (aa *AMQPAdapter) Consume(
 	ctx context.Context,
 	queueName string,
-	config connfx.ConsumerConfig,
-) (<-chan connfx.Message, <-chan error) {
-	messages := make(chan connfx.Message)
+	config ConsumerConfig,
+) (<-chan Message, <-chan error) {
+	messages := make(chan Message)
 	errors := make(chan error)
 
 	go func() {
@@ -215,8 +214,8 @@ func (aa *AMQPAdapter) ensureConnection() error {
 func (aa *AMQPAdapter) consumeLoop(
 	ctx context.Context,
 	queueName string,
-	config connfx.ConsumerConfig,
-	messages chan<- connfx.Message,
+	config ConsumerConfig,
+	messages chan<- Message,
 	errors chan<- error,
 ) {
 	for {
@@ -242,8 +241,8 @@ func (aa *AMQPAdapter) consumeLoop(
 func (aa *AMQPAdapter) processMessages(
 	ctx context.Context,
 	queueName string,
-	config connfx.ConsumerConfig,
-	messages chan<- connfx.Message,
+	config ConsumerConfig,
+	messages chan<- Message,
 	errors chan<- error,
 ) error {
 	deliveries, err := aa.channel.Consume(
@@ -289,8 +288,8 @@ func (aa *AMQPAdapter) processMessages(
 }
 
 // createMessage creates a connfx.Message from an AMQP delivery.
-func (aa *AMQPAdapter) createMessage(delivery amqp.Delivery) connfx.Message {
-	msg := connfx.Message{
+func (aa *AMQPAdapter) createMessage(delivery amqp.Delivery) Message {
+	msg := Message{ //nolint:exhaustruct
 		Body:    delivery.Body,
 		Headers: delivery.Headers,
 	}
@@ -318,15 +317,10 @@ func NewAMQPConnectionFactory(protocol string) *AMQPConnectionFactory {
 	}
 }
 
-// NewAMQPFactory creates a new AMQP factory with default "amqp" protocol.
-func NewAMQPFactory() *AMQPConnectionFactory {
-	return NewAMQPConnectionFactory("amqp")
-}
-
 func (f *AMQPConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config *connfx.ConfigTarget,
-) (connfx.Connection, error) {
+	config *ConfigTarget,
+) (Connection, error) {
 	dsn := config.DSN
 	if dsn == "" {
 		// Build DSN from config components using net.JoinHostPort
@@ -344,10 +338,10 @@ func (f *AMQPConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *AMQPConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{
-		connfx.ConnectionBehaviorStateful,
-		connfx.ConnectionBehaviorStreaming,
-		connfx.ConnectionBehaviorQueue,
+func (f *AMQPConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{
+		ConnectionBehaviorStateful,
+		ConnectionBehaviorStreaming,
+		ConnectionBehaviorQueue,
 	}
 }

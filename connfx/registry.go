@@ -44,6 +44,27 @@ func NewRegistry(logger *logfx.Logger) *Registry {
 	}
 }
 
+func NewRegistryWithDefaults(logger *logfx.Logger) *Registry {
+	registry := NewRegistry(logger)
+
+	// adapter_sql.go
+	registry.RegisterFactory(NewSQLConnectionFactory("sqlite"))
+	registry.RegisterFactory(NewSQLConnectionFactory("postgres"))
+	registry.RegisterFactory(NewSQLConnectionFactory("mysql"))
+
+	// adapter_http.go
+	registry.RegisterFactory(NewHTTPConnectionFactory("http"))
+	registry.RegisterFactory(NewHTTPConnectionFactory("https"))
+
+	// adapter_redis.go
+	registry.RegisterFactory(NewRedisConnectionFactory("redis"))
+
+	// adapter_amqp.go
+	registry.RegisterFactory(NewAMQPConnectionFactory("amqp"))
+
+	return registry
+}
+
 // RegisterFactory registers a connection factory for a specific protocol.
 func (registry *Registry) RegisterFactory(factory ConnectionFactory) {
 	registry.mu.Lock()

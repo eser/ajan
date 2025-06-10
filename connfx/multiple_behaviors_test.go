@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/eser/ajan/connfx"
-	"github.com/eser/ajan/connfx/adapters"
 	"github.com/eser/ajan/logfx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,11 +30,11 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register Redis adapter (supports both stateful and streaming)
-		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
+		registry.RegisterFactory(connfx.NewRedisConnectionFactory("redis"))
 
 		// Register other adapters for comparison
-		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
-		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
+		registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
 		protocols := registry.ListRegisteredProtocols()
 		assert.Contains(t, protocols, "redis")
@@ -52,9 +51,9 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
-		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
-		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
+		registry.RegisterFactory(connfx.NewRedisConnectionFactory("redis"))
+		registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
 		// Add SQLite connection (stateful only)
 		sqlConfig := &connfx.ConfigTarget{ //nolint:exhaustruct
@@ -90,9 +89,9 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 		registry := connfx.NewRegistry(logger)
 
 		// Register adapters
-		registry.RegisterFactory(adapters.NewRedisConnectionFactory("redis"))
-		registry.RegisterFactory(adapters.NewSQLConnectionFactory("sqlite"))
-		registry.RegisterFactory(adapters.NewHTTPConnectionFactory("http"))
+		registry.RegisterFactory(connfx.NewRedisConnectionFactory("redis"))
+		registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
+		registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
 		// Create a Redis connection config (won't actually connect)
 		redisConfig := &connfx.ConfigTarget{ //nolint:exhaustruct

@@ -1,4 +1,4 @@
-package adapters
+package connfx
 
 import (
 	"bytes"
@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/eser/ajan/connfx"
 )
 
 const (
@@ -53,8 +51,8 @@ func NewHTTPConnectionFactory(protocol string) *HTTPConnectionFactory {
 
 func (f *HTTPConnectionFactory) CreateConnection(
 	ctx context.Context,
-	config *connfx.ConfigTarget,
-) (connfx.Connection, error) {
+	config *ConfigTarget,
+) (Connection, error) {
 	// Create HTTP client with configuration
 	client, headers, err := f.buildHTTPClient(config)
 	if err != nil {
@@ -69,13 +67,13 @@ func (f *HTTPConnectionFactory) CreateConnection(
 		client:     client,
 		baseURL:    baseURL,
 		headers:    headers,
-		state:      int32(connfx.ConnectionStateConnected),
+		state:      int32(ConnectionStateConnected),
 		lastHealth: time.Time{},
 	}
 
 	// Perform initial health check
 	status := conn.HealthCheck(ctx)
-	if status.State == connfx.ConnectionStateError {
+	if status.State == ConnectionStateError {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToHealthCheckHTTP, status.Error)
 	}
 
@@ -86,12 +84,12 @@ func (f *HTTPConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *HTTPConnectionFactory) GetSupportedBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateless}
+func (f *HTTPConnectionFactory) GetSupportedBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{ConnectionBehaviorStateless}
 }
 
 func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
-	config *connfx.ConfigTarget,
+	config *ConfigTarget,
 ) (*http.Client, map[string]string, error) {
 	// Configure transport
 	transport := &http.Transport{} //nolint:exhaustruct
@@ -145,33 +143,33 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 
 // Connection interface implementation
 
-func (c *HTTPConnection) GetBehaviors() []connfx.ConnectionBehavior {
-	return []connfx.ConnectionBehavior{connfx.ConnectionBehaviorStateless}
+func (c *HTTPConnection) GetBehaviors() []ConnectionBehavior {
+	return []ConnectionBehavior{ConnectionBehaviorStateless}
 }
 
 func (c *HTTPConnection) GetProtocol() string {
 	return c.protocol
 }
 
-func (c *HTTPConnection) GetState() connfx.ConnectionState {
+func (c *HTTPConnection) GetState() ConnectionState {
 	state := atomic.LoadInt32(&c.state)
 
-	return connfx.ConnectionState(state)
+	return ConnectionState(state)
 }
 
 func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 	ctx context.Context,
-) *connfx.HealthStatus {
+) *HealthStatus {
 	start := time.Now()
-	status := &connfx.HealthStatus{ //nolint:exhaustruct
+	status := &HealthStatus{ //nolint:exhaustruct
 		Timestamp: start,
 	}
 
 	// Create health check request (HEAD request to base URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL, nil)
 	if err != nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
 		status.Error = err
 		status.Message = fmt.Sprintf("Failed to create health check request: %v", err)
 		status.Latency = time.Since(start)
@@ -189,8 +187,8 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 	status.Latency = time.Since(start)
 
 	if err != nil {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
 		status.Error = err
 		status.Message = fmt.Sprintf("Health check failed: %v", err)
 
@@ -204,8 +202,8 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 	// Check response status using switch instead of if-else chain
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateConnected))
-		status.State = connfx.ConnectionStateConnected
+		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
+		status.State = ConnectionStateConnected
 		status.Message = fmt.Sprintf("Connected (status=%d)", resp.StatusCode)
 	case resp.StatusCode >= 400 && resp.StatusCode < 500:
 		// Try GET request if HEAD fails with 405
@@ -215,12 +213,12 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 			}
 		}
 
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
 		status.Message = fmt.Sprintf("Client error (status=%d)", resp.StatusCode)
 	default:
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateError))
-		status.State = connfx.ConnectionStateError
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
 		status.Message = fmt.Sprintf("Server error (status=%d)", resp.StatusCode)
 	}
 
@@ -230,7 +228,7 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 }
 
 func (c *HTTPConnection) Close(ctx context.Context) error {
-	atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateDisconnected))
+	atomic.StoreInt32(&c.state, int32(ConnectionStateDisconnected))
 	// HTTP clients don't need explicit closing, but we can close idle connections
 	if transport, ok := c.client.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
@@ -311,7 +309,7 @@ func (c *HTTPConnection) NewRequest(
 }
 
 // tryGetRequest attempts a GET request when HEAD fails with 405.
-func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *connfx.HealthStatus {
+func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *HealthStatus {
 	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
 	if err != nil {
 		return nil
@@ -331,12 +329,12 @@ func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *co
 	}()
 
 	if getResp.StatusCode >= 200 && getResp.StatusCode < 300 {
-		atomic.StoreInt32(&c.state, int32(connfx.ConnectionStateConnected))
+		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
 		c.lastHealth = start
 
-		return &connfx.HealthStatus{ //nolint:exhaustruct
+		return &HealthStatus{ //nolint:exhaustruct
 			Timestamp: start,
-			State:     connfx.ConnectionStateConnected,
+			State:     ConnectionStateConnected,
 			Message:   fmt.Sprintf("Connected (status=%d)", getResp.StatusCode),
 			Latency:   time.Since(start),
 		}

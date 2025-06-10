@@ -122,11 +122,7 @@ func main() {
 
     // Setup connection registry
     logger := logfx.NewLogger(os.Stdout, &logfx.Config{Level: logfx.LevelInfo})
-    registry := connfx.NewRegistry(logger)
-
-    // Register storage adapter (Redis example)
-    redisFactory := adapters.NewRedisFactory()
-    registry.RegisterFactory(redisFactory)
+    registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure connection
     config := &connfx.ConfigTarget{
@@ -334,11 +330,7 @@ func main() {
 
     // Setup connection registry
     logger := logfx.NewLogger(os.Stdout, &logfx.Config{Level: logfx.LevelInfo})
-    registry := connfx.NewRegistry(logger)
-
-    // Register AMQP adapter
-    amqpFactory := adapters.NewAMQPFactory()
-    registry.RegisterFactory(amqpFactory)
+    registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure AMQP connection
     config := &connfx.ConfigTarget{
@@ -550,7 +542,7 @@ func (kc *KafkaConnection) Consume(ctx context.Context, queueName string, config
 
 ### 3. Create Factory and Register
 ```go
-kafkaFactory := adapters.NewKafkaFactory()
+kafkaFactory := connfx.NewKafkaFactory()
 registry.RegisterFactory(kafkaFactory)
 
 // Now datafx works with Kafka!
