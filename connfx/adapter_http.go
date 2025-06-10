@@ -164,7 +164,7 @@ func (c *HTTPConnection) GetState() ConnectionState {
 	return ConnectionState(state)
 }
 
-func (c *HTTPConnection) HealthCheck( //nolint:cyclop
+func (c *HTTPConnection) HealthCheck(
 	ctx context.Context,
 ) *HealthStatus {
 	start := time.Now()
@@ -172,25 +172,8 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 		Timestamp: start,
 	}
 
-	// Create health check request (HEAD request to base URL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL, nil)
-	if err != nil {
-		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
-		status.State = ConnectionStateError
-		status.Error = err
-		status.Message = fmt.Sprintf("Failed to create health check request: %v", err)
-		status.Latency = time.Since(start)
-
-		return status
-	}
-
-	// Add default headers
-	for k, v := range c.headers {
-		req.Header.Set(k, v)
-	}
-
-	// Perform request
-	resp, err := c.client.Do(req)
+	// Create and perform health check request
+	resp, err := c.performHealthCheckRequest(ctx)
 	status.Latency = time.Since(start)
 
 	if err != nil {
@@ -206,29 +189,8 @@ func (c *HTTPConnection) HealthCheck( //nolint:cyclop
 		_ = resp.Body.Close() // Ignore close error for health check
 	}()
 
-	// Check response status using switch instead of if-else chain
-	switch {
-	case resp.StatusCode >= 200 && resp.StatusCode < 300:
-		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
-		status.State = ConnectionStateConnected
-		status.Message = fmt.Sprintf("Connected (status=%d)", resp.StatusCode)
-	case resp.StatusCode >= 400 && resp.StatusCode < 500:
-		// Try GET request if HEAD fails with 405
-		if resp.StatusCode == http.StatusMethodNotAllowed {
-			if getStatus := c.tryGetRequest(ctx, start); getStatus != nil {
-				return getStatus
-			}
-		}
-
-		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
-		status.State = ConnectionStateError
-		status.Message = fmt.Sprintf("Client error (status=%d)", resp.StatusCode)
-	default:
-		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
-		status.State = ConnectionStateError
-		status.Message = fmt.Sprintf("Server error (status=%d)", resp.StatusCode)
-	}
-
+	// Determine health state based on HTTP response status
+	c.determineHealthState(resp, status, ctx, start)
 	c.lastHealth = start
 
 	return status
@@ -315,19 +277,50 @@ func (c *HTTPConnection) NewRequest(
 	return req, nil
 }
 
+func (c *HTTPConnection) performHealthCheckRequest(ctx context.Context) (*http.Response, error) {
+	// Create health check request (HEAD request to base URL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create health check request: %w", err)
+	}
+
+	// Add default headers
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
+
+	// Perform request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform health check request: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (c *HTTPConnection) determineHealthState(
+	resp *http.Response,
+	status *HealthStatus,
+	ctx context.Context,
+	start time.Time,
+) {
+	// Try GET request if HEAD fails with 405 (Method Not Allowed)
+	if resp.StatusCode == http.StatusMethodNotAllowed {
+		if getStatus := c.tryGetRequest(ctx, start); getStatus != nil {
+			*status = *getStatus
+
+			return
+		}
+	}
+
+	// Use the common status setting logic
+	c.setStatusFromResponse(resp.StatusCode, status, "HEAD")
+}
+
 // tryGetRequest attempts a GET request when HEAD fails with 405.
 func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *HealthStatus {
-	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
-	if err != nil {
-		return nil
-	}
-
-	for k, v := range c.headers {
-		getReq.Header.Set(k, v)
-	}
-
-	getResp, err := c.client.Do(getReq)
-	if err != nil {
+	getResp, err := c.performGetRequest(ctx)
+	if err != nil || getResp == nil {
 		return nil
 	}
 
@@ -335,17 +328,82 @@ func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *He
 		_ = getResp.Body.Close() // Ignore close error for health check
 	}()
 
-	if getResp.StatusCode >= 200 && getResp.StatusCode < 300 {
-		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
-		c.lastHealth = start
-
-		return &HealthStatus{ //nolint:exhaustruct
-			Timestamp: start,
-			State:     ConnectionStateConnected,
-			Message:   fmt.Sprintf("Connected (status=%d)", getResp.StatusCode),
-			Latency:   time.Since(start),
-		}
+	// Apply same logic as main health check for GET response
+	status := &HealthStatus{ //nolint:exhaustruct
+		Timestamp: start,
+		Latency:   time.Since(start),
 	}
 
-	return nil
+	c.setStatusFromResponse(getResp.StatusCode, status, "GET fallback")
+	c.lastHealth = start
+
+	return status
+}
+
+func (c *HTTPConnection) performGetRequest(ctx context.Context) (*http.Response, error) {
+	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GET request: %w", err)
+	}
+
+	for k, v := range c.headers {
+		getReq.Header.Set(k, v)
+	}
+
+	resp, err := c.client.Do(getReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform GET request: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (c *HTTPConnection) setStatusFromResponse(
+	statusCode int,
+	status *HealthStatus,
+	context string,
+) {
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		// 2xx responses indicate service is ready
+		atomic.StoreInt32(&c.state, int32(ConnectionStateReady))
+		status.State = ConnectionStateReady
+		status.Message = fmt.Sprintf(
+			"HTTP service is live and ready (%s, status=%d)",
+			context,
+			statusCode,
+		)
+	case statusCode == http.StatusTooManyRequests:
+		// 429 means service is live but not ready (overloaded)
+		atomic.StoreInt32(&c.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Message = fmt.Sprintf(
+			"HTTP service is live but overloaded (%s, status=%d)",
+			context,
+			statusCode,
+		)
+	case statusCode == http.StatusServiceUnavailable:
+		// 503 means service is connected but not live
+		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
+		status.State = ConnectionStateConnected
+		status.Message = fmt.Sprintf(
+			"HTTP service connected but unavailable (%s, status=%d)",
+			context,
+			statusCode,
+		)
+	case statusCode >= 400 && statusCode < 500:
+		// 4xx errors indicate connected but configuration issues
+		atomic.StoreInt32(&c.state, int32(ConnectionStateConnected))
+		status.State = ConnectionStateConnected
+		status.Message = fmt.Sprintf(
+			"HTTP service connected with client error (%s, status=%d)",
+			context,
+			statusCode,
+		)
+	default:
+		// 5xx and other errors indicate service error
+		atomic.StoreInt32(&c.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
+		status.Message = fmt.Sprintf("HTTP service error (%s, status=%d)", context, statusCode)
+	}
 }

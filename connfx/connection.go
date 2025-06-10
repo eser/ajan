@@ -39,9 +39,11 @@ type ConnectionState int32
 const (
 	ConnectionStateNotInitialized ConnectionState = 0
 	ConnectionStateConnected      ConnectionState = 1
-	ConnectionStateDisconnected   ConnectionState = 2
-	ConnectionStateError          ConnectionState = 3
-	ConnectionStateReconnecting   ConnectionState = 4
+	ConnectionStateLive           ConnectionState = 2
+	ConnectionStateReady          ConnectionState = 3
+	ConnectionStateDisconnected   ConnectionState = 4
+	ConnectionStateError          ConnectionState = 5
+	ConnectionStateReconnecting   ConnectionState = 6
 )
 
 // HealthStatus represents the health check result.

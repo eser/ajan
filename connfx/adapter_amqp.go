@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -23,6 +24,7 @@ var (
 	ErrChannelClosed            = errors.New("channel closed")
 	ErrFailedToReconnect        = errors.New("failed to reconnect")
 	ErrDeliveryChannelClosed    = errors.New("delivery channel closed")
+	ErrNoChannelAvailable       = errors.New("no channel available")
 )
 
 // AMQPAdapter implements the QueueRepository interface for AMQP-based message queues.
@@ -36,7 +38,7 @@ type AMQPAdapter struct {
 type AMQPConnection struct {
 	adapter  *AMQPAdapter
 	protocol string
-	state    ConnectionState
+	state    int32 // atomic field for connection state
 }
 
 // NewAMQPConnection creates a new AMQP connection.
@@ -50,7 +52,7 @@ func NewAMQPConnection(protocol, dsn string) *AMQPConnection {
 	return &AMQPConnection{
 		adapter:  adapter,
 		protocol: protocol,
-		state:    ConnectionStateConnected,
+		state:    int32(ConnectionStateNotInitialized),
 	}
 }
 
@@ -73,7 +75,7 @@ func (ac *AMQPConnection) GetProtocol() string {
 }
 
 func (ac *AMQPConnection) GetState() ConnectionState {
-	return ac.state
+	return ConnectionState(atomic.LoadInt32(&ac.state))
 }
 
 func (ac *AMQPConnection) HealthCheck(ctx context.Context) *HealthStatus {
@@ -81,26 +83,34 @@ func (ac *AMQPConnection) HealthCheck(ctx context.Context) *HealthStatus {
 
 	status := &HealthStatus{
 		Timestamp: start,
-		State:     ac.state,
+		State:     ac.GetState(),
 		Error:     nil,
 		Message:   "",
 		Latency:   0,
 	}
 
-	if ac.adapter.connection != nil && !ac.adapter.connection.IsClosed() {
-		status.Message = "AMQP connection healthy"
-	} else {
-		status.Error = ErrAMQPClientNotInitialized
-		status.Message = "AMQP connection not initialized or closed"
-		status.State = ConnectionStateError
+	// Check connection status
+	if connErr := ac.validateConnection(status, start); connErr != nil {
+		return status
 	}
 
+	// Test channel operations
+	if channelErr := ac.testChannelOperations(status, start); channelErr != nil {
+		return status
+	}
+
+	// Connection is ready
+	atomic.StoreInt32(&ac.state, int32(ConnectionStateReady))
+	status.State = ConnectionStateReady
+	status.Message = "AMQP connection is live and ready"
 	status.Latency = time.Since(start)
 
 	return status
 }
 
 func (ac *AMQPConnection) Close(ctx context.Context) error {
+	atomic.StoreInt32(&ac.state, int32(ConnectionStateDisconnected))
+
 	if ac.adapter.channel != nil {
 		if err := ac.adapter.channel.Close(); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailedToCloseChannel, err)
@@ -118,6 +128,76 @@ func (ac *AMQPConnection) Close(ctx context.Context) error {
 
 func (ac *AMQPConnection) GetRawConnection() any {
 	return ac.adapter
+}
+
+func (ac *AMQPConnection) validateConnection(status *HealthStatus, start time.Time) error {
+	// Check if connection exists and is not closed
+	if ac.adapter.connection == nil {
+		atomic.StoreInt32(&ac.state, int32(ConnectionStateNotInitialized))
+		status.State = ConnectionStateNotInitialized
+		status.Error = ErrAMQPClientNotInitialized
+		status.Message = "AMQP connection not initialized"
+		status.Latency = time.Since(start)
+
+		return ErrAMQPClientNotInitialized
+	}
+
+	if ac.adapter.connection.IsClosed() {
+		atomic.StoreInt32(&ac.state, int32(ConnectionStateDisconnected))
+		status.State = ConnectionStateDisconnected
+		status.Error = ErrFailedToOpenConnection
+		status.Message = "AMQP connection is closed"
+		status.Latency = time.Since(start)
+
+		return ErrFailedToOpenConnection
+	}
+
+	// Connection exists and is open - check if we have a working channel
+	if ac.adapter.channel == nil {
+		// Connection exists but no channel - connected but not live
+		atomic.StoreInt32(&ac.state, int32(ConnectionStateConnected))
+		status.State = ConnectionStateConnected
+		status.Message = "AMQP connection established but no channel available"
+		status.Latency = time.Since(start)
+
+		return ErrNoChannelAvailable
+	}
+
+	return nil
+}
+
+func (ac *AMQPConnection) testChannelOperations(status *HealthStatus, start time.Time) error {
+	// Try to perform a basic operation to test channel liveness
+	// We'll try to declare a temporary queue to verify we can perform operations
+	tempQueueName := fmt.Sprintf("__connfx_health_check_%d__", start.UnixNano())
+	_, err := ac.adapter.channel.QueueDeclare(
+		tempQueueName, // queue name
+		false,         // durable
+		true,          // delete when unused
+		true,          // exclusive
+		false,         // no-wait
+		nil,           // arguments
+	)
+
+	status.Latency = time.Since(start)
+
+	if err != nil {
+		// Channel exists but operations fail - live but not ready
+		atomic.StoreInt32(&ac.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Error = err
+		status.Message = fmt.Sprintf(
+			"AMQP connection is live but channel operations failing: %v",
+			err,
+		)
+
+		return fmt.Errorf("%w: %w", ErrFailedToDeclareQueue, err)
+	}
+
+	// Clean up the temporary queue (best effort)
+	_, _ = ac.adapter.channel.QueueDelete(tempQueueName, false, false, false)
+
+	return nil
 }
 
 // QueueRepository interface implementation.

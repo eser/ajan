@@ -10,14 +10,16 @@ func _() {
 	var x [1]struct{}
 	_ = x[ConnectionStateNotInitialized-0]
 	_ = x[ConnectionStateConnected-1]
-	_ = x[ConnectionStateDisconnected-2]
-	_ = x[ConnectionStateError-3]
-	_ = x[ConnectionStateReconnecting-4]
+	_ = x[ConnectionStateLive-2]
+	_ = x[ConnectionStateReady-3]
+	_ = x[ConnectionStateDisconnected-4]
+	_ = x[ConnectionStateError-5]
+	_ = x[ConnectionStateReconnecting-6]
 }
 
-const _ConnectionState_name = "NotInitializedConnectedDisconnectedErrorReconnecting"
+const _ConnectionState_name = "NotInitializedConnectedLiveReadyDisconnectedErrorReconnecting"
 
-var _ConnectionState_index = [...]uint8{0, 14, 23, 35, 40, 52}
+var _ConnectionState_index = [...]uint8{0, 14, 23, 27, 32, 44, 49, 61}
 
 func (i ConnectionState) String() string {
 	if i < 0 || i >= ConnectionState(len(_ConnectionState_index)-1) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,9 +38,10 @@ type RedisClient interface {
 
 // RedisConnection implements the connfx.Connection interface.
 type RedisConnection struct {
-	adapter  *RedisAdapter
-	protocol string
-	state    ConnectionState
+	adapter       *RedisAdapter
+	protocol      string
+	state         int32 // atomic field for connection state
+	isInitialized bool
 }
 
 // NewRedisConnection creates a new Redis connection.
@@ -52,11 +54,14 @@ func NewRedisConnection(protocol, host string, port int, password string, db int
 		client:   nil, // Will be initialized with real Redis client
 	}
 
-	return &RedisConnection{
-		adapter:  adapter,
-		protocol: protocol,
-		state:    ConnectionStateConnected,
+	conn := &RedisConnection{
+		adapter:       adapter,
+		protocol:      protocol,
+		state:         int32(ConnectionStateConnected),
+		isInitialized: false,
 	}
+
+	return conn
 }
 
 // Connection interface implementation.
@@ -79,7 +84,7 @@ func (rc *RedisConnection) GetProtocol() string {
 }
 
 func (rc *RedisConnection) GetState() ConnectionState {
-	return rc.state
+	return ConnectionState(rc.state)
 }
 
 func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
@@ -87,33 +92,66 @@ func (rc *RedisConnection) HealthCheck(ctx context.Context) *HealthStatus {
 
 	status := &HealthStatus{
 		Timestamp: start,
-		State:     rc.state,
+		State:     rc.GetState(),
 		Error:     nil,
 		Message:   "",
 		Latency:   0,
 	}
 
-	if rc.adapter.client != nil {
-		err := rc.adapter.client.Ping(ctx)
-		if err != nil {
-			status.Error = err
-			status.Message = "Redis ping failed"
-			status.State = ConnectionStateError
-		} else {
-			status.Message = "Redis connection healthy"
-		}
-	} else {
+	// Check if client is initialized
+	if rc.adapter.client == nil {
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateNotInitialized))
+		status.State = ConnectionStateNotInitialized
 		status.Error = ErrRedisClientNotInitialized
 		status.Message = "Redis client not initialized"
-		status.State = ConnectionStateError
+		status.Latency = time.Since(start)
+
+		return status
 	}
 
+	// Try to ping Redis to check liveness
+	err := rc.adapter.client.Ping(ctx)
 	status.Latency = time.Since(start)
+
+	if err != nil {
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateError))
+		status.State = ConnectionStateError
+		status.Error = err
+		status.Message = fmt.Sprintf("Redis ping failed: %v", err)
+
+		return status
+	}
+
+	// Redis ping successful - determine readiness state
+	// For Redis, we can consider it ready if:
+	// 1. Ping is successful (liveness check)
+	// 2. We can perform a basic operation to verify readiness
+
+	// Try a simple EXISTS operation to verify readiness
+	testKey := "__connfx_health_check__"
+	_, existsErr := rc.adapter.client.Exists(ctx, testKey)
+
+	if existsErr != nil {
+		// Can ping but cannot perform operations - live but not ready
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateLive))
+		status.State = ConnectionStateLive
+		status.Message = "Redis connection is live but not ready for operations"
+		status.Error = existsErr
+	} else {
+		// Can ping and perform operations - fully ready
+		atomic.StoreInt32(&rc.state, int32(ConnectionStateReady))
+		status.State = ConnectionStateReady
+		status.Message = "Redis connection is live and ready for operations"
+		rc.isInitialized = true
+	}
 
 	return status
 }
 
 func (rc *RedisConnection) Close(ctx context.Context) error {
+	atomic.StoreInt32(&rc.state, int32(ConnectionStateDisconnected))
+	rc.isInitialized = false
+
 	if rc.adapter.client != nil {
 		if err := rc.adapter.client.Close(); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailedToCloseRedisClient, err)

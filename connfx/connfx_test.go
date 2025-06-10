@@ -48,11 +48,11 @@ func TestRegistry_SQLiteConnection(t *testing.T) {
 	assert.Contains(t, conn.GetBehaviors(), connfx.ConnectionBehaviorStateful)
 	assert.Contains(t, conn.GetCapabilities(), connfx.ConnectionCapabilityRelational)
 	assert.Equal(t, "sqlite", conn.GetProtocol())
-	assert.Equal(t, connfx.ConnectionStateConnected, conn.GetState())
+	assert.Equal(t, connfx.ConnectionStateReady, conn.GetState())
 
 	// Test health check
 	status := conn.HealthCheck(ctx)
-	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
+	assert.Equal(t, connfx.ConnectionStateReady, status.State)
 	assert.NotZero(t, status.Timestamp)
 
 	// Test type-safe connection extraction (should be *sql.DB)
@@ -155,11 +155,11 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	statuses := registry.HealthCheck(ctx)
 	assert.Len(t, statuses, 1)
 	assert.Contains(t, statuses, "sql_test")
-	assert.Equal(t, connfx.ConnectionStateConnected, statuses["sql_test"].State)
+	assert.Equal(t, connfx.ConnectionStateReady, statuses["sql_test"].State)
 
 	// Test health check solely for the connection we added
 	status := conn.HealthCheck(ctx)
-	assert.Equal(t, connfx.ConnectionStateConnected, status.State)
+	assert.Equal(t, connfx.ConnectionStateReady, status.State)
 
 	// Test health check for non-existent connection
 	conn = registry.GetNamed("nonexistent")
@@ -239,6 +239,8 @@ func TestConnectionStates(t *testing.T) {
 	states := []connfx.ConnectionState{
 		connfx.ConnectionStateNotInitialized,
 		connfx.ConnectionStateConnected,
+		connfx.ConnectionStateLive,
+		connfx.ConnectionStateReady,
 		connfx.ConnectionStateDisconnected,
 		connfx.ConnectionStateError,
 		connfx.ConnectionStateReconnecting,
