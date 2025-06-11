@@ -45,7 +45,7 @@ package main
 import (
     "context"
     "log"
-    
+
     "github.com/eser/ajan/tracesfx"
 )
 
@@ -58,19 +58,19 @@ func main() {
         OTLPInsecure:   true,
         SampleRatio:    1.0, // Sample 100% for development
     })
-    
+
     if err := provider.Init(); err != nil {
         log.Fatal(err)
     }
     defer provider.Shutdown(context.Background())
-    
+
     // Get a tracer
     tracer := provider.Tracer("my-component")
-    
+
     // Create spans
     ctx, span := tracer.Start(context.Background(), "do-work")
     defer span.End()
-    
+
     // Your business logic here
     doWork(ctx)
 }
@@ -97,21 +97,21 @@ func setupObservability() {
         OTLPEndpoint: "http://localhost:4318",
     })
     tracesProvider.Init()
-    
+
     // Setup logging
     logger := logfx.NewLogger(os.Stdout, &logfx.Config{
         Level:        "INFO",
         OTLPEndpoint: "http://localhost:4318", // Same endpoint
     })
-    
+
     // Use together - trace IDs automatically appear in logs
     tracer := tracesProvider.Tracer("my-service")
     ctx, span := tracer.Start(context.Background(), "user-request")
-    
+
     // This log will include trace_id and span_id
-    logger.InfoContext(ctx, "Processing user request", 
+    logger.InfoContext(ctx, "Processing user request",
         slog.String("user_id", "12345"))
-    
+
     span.End()
 }
 ```
@@ -125,15 +125,15 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
     if correlationID == "" {
         correlationID = generateCorrelationID()
     }
-    
+
     // Add to context
     ctx := tracesfx.SetCorrelationIDInContext(r.Context(), correlationID)
-    
+
     // Start span with automatic correlation
     tracer := getTracer()
     ctx, span := tracer.StartSpanWithCorrelation(ctx, "handle-request")
     defer span.End()
-    
+
     // Both traces and logs will include correlation_id
     processRequest(ctx)
 }
@@ -148,14 +148,14 @@ type Config struct {
     // Service identification
     ServiceName    string        `conf:"service_name"`
     ServiceVersion string        `conf:"service_version"`
-    
+
     // OpenTelemetry Collector
     OTLPEndpoint   string        `conf:"otlp_endpoint"`     // e.g. "http://localhost:4318"
     OTLPInsecure   bool          `conf:"otlp_insecure"`     // default: true
-    
+
     // Sampling
     SampleRatio    float64       `conf:"sample_ratio"`      // 0.0 to 1.0, default: 1.0
-    
+
     // Batching
     BatchTimeout   time.Duration `conf:"batch_timeout"`     // default: 5s
     BatchSize      int           `conf:"batch_size"`        // default: 512
@@ -195,7 +195,7 @@ type ObservabilityStack struct {
 func NewObservabilityStack(config *Config) *ObservabilityStack {
     // Shared OTLP endpoint for all signals
     otlpEndpoint := config.OTLPEndpoint
-    
+
     return &ObservabilityStack{
         Traces: tracesfx.NewTracesProvider(&tracesfx.Config{
             ServiceName:  config.ServiceName,
@@ -232,14 +232,14 @@ func TracingMiddleware(tracer *tracesfx.Tracer) func(http.Handler) http.Handler 
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             ctx, span := tracer.Start(r.Context(), fmt.Sprintf("%s %s", r.Method, r.URL.Path))
             defer span.End()
-            
+
             // Add HTTP attributes
             span.SetAttributes(
                 attribute.String("http.method", r.Method),
                 attribute.String("http.url", r.URL.String()),
                 attribute.String("http.user_agent", r.UserAgent()),
             )
-            
+
             // Continue with tracing context
             next.ServeHTTP(w, r.WithContext(ctx))
         })
@@ -280,7 +280,7 @@ span.SetAttributes(
 
 // Add events
 span.AddEvent("cache-miss")
-span.AddEvent("retry-attempt", 
+span.AddEvent("retry-attempt",
     attribute.Int("attempt", 2))
 
 // Record errors
@@ -302,7 +302,7 @@ func parentOperation(ctx context.Context) {
     tracer := getTracer()
     ctx, span := tracer.Start(ctx, "parent")
     defer span.End()
-    
+
     // Child operations automatically inherit trace context
     childOperation(ctx)  // Will be a child span
 }
@@ -311,7 +311,7 @@ func childOperation(ctx context.Context) {
     tracer := getTracer()
     ctx, span := tracer.Start(ctx, "child")
     defer span.End()
-    
+
     // This span will be a child of "parent"
 }
 ```
@@ -321,7 +321,7 @@ func childOperation(ctx context.Context) {
 ```go
 func makeHTTPRequest(ctx context.Context, url string) {
     req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
-    
+
     // OpenTelemetry automatically injects trace headers
     client := &http.Client{}
     resp, err := client.Do(req)
@@ -367,14 +367,14 @@ span.SetAttributes(
 func operationWithTracing(ctx context.Context) error {
     ctx, span := tracer.Start(ctx, "risky-operation")
     defer span.End()
-    
+
     result, err := riskyOperation()
     if err != nil {
         span.RecordError(err)
         span.SetStatus(codes.Error, "operation failed")
         return err
     }
-    
+
     span.SetStatus(codes.Ok, "success")
     span.SetAttributes(attribute.String("result", result))
     return nil
@@ -425,12 +425,12 @@ func instrumentedFunction(ctx context.Context) {
     tracer := otel.Tracer("my-component")
     ctx, span := tracer.Start(ctx, "custom-operation")
     defer span.End()
-    
+
     // Add custom logic
     span.AddEvent("starting-phase-1")
     phase1(ctx)
-    
-    span.AddEvent("starting-phase-2") 
+
+    span.AddEvent("starting-phase-2")
     phase2(ctx)
 }
 ```
@@ -481,9 +481,9 @@ func main() {
     })
     provider.Init()
     defer provider.Shutdown(context.Background())
-    
+
     tracer := provider.Tracer("http-server")
-    
+
     http.HandleFunc("/users", TracingMiddleware(tracer)(UsersHandler))
     http.ListenAndServe(":8080", nil)
 }
@@ -497,7 +497,7 @@ import "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelg
 func setupGRPCServer() {
     provider := tracesfx.NewTracesProvider(config)
     provider.Init()
-    
+
     server := grpc.NewServer(
         grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
         grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
@@ -513,4 +513,4 @@ func setupGRPCServer() {
 
 ---
 
-**tracesfx** provides the distributed tracing foundation for your observability stack, seamlessly integrating with logs and metrics to give you complete visibility into your application's behavior. 
+**tracesfx** provides the distributed tracing foundation for your observability stack, seamlessly integrating with logs and metrics to give you complete visibility into your application's behavior.

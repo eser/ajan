@@ -4,7 +4,7 @@
 
 **logfx** package is a configurable logging solution that leverages the
 `log/slog` of the standard library for structured logging. It includes
-pretty-printing options and **OpenTelemetry collector integration** as the 
+pretty-printing options and **OpenTelemetry collector integration** as the
 preferred export method, with optional direct Loki export for legacy setups.
 The package supports OpenTelemetry-compatible severity levels and provides
 extensive test coverage to ensure reliability and correctness.
@@ -27,17 +27,17 @@ extensive test coverage to ensure reliability and correctness.
 ```go
 // Standard Go slog levels (limited)
 slog.LevelDebug  // -4
-slog.LevelInfo   //  0  
+slog.LevelInfo   //  0
 slog.LevelWarn   //  4
 slog.LevelError  //  8
 
 // logfx extended levels (OpenTelemetry compatible)
 logfx.LevelTrace // -8  ← Additional
-logfx.LevelDebug // -4  
+logfx.LevelDebug // -4
 logfx.LevelInfo  //  0
 logfx.LevelWarn  //  4
 logfx.LevelError //  8
-logfx.LevelFatal // 12  ← Additional  
+logfx.LevelFatal // 12  ← Additional
 logfx.LevelPanic // 16  ← Additional
 ```
 
@@ -60,7 +60,7 @@ logger := logfx.NewLogger(os.Stdout, &logfx.Config{
 
 // Use all OpenTelemetry-compatible levels
 logger.Trace("Detailed debugging info")           // Most verbose
-logger.Debug("Debug information")                 // Development debugging  
+logger.Debug("Debug information")                 // Development debugging
 logger.Info("General information")                // Standard info
 logger.Warn("Warning message")                    // Potential issues
 logger.Error("Error occurred")                    // Errors that don't stop execution
@@ -71,7 +71,7 @@ logger.Panic("Panic condition")                   // Most severe
 **Colored Output** (development mode):
 ```bash
 23:45:12.123 TRACE Detailed debugging info
-23:45:12.124 DEBUG Debug information  
+23:45:12.124 DEBUG Debug information
 23:45:12.125 INFO General information
 23:45:12.126 WARN Warning message
 23:45:12.127 ERROR Error occurred
@@ -115,7 +115,7 @@ package main
 import (
     "log/slog"
     "os"
-    
+
     "github.com/eser/ajan/logfx"
 )
 
@@ -133,7 +133,7 @@ func main() {
         slog.String("service", "my-service"),
         slog.String("version", "1.0.0"),
     )
-    
+
     // Extended levels for better observability
     logger.Trace("Connection pool initialized")     // Very detailed
     logger.Debug("Processing user request")         // Debug info
@@ -165,7 +165,7 @@ func main() {
     })
 
     router := httpfx.NewRouter("/api")
-    
+
     // Add correlation middleware for automatic request tracking
     router.Use(middlewares.CorrelationIDMiddleware())
     router.Use(middlewares.LoggingMiddleware(logger))
@@ -176,7 +176,7 @@ func main() {
         logger.InfoContext(ctx.Request.Context(), "Processing user request",
             slog.String("user_id", "123"),
         )
-        
+
         return ctx.Results.JSON(map[string]string{"status": "success"})
     })
 
@@ -215,7 +215,7 @@ type Config struct {
 The package automatically chooses the best export method:
 
 1. **🥇 OTLP Collector** (`OTLPEndpoint`) - Preferred for production
-2. **🥈 Direct Loki** (`LokiURI`) - Legacy/fallback option  
+2. **🥈 Direct Loki** (`LokiURI`) - Legacy/fallback option
 3. **Both can run simultaneously** if needed
 
 ## OpenTelemetry Collector Integration
@@ -235,7 +235,7 @@ logger := logfx.NewLogger(os.Stdout, config)
 ### Benefits of OpenTelemetry Collector
 
 - **🔄 Unified Pipeline** - All logs, metrics, and traces flow through one point
-- **🎛️ Flexibility** - Change backends without code changes  
+- **🎛️ Flexibility** - Change backends without code changes
 - **⚡ Performance** - Built-in batching, retries, and buffering
 - **💰 Cost Optimization** - Sampling and filtering before export
 - **🔧 Processing** - Transform, enrich, and route data
@@ -268,7 +268,7 @@ service:
 When using with `httpfx`, correlation IDs are automatically:
 
 - ✅ **Extracted** from `X-Correlation-ID` headers
-- ✅ **Generated** if missing  
+- ✅ **Generated** if missing
 - ✅ **Propagated** through Go context
 - ✅ **Added** to all log entries
 - ✅ **Included** in response headers
@@ -280,10 +280,10 @@ import "github.com/eser/ajan/httpfx/middlewares"
 
 func MyHandler(ctx *httpfx.Context) httpfx.Result {
     correlationID := middlewares.GetCorrelationIDFromContext(ctx.Request.Context())
-    
+
     // Use in external service calls
     externalReq.Header.Set("X-Correlation-ID", correlationID)
-    
+
     return ctx.Results.JSON(map[string]string{
         "correlation_id": correlationID,
     })
@@ -320,7 +320,7 @@ prodConfig := &logfx.Config{
     OTLPEndpoint: "http://otel-collector:4318",
 }
 
-// Debug production issues - temporary verbose logging  
+// Debug production issues - temporary verbose logging
 debugConfig := &logfx.Config{
     Level:        "DEBUG",  // More detail for troubleshooting
     PrettyMode:   false,
@@ -370,7 +370,7 @@ Use with other `ajan` packages for full observability:
 ```go
 import (
     "github.com/eser/ajan/logfx"     // Extended logs
-    "github.com/eser/ajan/metricsfx" // Metrics  
+    "github.com/eser/ajan/metricsfx" // Metrics
     // "github.com/eser/ajan/tracesfx"  // Traces
 )
 
@@ -391,7 +391,7 @@ When OpenTelemetry tracing is active, logs automatically include:
   "msg": "Processing request",
   "correlation_id": "abc-123-def",  // HTTP correlation ID
   "trace_id": "4bf92f3577b34da6",   // OpenTelemetry trace ID
-  "span_id": "00f067aa0ba902b7"     // OpenTelemetry span ID  
+  "span_id": "00f067aa0bb902b7"     // OpenTelemetry span ID
 }
 ```
 
@@ -419,7 +419,7 @@ The documentation below provides an overview of the package, its types,
 functions, and usage examples. For more detailed information, refer to the
 source code and tests.
 
-## Ideal Architecture 
+## Ideal Architecture
 
 **🎯 Recommended Setup**: Use OpenTelemetry Collector as the central hub for all observability data.
 

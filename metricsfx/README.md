@@ -22,13 +22,13 @@ package main
 import (
     "context"
     "time"
-    
+
     "github.com/eser/ajan/metricsfx"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     // Configure for OpenTelemetry collector (recommended)
     config := &metricsfx.Config{
         ServiceName:    "my-service",
@@ -37,17 +37,17 @@ func main() {
         OTLPInsecure:   true,
         ExportInterval: 30 * time.Second,
     }
-    
+
     // Create provider with collector integration
     provider := metricsfx.NewMetricsProvider(config)
     if err := provider.Init(); err != nil {
         panic(err)
     }
     defer provider.Shutdown(ctx)
-    
+
     // Create metrics using the builder
     builder := provider.NewBuilder()
-    
+
     requestCounter, err := builder.Counter(
         "requests_total",
         "Total number of requests",
@@ -55,7 +55,7 @@ func main() {
     if err != nil {
         panic(err)
     }
-    
+
     // Use metrics in your application
     requestCounter.Inc(ctx, metricsfx.StringAttr("endpoint", "/api/users"))
 }
@@ -70,7 +70,7 @@ import (
     "context"
     "net/http"
     "time"
-    
+
     "github.com/eser/ajan/httpfx"
     "github.com/eser/ajan/httpfx/middlewares"
     "github.com/eser/ajan/metricsfx"
@@ -78,35 +78,35 @@ import (
 
 func main() {
     ctx := context.Background()
-    
+
     // Setup metrics with OpenTelemetry collector
     provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
         ServiceName:    "api-service",
-        ServiceVersion: "1.0.0", 
+        ServiceVersion: "1.0.0",
         OTLPEndpoint:   "http://otel-collector:4318",
         ExportInterval: 15 * time.Second,
     })
     _ = provider.Init()
     defer provider.Shutdown(ctx)
-    
+
     // Create HTTP metrics
     httpMetrics, _ := metricsfx.NewHTTPMetrics(provider, "api-service", "1.0.0")
-    
+
     // Setup HTTP router with observability middleware
     router := httpfx.NewRouter("/api")
     router.Use(middlewares.CorrelationIDMiddleware())        // Request correlation
     router.Use(middlewares.MetricsMiddleware(httpMetrics))   // Automatic metrics
-    
+
     router.Route("GET /users/{id}", func(ctx *httpfx.Context) httpfx.Result {
         // Custom business metrics
         httpMetrics.RequestsTotal.Inc(ctx.Request.Context(),
             metricsfx.StringAttr("operation", "get_user"),
             metricsfx.StringAttr("user_type", "premium"),
         )
-        
+
         return ctx.Results.JSON(map[string]string{"status": "success"})
     })
-    
+
     http.ListenAndServe(":8080", router.GetMux())
 }
 ```
@@ -177,7 +177,7 @@ config := &metricsfx.Config{
     ExportInterval: 30 * time.Second,
 }
 
-// Development setup  
+// Development setup
 devConfig := &metricsfx.Config{
     ServiceName:    "my-service",
     ServiceVersion: "dev",
@@ -203,7 +203,7 @@ processors:
   batch:
     timeout: 10s
     send_batch_size: 1024
-  
+
   resource:
     attributes:
       - key: environment
@@ -213,7 +213,7 @@ processors:
 exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
-  
+
   # Add other exporters as needed
   datadog:
     api:
@@ -244,12 +244,12 @@ requestCounter, err := builder.Counter(
 
 // Counter with unit
 bytesCounter, err := builder.Counter(
-    "bytes_processed_total", 
+    "bytes_processed_total",
     "Total bytes processed",
 ).WithUnit("byte").Build()
 
 // Usage
-requestCounter.Inc(ctx, 
+requestCounter.Inc(ctx,
     metricsfx.StringAttr("method", "GET"),
     metricsfx.StringAttr("status", "200"),
 )
@@ -271,7 +271,7 @@ responseSizeHist, err := builder.Histogram(
 ).WithBuckets([]float64{100, 1024, 10240, 102400}).Build()
 
 // Usage
-requestDuration.RecordDuration(ctx, duration, 
+requestDuration.RecordDuration(ctx, duration,
     metricsfx.StringAttr("endpoint", "/api/users"),
 )
 ```
@@ -282,7 +282,7 @@ requestDuration.RecordDuration(ctx, duration,
 // Current active connections
 activeConnections, err := builder.Gauge(
     "active_connections",
-    "Number of active connections", 
+    "Number of active connections",
 ).Build()
 
 // Memory usage
@@ -326,16 +326,16 @@ router.Route("POST /users", func(ctx *httpfx.Context) httpfx.Result {
         metricsfx.StringAttr("user_type", "premium"),
         metricsfx.StringAttr("plan", "enterprise"),
     )
-    
+
     // Track custom durations
     start := time.Now()
     // ... business logic ...
     businessDuration := time.Since(start)
-    
+
     businessTimer.RecordDuration(ctx.Request.Context(), businessDuration,
         metricsfx.StringAttr("operation", "user_creation"),
     )
-    
+
     return ctx.Results.JSON(response)
 })
 ```
@@ -359,7 +359,7 @@ config := &metricsfx.Config{
 // Metrics automatically include resource information
 config := &metricsfx.Config{
     ServiceName:    "user-service",      // service.name
-    ServiceVersion: "2.1.0",             // service.version  
+    ServiceVersion: "2.1.0",             // service.version
     OTLPEndpoint:   "http://collector:4318",
 }
 
@@ -374,11 +374,11 @@ When used with the complete `ajan` observability stack:
 // All using the same collector endpoint
 observabilityConfig := struct {
     ServiceName  string
-    ServiceVersion string  
+    ServiceVersion string
     OTLPEndpoint string
 }{
     ServiceName:    "my-service",
-    ServiceVersion: "1.0.0", 
+    ServiceVersion: "1.0.0",
     OTLPEndpoint:   "http://otel-collector:4318",
 }
 
@@ -430,7 +430,7 @@ config := &metricsfx.Config{
 
 ### After (OpenTelemetry Collector)
 ```go
-// New approach - unified pipeline  
+// New approach - unified pipeline
 config := &metricsfx.Config{
     ServiceName:    "my-service",
     ServiceVersion: "1.0.0",
