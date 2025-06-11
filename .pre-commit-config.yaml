@@ -79,6 +79,7 @@ repos:
             processfx/README.md|
             queuefx/README.md|
             results/README.md|
+            tracesfx/README.md|
             types/README.md|
             sampleapp/README.md|
             sampleapp/Dockerfile

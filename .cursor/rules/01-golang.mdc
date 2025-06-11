@@ -195,7 +195,7 @@ func TestGetConnection_Errors(t *testing.T) {
 - Use **otel.Tracer** for creating spans and **otel.Meter** for collecting metrics.
 - Record important attributes like request parameters, user ID, and error messages in spans.
 - Use **log correlation** by injecting trace IDs into structured logs.
-- Export data to **OpenTelemetry Collector**, **Jaeger**, or **Prometheus**.
+- Export data to **OpenTelemetry Collector**, **Tempo**, or **Prometheus**.
 
 ### Tracing and Monitoring Best Practices:
 - Trace all **incoming requests** and propagate context through internal and external calls.

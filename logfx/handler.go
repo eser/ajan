@@ -13,6 +13,8 @@ var (
 	ErrFailedToParseLogLevel = errors.New("failed to parse log level")
 	ErrFailedToWriteLog      = errors.New("failed to write log")
 	ErrFailedToHandleLog     = errors.New("failed to handle log")
+	ErrFailedToInitLoki      = errors.New("failed to initialize loki client")
+	ErrFailedToInitOTLP      = errors.New("failed to initialize OTLP client")
 )
 
 type Handler struct {
@@ -22,6 +24,10 @@ type Handler struct {
 
 	InnerWriter io.Writer
 	InnerConfig *Config
+
+	// Export clients (prioritized: OTLP -> Loki)
+	OTLPClient *OTLPClient
+	LokiClient *LokiClient
 }
 
 func NewHandler(w io.Writer, config *Config) *Handler {
@@ -46,12 +52,41 @@ func NewHandler(w io.Writer, config *Config) *Handler {
 
 	innerHandler := slog.NewJSONHandler(w, opts)
 
+	// Initialize OTLP client if configured (preferred)
+	var otlpClient *OTLPClient
+	if config.OTLPEndpoint != "" {
+		otlpClient, err = NewOTLPClient(config.OTLPEndpoint, config.OTLPInsecure)
+		if err != nil {
+			if initError != nil {
+				initError = fmt.Errorf("%w; %w: %w", initError, ErrFailedToInitOTLP, err)
+			} else {
+				initError = fmt.Errorf("%w: %w", ErrFailedToInitOTLP, err)
+			}
+		}
+	}
+
+	// Initialize Loki client if configured (fallback or additional)
+	var lokiClient *LokiClient
+	if config.LokiURI != "" {
+		lokiClient, err = NewLokiClient(config.LokiURI, config.LokiLabel)
+		if err != nil {
+			if initError != nil {
+				initError = fmt.Errorf("%w; %w: %w", initError, ErrFailedToInitLoki, err)
+			} else {
+				initError = fmt.Errorf("%w: %w", ErrFailedToInitLoki, err)
+			}
+		}
+	}
+
 	return &Handler{
 		InitError: initError,
 
 		InnerHandler: innerHandler,
 		InnerWriter:  w,
 		InnerConfig:  config,
+
+		OTLPClient: otlpClient,
+		LokiClient: lokiClient,
 	}
 }
 
@@ -60,6 +95,21 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
+	// Add correlation ID from context to the record if available
+	if correlationID := getCorrelationIDFromContext(ctx); correlationID != "" {
+		rec.AddAttrs(slog.String("correlation_id", correlationID))
+	}
+
+	// Send to OTLP collector if configured (preferred for OpenTelemetry)
+	if h.OTLPClient != nil {
+		h.OTLPClient.SendLog(ctx, rec)
+	}
+
+	// Send to Loki if configured (legacy/additional option)
+	if h.LokiClient != nil {
+		h.LokiClient.SendLog(ctx, rec)
+	}
+
 	if h.InnerConfig.PrettyMode {
 		out := strings.Builder{}
 
@@ -96,6 +146,9 @@ func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 		InnerWriter: h.InnerWriter,
 		InnerConfig: h.InnerConfig,
+
+		OTLPClient: h.OTLPClient,
+		LokiClient: h.LokiClient,
 	}
 }
 
@@ -107,5 +160,23 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 
 		InnerWriter: h.InnerWriter,
 		InnerConfig: h.InnerConfig,
+
+		OTLPClient: h.OTLPClient,
+		LokiClient: h.LokiClient,
 	}
+}
+
+// Shutdown gracefully shuts down any active export clients.
+func (h *Handler) Shutdown(ctx context.Context) error {
+	var err error
+
+	if h.OTLPClient != nil {
+		if shutdownErr := h.OTLPClient.Shutdown(ctx); shutdownErr != nil {
+			err = fmt.Errorf("failed to shutdown OTLP client: %w", shutdownErr)
+		}
+	}
+
+	// Note: Loki client doesn't need shutdown as it uses simple HTTP client
+
+	return err
 }

@@ -26,7 +26,7 @@ type Metrics struct {
 
 // NewMetrics creates HTTP metrics using the simplified MetricsBuilder.
 func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
-	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/httpfx", "1.0.0")
+	builder := provider.NewBuilder()
 
 	return &Metrics{
 		builder: builder,

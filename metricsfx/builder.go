@@ -85,12 +85,15 @@ type MetricsBuilder struct {
 }
 
 // NewMetricsBuilder creates a new metrics builder with the given meter and name prefix.
-func NewMetricsBuilder(provider *MetricsProvider, name, version string) *MetricsBuilder {
-	meter := provider.GetMeterProvider().Meter(name, metric.WithInstrumentationVersion(version))
+func NewMetricsBuilder(provider *MetricsProvider) *MetricsBuilder {
+	meter := provider.meterProvider.Meter(
+		provider.config.ServiceName,
+		metric.WithInstrumentationVersion(provider.config.ServiceVersion),
+	)
 
 	return &MetricsBuilder{
 		meter:      meter,
-		name:       name,
+		name:       provider.config.ServiceName,
 		counters:   make(map[string]metric.Int64Counter),
 		gauges:     make(map[string]metric.Int64Gauge),
 		histograms: make(map[string]metric.Float64Histogram),

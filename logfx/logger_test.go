@@ -18,17 +18,25 @@ func TestRegisterLogger(t *testing.T) {
 		{
 			name: "ValidConfig",
 			config: &logfx.Config{
-				Level:      "info",
-				PrettyMode: true,
-				AddSource:  true,
+				Level:        "info",
+				PrettyMode:   true,
+				AddSource:    true,
+				OTLPEndpoint: "",
+				OTLPInsecure: false,
+				LokiURI:      "",
+				LokiLabel:    "",
 			},
 		},
 		{
 			name: "InvalidLogLevel",
 			config: &logfx.Config{
-				Level:      "invalid",
-				PrettyMode: true,
-				AddSource:  true,
+				Level:        "invalid",
+				PrettyMode:   true,
+				AddSource:    true,
+				OTLPEndpoint: "",
+				OTLPInsecure: false,
+				LokiURI:      "",
+				LokiLabel:    "",
 			},
 		},
 	}

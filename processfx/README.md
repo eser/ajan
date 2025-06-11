@@ -592,7 +592,7 @@ func main() {
 
 ```go
 func main() {
-    metrics := metricsfx.NewMetricsProvider()
+    metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{})
     workerCounter, _ := metrics.CreateCounter("workers_active", "Number of active workers")
 
     process := processfx.New(ctx, logger)

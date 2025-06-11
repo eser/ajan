@@ -330,10 +330,10 @@ The application includes metrics collection using MetricsFX:
 
 ```go
 // Initialize metrics provider
-metrics := metricsfx.NewMetricsProvider()
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{})
 
 // Register native Go runtime metrics
-err := metrics.RegisterNativeCollectors()
+err := metrics.Init()
 if err != nil {
     log.Fatal("Failed to register metrics collectors:", err)
 }

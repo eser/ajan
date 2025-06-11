@@ -20,7 +20,7 @@ type Metrics struct {
 
 // NewMetrics creates event metrics using the simplified MetricsBuilder.
 func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
-	builder := metricsfx.NewMetricsBuilder(provider, "github.com/eser/ajan/eventsfx", "1.0.0")
+	builder := provider.NewBuilder()
 
 	return &Metrics{
 		builder: builder,

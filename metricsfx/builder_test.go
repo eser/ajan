@@ -12,7 +12,18 @@ import (
 func setupMetricsProvider(t *testing.T) *metricsfx.MetricsProvider {
 	t.Helper()
 
-	provider := metricsfx.NewMetricsProvider()
+	provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+		ServiceName:              "",
+		ServiceVersion:           "",
+		OTLPEndpoint:             "",
+		OTLPInsecure:             false,
+		PrometheusEndpoint:       "",
+		ExportInterval:           0,
+		RegisterNativeCollectors: false,
+	})
+
+	err := provider.Init()
+	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		err := provider.Shutdown(t.Context())
@@ -28,7 +39,7 @@ func TestMetricsBuilder_Counter(t *testing.T) {
 	t.Parallel()
 
 	provider := setupMetricsProvider(t)
-	builder := metricsfx.NewMetricsBuilder(provider, "test.service", "1.0.0")
+	builder := provider.NewBuilder()
 
 	counter, err := builder.Counter(
 		"test_counter",
@@ -48,7 +59,7 @@ func TestMetricsBuilder_Gauge(t *testing.T) {
 	t.Parallel()
 
 	provider := setupMetricsProvider(t)
-	builder := metricsfx.NewMetricsBuilder(provider, "test.service", "1.0.0")
+	builder := provider.NewBuilder()
 
 	gauge, err := builder.Gauge(
 		"test_gauge",
@@ -68,7 +79,7 @@ func TestMetricsBuilder_Histogram(t *testing.T) {
 	t.Parallel()
 
 	provider := setupMetricsProvider(t)
-	builder := metricsfx.NewMetricsBuilder(provider, "test.service", "1.0.0")
+	builder := provider.NewBuilder()
 
 	histogram, err := builder.Histogram(
 		"test_histogram",
@@ -88,7 +99,7 @@ func TestMetricsBuilder_CustomBuckets(t *testing.T) {
 	t.Parallel()
 
 	provider := setupMetricsProvider(t)
-	builder := metricsfx.NewMetricsBuilder(provider, "test.service", "1.0.0")
+	builder := provider.NewBuilder()
 
 	histogram, err := builder.Histogram(
 		"custom_buckets_histogram",
@@ -107,7 +118,7 @@ func TestWorkerMetrics_Integration(t *testing.T) {
 	t.Parallel()
 
 	provider := setupMetricsProvider(t)
-	builder := metricsfx.NewMetricsBuilder(provider, "test.worker", "1.0.0")
+	builder := provider.NewBuilder()
 
 	// Create some sample worker metrics
 	workerTicks, err := builder.Counter(

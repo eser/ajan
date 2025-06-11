@@ -39,7 +39,7 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	appContext.Logger = logfx.NewLoggerAsDefault(os.Stdout, &appContext.Config.Log)
 
 	// metrics
-	appContext.Metrics = metricsfx.NewMetricsProvider()
+	appContext.Metrics = metricsfx.NewMetricsProvider(appContext.Metrics)
 
 	err = appContext.Metrics.RegisterNativeCollectors()
 	if err != nil {

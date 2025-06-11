@@ -15,7 +15,18 @@ import (
 func setupTestMetricsProvider(t *testing.T) *metricsfx.MetricsProvider {
 	t.Helper()
 
-	provider := metricsfx.NewMetricsProvider()
+	provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+		ServiceName:              "",
+		ServiceVersion:           "",
+		OTLPEndpoint:             "",
+		OTLPInsecure:             false,
+		PrometheusEndpoint:       "",
+		ExportInterval:           0,
+		RegisterNativeCollectors: false,
+	})
+
+	err := provider.Init()
+	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		err := provider.Shutdown(t.Context())
