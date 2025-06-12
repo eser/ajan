@@ -18,7 +18,7 @@ extensive test coverage to ensure reliability and correctness.
 - 🎨 **Pretty Printing** - Colored output for development
 - ⚡ **Performance Optimized** - Asynchronous exports, structured logging
 
-## 🚀 **Extended Log Levels - A Key Differentiator**
+## 🚀 **Extended Log Levels**
 
 **The Problem**: Go's standard `log/slog` package provides only 4 log levels (Debug, Info, Warn, Error), which is insufficient for modern observability and OpenTelemetry compatibility.
 
@@ -296,7 +296,7 @@ func MyHandler(ctx *httpfx.Context) httpfx.Result {
 
 ```go
 config := &logfx.Config{
-    Level:        "DEBUG",                           // Extended level support
+    Level:        "DEBUG",                          // Extended level support
     OTLPEndpoint: "http://otel-collector:4318",     // Primary
     LokiURI:      "http://backup-loki:3100",        // Backup
     LokiLabel:    "backup=true,service=my-app",
@@ -384,7 +384,7 @@ config := &Config{
 
 When OpenTelemetry tracing is active, logs automatically include:
 
-```json
+```jsonc
 {
   "time": "2024-01-15T10:30:00Z",
   "level": "INFO",
@@ -426,7 +426,7 @@ source code and tests.
 ```
 ┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
 │                 │    │                     │    │                 │
-│   Your App      │───▶│ OpenTelemetry      │───▶│  Backends       │
+│   Your App      │───▶│ OpenTelemetry       │───▶│  Backends       │
 │                 │    │ Collector           │    │                 │
 │ • logfx         │    │                     │    │ • Loki (logs)   │
 │ • metricsfx     │    │ • Receives all 3    │    │ • Prometheus    │

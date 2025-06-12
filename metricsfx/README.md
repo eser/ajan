@@ -148,7 +148,7 @@ The collector provides a unified observability pipeline that offers significant 
 ```
 ┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
 │                 │    │                     │    │                 │
-│   Your App      │───▶│ OpenTelemetry      │───▶│   Backends      │
+│   Your App      │───▶│ OpenTelemetry       │───▶│   Backends      │
 │                 │    │ Collector           │    │                 │
 │ • metricsfx     │    │                     │    │ • Prometheus    │
 │ • logfx         │    │ • Receives all 3    │    │ • Grafana       │
@@ -348,7 +348,7 @@ router.Route("POST /users", func(ctx *httpfx.Context) httpfx.Result {
 config := &metricsfx.Config{
     ServiceName:        "my-service",
     OTLPEndpoint:       "http://otel-collector:4318",  // Primary
-    PrometheusEndpoint: "/metrics",                     // Direct fallback
+    PrometheusEndpoint: "/metrics",                    // Direct fallback
     ExportInterval:     30 * time.Second,
 }
 ```

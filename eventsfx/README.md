@@ -21,8 +21,8 @@ Example configuration:
 
 ```go
 config := &eventsfx.Config{
-  DefaultBufferSize: 1000,    // Buffer size for event queue
-  ReplyTimeout:     10 * time.Second,  // Timeout for synchronous event replies
+  DefaultBufferSize: 1000,              // Buffer size for event queue
+  ReplyTimeout:      10 * time.Second,  // Timeout for synchronous event replies
 }
 ```
 
