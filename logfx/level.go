@@ -24,6 +24,8 @@ const (
 	LevelPanic slog.Level = slog.Level(16)
 )
 
+const DefaultLogLevel = "INFO"
+
 func LevelEncoder(l slog.Level) string {
 	str := func(base string, val slog.Level) string {
 		if val == 0 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 )
 
 type Logger struct {
@@ -26,15 +27,18 @@ func NewLogger(w io.Writer, config *Config) *Logger {
 	return logger
 }
 
-func NewLoggerAsDefault(w io.Writer, config *Config) *Logger {
-	logger := NewLogger(w, config)
-	slog.SetDefault(logger.Logger)
-
-	return logger
+func NewLoggerWithDefaults() *Logger {
+	return NewLogger(os.Stdout, &Config{ //nolint:exhaustruct
+		Level: DefaultLogLevel,
+	})
 }
 
 func NewLoggerFromSlog(slog *slog.Logger) *Logger {
 	return &Logger{Logger: slog}
+}
+
+func (l *Logger) SetAsDefault() {
+	slog.SetDefault(l.Logger)
 }
 
 // Trace logs at [LevelTrace].

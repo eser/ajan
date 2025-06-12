@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -86,7 +85,7 @@ func TestNewHTTPService(t *testing.T) { //nolint:funlen
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
+			logger := logfx.NewLoggerWithDefaults()
 
 			router := httpfx.NewRouter("/")
 			metricsProvider := setupTestMetricsProvider(t)
@@ -121,7 +120,7 @@ func TestNewHTTPService(t *testing.T) { //nolint:funlen
 func TestHTTPService_Start(t *testing.T) { //nolint:funlen
 	t.Parallel()
 
-	logger := logfx.NewLogger(os.Stdout, &logfx.Config{}) //nolint:exhaustruct
+	logger := logfx.NewLoggerWithDefaults()
 
 	router := httpfx.NewRouter("/")
 	metricsProvider := setupTestMetricsProvider(t)

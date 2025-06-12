@@ -23,35 +23,27 @@ datafx depends on connfx for connection management. You configure connections th
 ### Connection Configuration (via connfx)
 
 ```go
-// Redis configuration example
+// Redis/Valkey configuration example
 redisConfig := &connfx.ConfigTarget{
     Protocol: "redis",
-    Host:     "localhost",
-    Port:     6379,
     DSN:      "redis://localhost:6379",
 }
 
 // PostgreSQL configuration example
 postgresConfig := &connfx.ConfigTarget{
     Protocol: "postgres",
-    Host:     "localhost",
-    Port:     5432,
     DSN:      "postgres://user:pass@localhost:5432/dbname",
 }
 
 // MongoDB configuration example
 mongoConfig := &connfx.ConfigTarget{
     Protocol: "mongodb",
-    Host:     "localhost",
-    Port:     27017,
     DSN:      "mongodb://localhost:27017/mydb",
 }
 
 // AMQP/RabbitMQ configuration example
 amqpConfig := &connfx.ConfigTarget{
     Protocol: "amqp",
-    Host:     "localhost",
-    Port:     5672,
     DSN:      "amqp://guest:guest@localhost:5672/",
 }
 ```
@@ -78,10 +70,10 @@ type Product struct {
 
 // Example message types for queues
 type OrderEvent struct {
-    OrderID   string    `json:"order_id"`
-    CustomerID string   `json:"customer_id"`
-    Amount    float64   `json:"amount"`
-    Timestamp time.Time `json:"timestamp"`
+    OrderID    string    `json:"order_id"`
+    CustomerID string    `json:"customer_id"`
+    Amount     float64   `json:"amount"`
+    Timestamp  time.Time `json:"timestamp"`
 }
 
 type NotificationMessage struct {
@@ -121,14 +113,12 @@ func main() {
     ctx := context.Background()
 
     // Setup connection registry
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{Level: logfx.LevelInfo})
+    logger := logfx.NewLoggerWithDefaults()
     registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure connection
     config := &connfx.ConfigTarget{
         Protocol: "redis",
-        Host:     "localhost",
-        Port:     6379,
         DSN:      "redis://localhost:6379",
     }
 
@@ -323,7 +313,7 @@ func main() {
     ctx := context.Background()
 
     // Setup connection registry
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{Level: logfx.LevelInfo})
+    logger := logfx.NewLoggerWithDefaults()
     registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure AMQP connection

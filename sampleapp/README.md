@@ -292,7 +292,8 @@ The application uses structured logging with LogFX:
 
 ```go
 // Create logger with configuration
-logger := logfx.NewLoggerAsDefault(os.Stdout, &config.Log)
+logger := logfx.NewLogger(os.Stdout, &config.Log)
+logger.SetAsDefault()
 
 // Use throughout the application
 logger.Info("Application started",

@@ -44,10 +44,7 @@ import (
 
 func main() {
     // Create logger using logfx
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-        Level:      "INFO",
-        PrettyMode: true,
-    })
+    logger := logfx.NewLoggerWithDefaults()
 
     // Create connection registry
     registry := connfx.NewRegistryWithDefaults(logger)
