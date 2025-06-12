@@ -30,7 +30,7 @@ import (
 
 func main() {
     ctx := context.Background()
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger()
 
     // Create process manager
     process := processfx.New(ctx, logger)
@@ -73,7 +73,13 @@ func main() {
 ```go
 func main() {
     ctx := context.Background()
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:      "INFO",
+            PrettyMode: true,
+            AddSource:  false,
+        }),
+    )
 
     process := processfx.New(ctx, logger)
 
@@ -204,7 +210,13 @@ ProcessFX automatically handles these OS signals:
 ```go
 func runApplication() {
     ctx := context.Background()
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:      "INFO",
+            PrettyMode: true,
+            AddSource:  false,
+        }),
+    )
 
     process := processfx.New(ctx, logger)
 
@@ -264,7 +276,13 @@ func runApplication() {
 ```go
 func runWithDatabase() {
     ctx := context.Background()
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:      "INFO",
+            PrettyMode: true,
+            AddSource:  false,
+        }),
+    )
 
     process := processfx.New(ctx, logger)
 
@@ -309,7 +327,13 @@ func runWithDatabase() {
 ```go
 func runHTTPServer() {
     ctx := context.Background()
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:      "INFO",
+            PrettyMode: true,
+            AddSource:  false,
+        }),
+    )
 
     process := processfx.New(ctx, logger)
 

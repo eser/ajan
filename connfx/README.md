@@ -44,7 +44,7 @@ import (
 
 func main() {
     // Create logger using logfx
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger()
 
     // Create connection registry
     registry := connfx.NewRegistryWithDefaults(logger)

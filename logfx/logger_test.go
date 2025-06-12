@@ -18,25 +18,27 @@ func TestRegisterLogger(t *testing.T) {
 		{
 			name: "ValidConfig",
 			config: &logfx.Config{
-				Level:        "info",
-				PrettyMode:   true,
-				AddSource:    true,
-				OTLPEndpoint: "",
-				OTLPInsecure: false,
-				LokiURI:      "",
-				LokiLabel:    "",
+				Level:         "info",
+				PrettyMode:    true,
+				AddSource:     true,
+				DefaultLogger: false,
+				OTLPEndpoint:  "",
+				OTLPInsecure:  false,
+				LokiURI:       "",
+				LokiLabel:     "",
 			},
 		},
 		{
 			name: "InvalidLogLevel",
 			config: &logfx.Config{
-				Level:        "invalid",
-				PrettyMode:   true,
-				AddSource:    true,
-				OTLPEndpoint: "",
-				OTLPInsecure: false,
-				LokiURI:      "",
-				LokiLabel:    "",
+				Level:         "invalid",
+				PrettyMode:    true,
+				AddSource:     true,
+				DefaultLogger: false,
+				OTLPEndpoint:  "",
+				OTLPInsecure:  false,
+				LokiURI:       "",
+				LokiLabel:     "",
 			},
 		},
 	}
@@ -45,7 +47,10 @@ func TestRegisterLogger(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger := logfx.NewLogger(os.Stdout, tt.config)
+			logger := logfx.NewLogger(
+				logfx.WithWriter(os.Stdout),
+				logfx.WithConfig(tt.config),
+			)
 			assert.NotNil(t, logger)
 		})
 	}

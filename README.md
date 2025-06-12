@@ -10,22 +10,23 @@
 |         Component         | Description |
 | ------------------------- | ----------- |
 | [cachefx](./cachefx/)     | Flexible caching solution with support for Redis and other backends |
-| [configfx](./configfx/)   | Configuration management with support for multiple sources including environment variables and files |
-| [connfx](./connfx/)       | Connection management and registry for databases, caches, and external services |
-| [datafx](./datafx/)       | Database access layer supporting Postgres, MySQL, and SQLite |
-| [di](./di/)               | Lightweight yet powerful dependency injection container |
-| [eventsfx](./eventsfx/)   | Event handling and pub/sub system |
-| [grpcfx](./grpcfx/)       | gRPC service integration and utilities |
-| [httpclient](./httpclient/) | HTTP client utilities and helpers for external API communication |
-| [httpfx](./httpfx/)       | HTTP service framework with routing and middleware support |
-| [lib](./lib/)             | Common utilities and shared functionality including network, crypto, and string helpers |
-| [logfx](./logfx/)         | Structured logging with pretty-printing and OpenTelemetry support |
-| [metricsfx](./metricsfx/) | Metrics collection and monitoring utilities |
-| [processfx](./processfx/) | Process and goroutine lifecycle management with graceful shutdown handling |
-| [queuefx](./queuefx/)     | Message queue integration with RabbitMQ support |
-| [results](./results/)     | Structured error handling and result types |
+| [configfx](./configfx/)   | Type-safe configuration management with multiple sources, environment-aware loading, and validation |
+| [connfx](./connfx/)       | Behavior-based connection management and registry with self-registering adapters for databases, caches, and external services |
+| [datafx](./datafx/)       | Technology-agnostic data persistence layer with automatic marshaling, transactions, caching, and queue support |
+| [di](./di/)               | Lightweight yet powerful dependency injection container with type-safe resolution and interface binding |
+| [eventsfx](./eventsfx/)   | Event handling and pub/sub system with synchronous and asynchronous processing |
+| [grpcfx](./grpcfx/)       | gRPC service framework with reflection, graceful shutdown, and middleware support |
+| [httpclient](./httpclient/) | Resilient HTTP client with circuit breaker pattern, exponential backoff, and retry mechanisms |
+| [httpfx](./httpfx/)       | HTTP service framework with routing, middleware, OpenAPI generation, and graceful shutdown |
+| [lib](./lib/)             | Comprehensive utility library with network, crypto, environment, string, and data manipulation helpers |
+| [logfx](./logfx/)         | Extended structured logging with OpenTelemetry-compatible levels, correlation IDs, and OTLP export |
+| [metricsfx](./metricsfx/) | OpenTelemetry-based metrics collection with simplified builder API and unified observability pipeline |
+| [processfx](./processfx/) | Process and goroutine lifecycle management with graceful shutdown, signal handling, and context propagation |
+| [queuefx](./queuefx/)     | Message queue integration with RabbitMQ support and reliable processing patterns |
+| [results](./results/)     | Structured error handling and result types with attributes and operational context |
 | [sampleapp](./sampleapp/) | Complete example application demonstrating ajan framework usage and best practices |
-| [types](./types/)         | Custom data types including metric types with unit suffix support |
+| [tracesfx](./tracesfx/)   | Distributed tracing with OpenTelemetry integration, correlation support, and seamless log/metrics correlation |
+| [types](./types/)         | Enhanced data types including metric types with unit suffix support and intelligent parsing |
 
 ## 🙋🏻 FAQ
 

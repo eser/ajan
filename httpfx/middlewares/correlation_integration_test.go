@@ -79,15 +79,19 @@ func executeTestRequest(t *testing.T, incomingCorrelationID string) (string, str
 
 	// Create logger with JSON output for easy parsing
 	logConfig := &logfx.Config{
-		Level:        "DEBUG",
-		PrettyMode:   false,
-		AddSource:    false,
-		OTLPEndpoint: "",
-		OTLPInsecure: false,
-		LokiURI:      "",
-		LokiLabel:    "",
+		Level:         "DEBUG",
+		PrettyMode:    false,
+		AddSource:     false,
+		DefaultLogger: false,
+		OTLPEndpoint:  "",
+		OTLPInsecure:  false,
+		LokiURI:       "",
+		LokiLabel:     "",
 	}
-	logger := logfx.NewLogger(&logBuffer, logConfig)
+	logger := logfx.NewLogger(
+		logfx.WithWriter(&logBuffer),
+		logfx.WithConfig(logConfig),
+	)
 
 	// Create router with middleware chain
 	router := httpfx.NewRouter("/")

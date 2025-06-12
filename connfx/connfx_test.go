@@ -20,7 +20,7 @@ func newMockLogger() *logfx.Logger {
 		Level: slog.LevelError, // Only show errors in tests
 	}))
 
-	return logfx.NewLoggerFromSlog(slogger)
+	return logfx.NewLogger(logfx.WithFromSlog(slogger))
 }
 
 func TestRegistry_SQLiteConnection(t *testing.T) {

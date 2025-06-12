@@ -113,7 +113,7 @@ func main() {
     ctx := context.Background()
 
     // Setup connection registry
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger()
     registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure connection
@@ -313,7 +313,7 @@ func main() {
     ctx := context.Background()
 
     // Setup connection registry
-    logger := logfx.NewLoggerWithDefaults()
+    logger := logfx.NewLogger()
     registry := connfx.NewRegistryWithDefaults(logger)
 
     // Configure AMQP connection

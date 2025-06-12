@@ -99,10 +99,9 @@ func setupObservability() {
     tracesProvider.Init()
 
     // Setup logging
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-        Level:        "INFO",
-        OTLPEndpoint: "http://localhost:4318", // Same endpoint
-    })
+    logger := logfx.NewLogger(
+        logfx.WithOTLP("http://localhost:4318", false),
+    )
 
     // Use together - trace IDs automatically appear in logs
     tracer := tracesProvider.Tracer("my-service")
@@ -206,10 +205,13 @@ func NewObservabilityStack(config *Config) *ObservabilityStack {
             ServiceName:  config.ServiceName,
             OTLPEndpoint: otlpEndpoint,
         }),
-        Logger: logfx.NewLogger(os.Stdout, &logfx.Config{
-            Level:        config.LogLevel,
-            OTLPEndpoint: otlpEndpoint,
-        }),
+        Logger: logfx.NewLogger(
+            logfx.WithWriter(os.Stdout),
+            logfx.WithConfig(&logfx.Config{
+                Level:        config.LogLevel,
+                OTLPEndpoint: otlpEndpoint,
+            }),
+        ),
     }
 }
 

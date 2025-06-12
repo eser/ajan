@@ -9,32 +9,41 @@ import (
 
 type Logger struct {
 	*slog.Logger
+
+	Writer io.Writer
+	Config *Config
 }
 
-func NewLogger(w io.Writer, config *Config) *Logger {
-	handler := NewHandler(w, config)
+func NewLogger(options ...NewLoggerOption) *Logger {
+	logger := &Logger{ //nolint:exhaustruct
+		Config: &Config{ //nolint:exhaustruct
+			Level: DefaultLogLevel,
+		},
+		Writer: os.Stdout,
+	}
 
-	logger := &Logger{Logger: slog.New(handler)}
+	for _, option := range options {
+		option(logger)
+	}
 
-	if handler.InitError != nil {
-		logger.Warn(
-			"an error occurred while initializing the logger",
-			slog.String("error", handler.InitError.Error()),
-			slog.Any("config", config),
-		)
+	if logger.Logger == nil {
+		handler := NewHandler(logger.Writer, logger.Config)
+		logger.Logger = slog.New(handler)
+
+		if handler.InitError != nil {
+			logger.Warn(
+				"an error occurred while initializing the logger",
+				slog.String("error", handler.InitError.Error()),
+				slog.Any("config", logger.Config),
+			)
+		}
+	}
+
+	if logger.Config.DefaultLogger {
+		logger.SetAsDefault()
 	}
 
 	return logger
-}
-
-func NewLoggerWithDefaults() *Logger {
-	return NewLogger(os.Stdout, &Config{ //nolint:exhaustruct
-		Level: DefaultLogLevel,
-	})
-}
-
-func NewLoggerFromSlog(slog *slog.Logger) *Logger {
-	return &Logger{Logger: slog}
 }
 
 func (l *Logger) SetAsDefault() {

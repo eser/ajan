@@ -18,7 +18,7 @@ func TestMultipleBehaviors_RedisAdapter(t *testing.T) { //nolint:funlen
 	slogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{ //nolint:exhaustruct
 		Level: slog.LevelInfo, // Show info logs for this test to see behavior registration
 	}))
-	logger := logfx.NewLoggerFromSlog(slogger)
+	logger := logfx.NewLogger(logfx.WithFromSlog(slogger))
 
 	ctx := t.Context()
 

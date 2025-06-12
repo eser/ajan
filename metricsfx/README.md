@@ -391,10 +391,9 @@ metricsProvider := metricsfx.NewMetricsProvider(&metricsfx.Config{
 _ = metricsProvider.Init()
 
 // Logs (with automatic correlation)
-logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-    Level:        "INFO",
-    OTLPEndpoint: observabilityConfig.OTLPEndpoint,
-})
+logger := logfx.NewLogger(
+    logfx.WithOTLP(observabilityConfig.OTLPEndpoint, false),
+)
 
 // All telemetry data flows to the same collector with:
 // - Consistent resource attribution (service name/version)

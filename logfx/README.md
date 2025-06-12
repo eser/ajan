@@ -54,9 +54,9 @@ logfx.LevelPanic // 16  ← Additional
 ```go
 import "github.com/eser/ajan/logfx"
 
-logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-    Level: "TRACE",  // Now supports all 7 levels
-})
+logger := logfx.NewLogger(
+    logfx.WithLevel(logfx.LevelTrace), // Now supports all 7 levels
+)
 
 // Use all OpenTelemetry-compatible levels
 logger.Trace("Detailed debugging info")           // Most verbose
@@ -121,12 +121,9 @@ import (
 
 func main() {
     // Create logger with OpenTelemetry collector export
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-        Level:        "INFO",
-        PrettyMode:   false,
-        OTLPEndpoint: "http://otel-collector:4318",
-        OTLPInsecure: true,
-    })
+    logger := logfx.NewLogger(
+        logfx.WithOTLP("http://otel-collector:4318", true),
+    )
 
     // Use structured logging with extended levels
     logger.Info("Application started",
@@ -158,11 +155,14 @@ import (
 )
 
 func main() {
-    logger := logfx.NewLogger(os.Stdout, &logfx.Config{
-        Level:        "TRACE",  // Use extended levels for comprehensive logging
-        PrettyMode:   false,
-        OTLPEndpoint: "http://otel-collector:4318",
-    })
+    logger := logfx.NewLogger(
+        logfx.WithWriter(os.Stdout),
+        logfx.WithConfig(&logfx.Config{
+            Level:        "TRACE",  // Use extended levels for comprehensive logging
+            PrettyMode:   false,
+            OTLPEndpoint: "http://otel-collector:4318",
+        }),
+    )
 
     router := httpfx.NewRouter("/api")
 
@@ -229,7 +229,10 @@ config := &logfx.Config{
     OTLPEndpoint: "http://otel-collector:4318",
     OTLPInsecure: true,
 }
-logger := logfx.NewLogger(os.Stdout, config)
+logger := logfx.NewLogger(
+    logfx.WithWriter(os.Stdout),
+    logfx.WithConfig(config),
+)
 ```
 
 ### Benefits of OpenTelemetry Collector
@@ -350,7 +353,10 @@ The logger handles export failures gracefully:
 
 ```go
 // Logger continues working even if exports fail
-logger := logfx.NewLogger(os.Stdout, config)
+logger := logfx.NewLogger(
+    logfx.WithWriter(os.Stdout),
+    logfx.WithConfig(config),
+)
 
 // Check for initialization errors
 if handler, ok := logger.Handler.(*logfx.Handler); ok && handler.InitError != nil {
@@ -397,27 +403,128 @@ When OpenTelemetry tracing is active, logs automatically include:
 
 This provides multiple correlation dimensions for complete request traceability.
 
-## 🎯 **Why Choose logfx?**
+## API Reference
 
-### **Standard Library Foundation**
-- Built on Go's `log/slog` - not a replacement, but an enhancement
-- Zero breaking changes to existing slog code
-- Familiar API with extended capabilities
+### Logger Creation
 
-### **OpenTelemetry Ready**
-- 7 log levels matching OpenTelemetry severity levels
-- Proper OTLP export with correct severity mapping
-- Automatic trace context integration
+#### NewLogger (Options Pattern)
 
-### **Production Grade**
-- Asynchronous exports for performance
-- Graceful error handling
-- Multiple export destinations
-- Comprehensive correlation support
+```go
+func NewLogger(options ...NewLoggerOption) *Logger
+```
 
-The documentation below provides an overview of the package, its types,
-functions, and usage examples. For more detailed information, refer to the
-source code and tests.
+Create a logger using the flexible options pattern:
+
+```go
+// Basic logger with default configuration
+logger := logfx.NewLogger()
+
+// Logger with custom writer and config
+logger := logfx.NewLogger(
+    logfx.WithWriter(os.Stdout),
+    logfx.WithConfig(&logfx.Config{
+        Level:        "INFO",
+        PrettyMode:   false,
+        OTLPEndpoint: "http://otel-collector:4318",
+    }),
+)
+
+// Logger with individual options
+logger := logfx.NewLogger(
+    logfx.WithLevel(slog.LevelDebug),
+    logfx.WithPrettyMode(true),
+    logfx.WithAddSource(true),
+    logfx.WithOTLP("http://otel-collector:4318", true),
+    logfx.WithDefaultLogger(), // Set as default logger
+)
+```
+
+#### Available Options
+
+```go
+// Configuration options
+WithConfig(config *Config)                    // Full configuration
+WithLevel(level slog.Level)                   // Set log level
+WithPrettyMode(pretty bool)                   // Enable/disable pretty printing
+WithAddSource(addSource bool)                 // Include source code location
+WithDefaultLogger()                           // Set as default logger
+
+// Output options
+WithWriter(writer io.Writer)                  // Set output writer
+WithFromSlog(slog *slog.Logger)              // Wrap existing slog.Logger
+
+// Export options
+WithOTLP(endpoint string, insecure bool)      // OpenTelemetry collector export
+WithLoki(uri string, label string)           // Direct Loki export
+```
+
+#### Convenience Functions
+
+```go
+// Quick default setup
+logger := logfx.NewLogger(
+    logfx.WithConfig(&logfx.Config{
+        Level:      "INFO",
+        PrettyMode: true,
+        AddSource:  false,
+    }),
+)
+
+// Wrap existing slog logger
+slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+logger := logfx.NewLogger(logfx.WithFromSlog(slogger))
+
+// Production setup
+logger := logfx.NewLogger(
+    logfx.WithConfig(&logfx.Config{
+        Level:        "INFO",
+        PrettyMode:   false,
+        OTLPEndpoint: "http://otel-collector:4318",
+    }),
+)
+
+// Development setup
+logger := logfx.NewLogger(
+    logfx.WithLevel(slog.LevelDebug),
+    logfx.WithPrettyMode(true),
+    logfx.WithAddSource(true),
+    logfx.WithDefaultLogger(),
+)
+```
+
+**Usage Examples:**
+
+```go
+// Quick default setup
+logger := logfx.NewLogger(
+    logfx.WithConfig(&logfx.Config{
+        Level:      "INFO",
+        PrettyMode: true,
+        AddSource:  false,
+    }),
+)
+
+// Wrap existing slog logger
+slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+logger := logfx.NewLogger(logfx.WithFromSlog(slogger))
+
+// Production setup
+logger := logfx.NewLogger(
+    logfx.WithConfig(&logfx.Config{
+        Level:        "INFO",
+        PrettyMode:   false,
+        OTLPEndpoint: "http://otel-collector:4318",
+    }),
+)
+
+// Development setup
+logger := logfx.NewLogger(
+    logfx.WithLevel(slog.LevelDebug),
+    logfx.WithPrettyMode(true),
+    logfx.WithAddSource(true),
+    logfx.WithDefaultLogger(),
+)
+```
 
 ## Ideal Architecture
 
