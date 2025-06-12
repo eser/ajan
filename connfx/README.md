@@ -52,12 +52,16 @@ func main() {
     // Create connection registry
     registry := connfx.NewRegistryWithDefaults(logger)
 
-    // Load configuration - no behavior field needed!
+    // Load configuration
     config := &connfx.Config{
         Connections: map[string]connfx.ConfigTarget{
             "default": {
                 Protocol: "sqlite",
-                Database: ":memory:",
+                DSN:      ":memory:",
+            },
+            "cache": {
+                Protocol: "redis",
+                DSN:     "redis://localhost:6379",
             },
             "api": {
                 Protocol: "http",
@@ -77,6 +81,11 @@ func main() {
         log.Fatal("Database connection not found")
     }
 
+    cacheConn := registry.GetNamed("cache")
+    if cacheConn == nil {
+        log.Fatal("Cache connection not found")
+    }
+
     apiConn := registry.GetNamed("api")
     if apiConn == nil {
         log.Fatal("API connection not found")
@@ -84,16 +93,23 @@ func main() {
 
     // Check behaviors determined by providers
     log.Printf("DB behaviors: %v", dbConn.GetBehaviors())     // [stateful]
+    log.Printf("Cache behaviors: %v", dbConn.GetBehaviors())  // [stateful streaming]
     log.Printf("API behaviors: %v", apiConn.GetBehaviors())   // [stateless]
 
     // Check capabilities determined by providers
-    log.Printf("DB capabilities: %v", dbConn.GetCapabilities())     // [transactional relational]
-    log.Printf("API capabilities: %v", apiConn.GetBehaviors())   // []
+    log.Printf("DB capabilities: %v", dbConn.GetCapabilities())         // [transactional relational]
+    log.Printf("Cache capabilities: %v", cacheConn.GetCapabilities())   // [key-value cache queue]
+    log.Printf("API capabilities: %v", apiConn.GetBehaviors())          // []
 
     // Use the connections with type safety
     db, err := connfx.GetTypedConnection[*sql.DB](dbConn)
     if err != nil {
         log.Fatal("Failed to get SQL DB:", err)
+    }
+
+    cache, err := connfx.GetTypedConnection[*redis.Client](cacheConn)
+    if err != nil {
+        log.Fatal("Failed to get Redis Client:", err)
     }
 
     httpClient, err := connfx.GetTypedConnection[*http.Client](apiConn)
@@ -102,7 +118,8 @@ func main() {
     }
 
     // Now use the typed connections safely
-    _ = db        // *sql.DB
+    _ = db         // *sql.DB
+    _ = cache      // *redis.Client
     _ = httpClient // *http.Client
 }
 ```
@@ -115,8 +132,8 @@ func NewService(logger *logfx.Logger) *Service {
 
     // Register required adapters
     registry.RegisterFactory(connfx.NewSQLConnectionFactory("sqlite"))
-    registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
     registry.RegisterFactory(connfx.NewRedisConnectionFactory("redis")) // Supports both stateful + streaming
+    registry.RegisterFactory(connfx.NewHTTPConnectionFactory("http"))
 
     // Load config
     registry.LoadFromConfig(ctx, config)
@@ -127,7 +144,7 @@ func NewService(logger *logfx.Logger) *Service {
 }
 
 func (s *Service) DoSomething(ctx context.Context) error {
-    conn := s.connRegistry.GetNamed("primary")
+    conn := s.connRegistry.GetDefault()
     if conn == nil {
         return errors.New("connection not found")
     }
@@ -192,46 +209,6 @@ func RegisterCustomAdapter(registry *connfx.Registry) {
     registry.RegisterFactory(factory)
 }
 ```
-
-## Configuration
-
-### Provider-Based Configuration
-
-```yaml
-connections:
-  primary_db:
-    protocol: postgres  # Provider determines this is stateful
-    host: localhost
-    port: 5432
-    database: myapp
-    username: user
-    password: secret
-
-  cache:
-    protocol: redis     # Provider determines this supports stateful + streaming
-    host: localhost
-    port: 6379
-
-  external_api:
-    protocol: http      # Provider determines this is stateless
-    url: "https://api.example.com"
-    timeout: 30s
-    properties:
-      headers:
-        Authorization: "Bearer TOKEN"
-
-  event_stream:
-    protocol: kafka     # Provider determines this is streaming
-    host: localhost
-    port: 9092
-```
-
-### Provider Behavior Examples
-
-- **SQL Databases** (postgres/mysql/sqlite): `[stateful]`
-- **HTTP APIs** (http/https/graphql): `[stateless]`
-- **Redis**: `[stateful, streaming]` - supports both key-value and pub/sub
-- **Message Queues** (kafka/rabbitmq): `[streaming]`
 
 ## Working with Connections
 
@@ -311,67 +288,6 @@ for _, conn := range redisConns {
 }
 ```
 
-### Type-Safe Connection Extraction
-
-The `GetTypedConnection` generic function provides type-safe extraction of raw connections without manual type assertions:
-
-```go
-import "database/sql"
-
-// Get connection
-conn := registry.GetNamed("database")
-if conn == nil {
-    return errors.New("database connection not found")
-}
-
-// Extract typed connection safely
-db, err := connfx.GetTypedConnection[*sql.DB](conn)
-if err != nil {
-    return fmt.Errorf("failed to get SQL database: %w", err)
-}
-
-// Now db is *sql.DB and can be used safely
-rows, err := db.QueryContext(ctx, "SELECT * FROM users")
-if err != nil {
-    return err
-}
-defer rows.Close()
-
-// Works with any connection type
-httpConn := registry.GetNamed("api")
-if httpConn == nil {
-    return errors.New("API connection not found")
-}
-
-client, err := connfx.GetTypedConnection[*http.Client](httpConn)
-if err != nil {
-    return fmt.Errorf("failed to get HTTP client: %w", err)
-}
-
-resp, err := client.Get("https://api.example.com/data")
-```
-
-### Combined Usage Pattern
-
-```go
-// Get and extract in one pattern
-func getDatabase(registry *connfx.Registry, name string) (*sql.DB, error) {
-    conn := registry.GetNamed(name)
-    if conn == nil {
-        return nil, fmt.Errorf("connection %q not found", name)
-    }
-
-    return connfx.GetTypedConnection[*sql.DB](conn)
-}
-
-// Usage
-db, err := getDatabase(registry, "primary")
-if err != nil {
-    return err
-}
-// db is now *sql.DB
-```
-
 ## Health Checks
 
 ```go
@@ -405,91 +321,6 @@ fmt.Printf("Status: %s, Message: %s\n", status.State, status.Message)
 
 ### Multiple Behavior Providers
 - Redis: `registry.RegisterFactory(redisFactory)` → `[stateful, streaming]`
-
-## Integration Examples
-
-### datafx Integration
-
-```go
-// datafx can get SQL connections by behavior
-statefulConns := registry.GetByBehavior(connfx.ConnectionBehaviorStateful)
-for _, conn := range statefulConns {
-    if conn.GetProtocol() == "postgres" {
-        db, err := connfx.GetTypedConnection[*sql.DB](conn)
-        if err != nil {
-            log.Printf("Failed to get SQL DB: %v", err)
-            continue
-        }
-        // Use db for datafx operations
-    }
-}
-```
-
-### queuefx Integration
-
-```go
-// queuefx can get streaming connections
-streamingConns := registry.GetByBehavior(connfx.ConnectionBehaviorStreaming)
-for _, conn := range streamingConns {
-    switch conn.GetProtocol() {
-    case "redis":
-        // Type-safe Redis connection extraction
-        client, err := connfx.GetTypedConnection[redis.Client](conn) // Assuming redis.Client type
-        if err != nil {
-            log.Printf("Failed to get Redis client: %v", err)
-            continue
-        }
-        // Use client for queue operations
-    case "kafka":
-        // Type-safe Kafka connection extraction
-        kafkaConn, err := connfx.GetTypedConnection[kafka.Connection](conn) // Assuming kafka.Connection type
-        if err != nil {
-            log.Printf("Failed to get Kafka connection: %v", err)
-            continue
-        }
-        // Handle Kafka connections
-    }
-}
-```
-
-### Multi-Purpose Redis Usage
-
-```go
-// Use Redis for both caching (stateful) and pub/sub (streaming)
-redisConn := registry.GetNamed("cache")
-if redisConn == nil {
-    return errors.New("cache connection not found")
-}
-
-// Check what behaviors and capabilities this Redis connection supports
-behaviors := redisConn.GetBehaviors()
-capabilities := redisConn.GetCapabilities()
-fmt.Printf("Redis supports: %v and %v\n", behaviors, capabilities) // [stateful streaming] and [cache queue key-value]
-
-// Extract Redis client safely
-redisClient, err := connfx.GetTypedConnection[redis.Client](redisConn) // Assuming redis.Client type
-if err != nil {
-    return fmt.Errorf("failed to get Redis client: %w", err)
-}
-
-// Use for caching (stateful behavior)
-if hasStateful(behaviors) {
-    // Use redisClient for GET/SET operations
-    err := redisClient.Set("key", "value")
-    if err != nil {
-        return err
-    }
-}
-
-// Use for pub/sub (streaming behavior)
-if hasStreaming(behaviors) {
-    // Use redisClient for PUBLISH/SUBSCRIBE operations
-    err := redisClient.Publish("channel", "message")
-    if err != nil {
-        return err
-    }
-}
-```
 
 ## API Reference
 
