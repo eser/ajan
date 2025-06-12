@@ -18,7 +18,7 @@ var (
 
 // Metrics holds gRPC-specific metrics using the simplified MetricsBuilder approach.
 type Metrics struct {
-	builder *metricsfx.MetricsBuilder
+	Provider *metricsfx.MetricsProvider
 
 	RequestsTotal   *metricsfx.CounterMetric
 	RequestDuration *metricsfx.HistogramMetric
@@ -26,10 +26,8 @@ type Metrics struct {
 
 // NewMetrics creates gRPC metrics using the simplified MetricsBuilder.
 func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
-	builder := provider.NewBuilder()
-
 	return &Metrics{
-		builder: builder,
+		Provider: provider,
 
 		RequestsTotal:   nil,
 		RequestDuration: nil,
@@ -37,7 +35,9 @@ func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
 }
 
 func (metrics *Metrics) Init() error {
-	requestsTotal, err := metrics.builder.Counter(
+	builder := metrics.Provider.NewBuilder()
+
+	requestsTotal, err := builder.Counter(
 		"grpc_requests_total",
 		"Total number of gRPC requests",
 	).WithUnit("{request}").Build()
@@ -47,7 +47,7 @@ func (metrics *Metrics) Init() error {
 
 	metrics.RequestsTotal = requestsTotal
 
-	requestDuration, err := metrics.builder.Histogram(
+	requestDuration, err := builder.Histogram(
 		"grpc_request_duration_seconds",
 		"gRPC request duration in seconds",
 	).WithDurationBuckets().Build()

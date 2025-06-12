@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	DefaultFailureThreshold     = 5
-	DefaultResetTimeout         = 10 * time.Second
-	DefaultHalfOpenSuccess      = 2
 	DefaultServerErrorThreshold = 500
+
+	DefaultFailureThreshold = 5
+	DefaultResetTimeout     = 10 * time.Second
+	DefaultHalfOpenSuccess  = 2
 )
 
 var (
@@ -32,43 +33,38 @@ var (
 )
 
 type ResilientTransport struct {
-	transport      http.RoundTripper
-	circuitBreaker *CircuitBreaker
-	retryStrategy  *RetryStrategy
+	Transport http.RoundTripper
+	Config    *Config
+
+	CircuitBreaker *CircuitBreaker
+	RetryStrategy  *RetryStrategy
 }
 
 func NewResilientTransport(
 	transport http.RoundTripper,
-	cb *CircuitBreaker,
-	rs *RetryStrategy,
+	config *Config,
 ) *ResilientTransport {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
 
-	if cb == nil {
-		cb = NewCircuitBreaker(CircuitBreakerConfig{
-			Enabled:               true,
-			FailureThreshold:      DefaultFailureThreshold,
-			ResetTimeout:          DefaultResetTimeout,
-			HalfOpenSuccessNeeded: DefaultHalfOpenSuccess,
-			ServerErrorThreshold:  DefaultServerErrorThreshold,
-		})
-	}
-
-	if rs == nil {
-		rs = DefaultRetryStrategy()
-	}
+	cb := NewCircuitBreaker(&config.CircuitBreaker)
+	rs := NewRetryStrategy(&config.RetryStrategy)
 
 	return &ResilientTransport{
-		transport:      transport,
-		circuitBreaker: cb,
-		retryStrategy:  rs,
+		Transport: transport,
+		Config:    config,
+
+		CircuitBreaker: cb,
+		RetryStrategy:  rs,
 	}
 }
 
-func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !t.circuitBreaker.IsAllowed() {
+func (t *ResilientTransport) RoundTrip( //nolint:cyclop,gocognit,funlen
+	req *http.Request,
+) (*http.Response, error) {
+	// Check circuit breaker before starting (only if enabled)
+	if t.Config.CircuitBreaker.Enabled && !t.CircuitBreaker.IsAllowed() {
 		return nil, ErrCircuitOpen
 	}
 
@@ -80,8 +76,17 @@ func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 	var resp *http.Response
 
-	for attempt := range t.retryStrategy.Config.MaxAttempts {
-		if attempt > 0 {
+	// Determine max attempts based on retry configuration
+	var maxAttempts uint
+	if t.Config.RetryStrategy.Enabled {
+		maxAttempts = max(t.Config.RetryStrategy.MaxAttempts, 1)
+	} else {
+		maxAttempts = 1
+	}
+
+	for attempt := range maxAttempts {
+		// Handle retry backoff (skip on first attempt)
+		if attempt > 0 && t.Config.RetryStrategy.Enabled {
 			var err error
 
 			req, err = t.handleRetry(req, attempt)
@@ -90,16 +95,46 @@ func (t *ResilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 			}
 		}
 
+		// Make the request
 		resp, lastErr = t.handleRequest(req)
-		if lastErr == nil && resp.StatusCode < t.circuitBreaker.Config.ServerErrorThreshold {
+
+		// If request was successful, return immediately
+		if lastErr == nil && resp.StatusCode < t.Config.ServerErrorThreshold {
 			return resp, nil
+		}
+
+		// Check circuit breaker after failure (only if enabled)
+		if t.Config.CircuitBreaker.Enabled && !t.CircuitBreaker.IsAllowed() {
+			return nil, ErrCircuitOpen
+		}
+
+		// If this is the last attempt or retries are disabled, break
+		if !t.Config.RetryStrategy.Enabled || attempt == maxAttempts-1 {
+			break
 		}
 	}
 
+	// Handle final response based on what we have
 	if lastErr != nil {
-		return nil, fmt.Errorf("%w: %w", ErrAllRetryAttemptsFailed, lastErr)
+		// Transport error occurred
+		if t.Config.RetryStrategy.Enabled && maxAttempts > 1 {
+			return nil, fmt.Errorf("%w: %w", ErrAllRetryAttemptsFailed, lastErr)
+		}
+
+		return nil, fmt.Errorf("%w: %w", ErrTransportError, lastErr)
 	}
 
+	// We have a response but it's a server error
+	if resp != nil && resp.StatusCode >= t.Config.ServerErrorThreshold {
+		// If retries were enabled and exhausted, return retry error
+		if t.Config.RetryStrategy.Enabled && maxAttempts > 1 {
+			return nil, ErrMaxRetries
+		}
+		// Otherwise return the server error response
+		return resp, nil
+	}
+
+	// Fallback - should not reach here
 	return nil, ErrMaxRetries
 }
 
@@ -109,42 +144,44 @@ func (t *ResilientTransport) CancelRequest(req *http.Request) {
 		CancelRequest(req *http.Request)
 	}
 
-	if cr, ok := t.transport.(canceler); ok {
+	if cr, ok := t.Transport.(canceler); ok {
 		cr.CancelRequest(req)
 	}
 }
 
 // handleRequest performs a single request attempt and handles the response.
 func (t *ResilientTransport) handleRequest(req *http.Request) (*http.Response, error) {
-	resp, err := t.transport.RoundTrip(req)
+	resp, err := t.Transport.RoundTrip(req)
 	if err != nil {
-		t.circuitBreaker.OnFailure()
-
-		if !t.circuitBreaker.IsAllowed() {
-			return nil, ErrCircuitOpen
+		// Only notify circuit breaker if it's enabled
+		if t.Config.CircuitBreaker.Enabled {
+			t.CircuitBreaker.OnFailure()
 		}
 
 		return nil, fmt.Errorf("%w: %w", ErrTransportError, err)
 	}
 
-	if resp.StatusCode >= t.circuitBreaker.Config.ServerErrorThreshold {
-		t.circuitBreaker.OnFailure()
-
-		if !t.circuitBreaker.IsAllowed() {
-			return nil, ErrCircuitOpen
+	// Check if this is a server error
+	if resp.StatusCode >= t.Config.ServerErrorThreshold {
+		// Only notify circuit breaker if it's enabled
+		if t.Config.CircuitBreaker.Enabled {
+			t.CircuitBreaker.OnFailure()
 		}
 
 		return resp, nil
 	}
 
-	t.circuitBreaker.OnSuccess()
+	// Success - notify circuit breaker if enabled
+	if t.Config.CircuitBreaker.Enabled {
+		t.CircuitBreaker.OnSuccess()
+	}
 
 	return resp, nil
 }
 
 // handleRetry manages the retry backoff and request cloning.
 func (t *ResilientTransport) handleRetry(req *http.Request, attempt uint) (*http.Request, error) {
-	backoff := t.retryStrategy.NextBackoff(attempt)
+	backoff := t.RetryStrategy.NextBackoff(attempt)
 	if backoff <= 0 {
 		return nil, ErrMaxRetries
 	}

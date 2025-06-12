@@ -17,11 +17,11 @@ const (
 )
 
 type RetryStrategy struct {
-	Config RetryConfig
+	Config *RetryStrategyConfig
 }
 
 // NewRetryStrategy creates a new retry strategy with the specified parameters.
-func NewRetryStrategy(config RetryConfig) *RetryStrategy {
+func NewRetryStrategy(config *RetryStrategyConfig) *RetryStrategy {
 	return &RetryStrategy{
 		Config: config,
 	}
@@ -54,17 +54,4 @@ func (r *RetryStrategy) NextBackoff(attempt uint) time.Duration {
 	}
 
 	return time.Duration(backoff)
-}
-
-func DefaultRetryStrategy() *RetryStrategy {
-	return &RetryStrategy{
-		Config: RetryConfig{
-			Enabled:         true,
-			MaxAttempts:     DefaultMaxAttempts,
-			InitialInterval: DefaultInitialInterval,
-			MaxInterval:     DefaultMaxInterval,
-			Multiplier:      DefaultMultiplier,
-			RandomFactor:    DefaultRandomFactor,
-		},
-	}
 }

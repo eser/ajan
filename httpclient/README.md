@@ -17,46 +17,200 @@ improved reliability and fault tolerance.
 
 ## Usage
 
-### Basic Usage
+The circuit breaker and retry strategy can be configured in **four independent modes**:
 
+### 1. Both Enabled (Default)
 ```go
-// Create a client with default settings
-client := httpclient.DefaultClient()
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled:               true,
+            FailureThreshold:      5,
+            ResetTimeout:          10 * time.Second,
+            HalfOpenSuccessNeeded: 2,
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled:         true,
+            MaxAttempts:     3,
+            InitialInterval: 100 * time.Millisecond,
+            MaxInterval:     10 * time.Second,
+            Multiplier:      2.0,
+            RandomFactor:    0.1,
+        },
+        ServerErrorThreshold: 500,
+    }),
+)
+```
 
-// Make requests as you would with http.Client
+**Behavior**: Requests are retried up to `MaxAttempts` times. If failures reach `FailureThreshold`, the circuit breaker opens and subsequent requests fail immediately with `ErrCircuitOpen`.
+
+### 2. Circuit Breaker Only (Retry Disabled)
+```go
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled:               true,
+            FailureThreshold:      3,
+            ResetTimeout:          1 * time.Second,
+            HalfOpenSuccessNeeded: 1,
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled: false, // Retry disabled
+        },
+        ServerErrorThreshold: 500,
+    }),
+)
+```
+
+**Behavior**: No retries are performed. After `FailureThreshold` failures, the circuit breaker opens. Server error responses (5xx) are returned directly until the circuit opens.
+
+### 3. Retry Only (Circuit Breaker Disabled)
+```go
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled: false, // Circuit breaker disabled
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled:         true,
+            MaxAttempts:     3,
+            InitialInterval: time.Millisecond,
+            MaxInterval:     time.Second,
+            Multiplier:      1.0,
+            RandomFactor:    0,
+        },
+        ServerErrorThreshold: 500,
+    }),
+)
+```
+
+**Behavior**: Requests are retried up to `MaxAttempts` times with exponential backoff. No circuit breaking occurs - retries continue regardless of failure patterns.
+
+### 4. Neither Enabled (Basic HTTP Client)
+```go
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled: false, // Circuit breaker disabled
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled: false, // Retry disabled
+        },
+        ServerErrorThreshold: 500,
+    }),
+)
+```
+
+**Behavior**: Behaves like a standard HTTP client. Requests are made once with no retries or circuit breaking. Server errors are returned directly.
+
+## Error Types
+
+The client returns specific errors based on the failure mode:
+
+- `ErrCircuitOpen`: Circuit breaker is open (circuit breaker feature)
+- `ErrMaxRetries`: Retry attempts exhausted (retry feature)
+- `ErrAllRetryAttemptsFailed`: All retry attempts failed with transport errors
+- `ErrTransportError`: Underlying transport failure
+- `ErrRequestBodyNotRetriable`: Request body cannot be retried
+
+## Usage Examples
+
+### Example 1: High-Availability Service (Both Enabled)
+```go
+// For critical services that need both retry resilience and circuit breaking
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled:               true,
+            FailureThreshold:      5,  // Open after 5 consecutive failures
+            ResetTimeout:          30 * time.Second,
+            HalfOpenSuccessNeeded: 3,  // Need 3 successes to close
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled:         true,
+            MaxAttempts:     3,        // Retry up to 3 times
+            InitialInterval: 200 * time.Millisecond,
+            MaxInterval:     5 * time.Second,
+            Multiplier:      2.0,
+            RandomFactor:    0.1,
+        },
+        ServerErrorThreshold: 500,
+    }),
+)
+
+resp, err := client.Get("https://critical-service.com/api")
+if errors.Is(err, httpclient.ErrCircuitOpen) {
+    // Circuit breaker is open - service is likely down
+    log.Warn("Circuit breaker open for critical service")
+} else if errors.Is(err, httpclient.ErrMaxRetries) {
+    // Retries exhausted but circuit breaker still allows requests
+    log.Error("All retries failed for critical service")
+}
+```
+
+### Example 2: Fast-Failing Service (Circuit Breaker Only)
+```go
+// For services where you want immediate failure detection
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled:               true,
+            FailureThreshold:      2,  // Fail fast after 2 failures
+            ResetTimeout:          5 * time.Second,
+            HalfOpenSuccessNeeded: 1,
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled: false, // No retries - fail fast
+        },
+    }),
+)
+```
+
+### Example 3: Transient Error Recovery (Retry Only)
+```go
+// For services with transient errors but no need for circuit breaking
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{
+            Enabled: false, // No circuit breaking
+        },
+        RetryStrategy: httpclient.RetryStrategyConfig{
+            Enabled:         true,
+            MaxAttempts:     5,        // Aggressive retry
+            InitialInterval: 50 * time.Millisecond,
+            MaxInterval:     2 * time.Second,
+            Multiplier:      1.5,
+            RandomFactor:    0.2,      // Add jitter
+        },
+    }),
+)
+```
+
+### Example 4: Simple HTTP Client (Neither Enabled)
+```go
+// For simple use cases or when you want to handle failures manually
+client := httpclient.NewClient(
+    httpclient.WithConfig(&httpclient.Config{
+        CircuitBreaker: httpclient.CircuitBreakerConfig{Enabled: false},
+        RetryStrategy:  httpclient.RetryStrategyConfig{Enabled: false},
+    }),
+)
+
+// Handle errors manually
 resp, err := client.Get("https://api.example.com")
 if err != nil {
-  // Handle error
+    // Handle transport errors
 }
-defer resp.Body.Close()
+if resp.StatusCode >= 500 {
+    // Handle server errors
+}
 ```
 
-### Custom Configuration
+### Example 5: Context Support
 
 ```go
-// Configure circuit breaker
-cb := httpclient.NewCircuitBreaker(
-  5,              // Failure threshold
-  10*time.Second, // Reset timeout
-  2,              // Half-open success needed
-)
+client := httpclient.NewClient()
 
-// Configure retry strategy
-rs := httpclient.NewRetryStrategy(
-  3,                    // Max attempts
-  100*time.Millisecond, // Initial interval
-  10*time.Second,       // Max interval
-  2.0,                  // Multiplier
-  0.1,                  // Random factor
-)
-
-// Create client with custom settings
-client := httpclient.NewClient(cb, rs)
-```
-
-### Context Support
-
-```go
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 
@@ -72,30 +226,53 @@ if err != nil {
 defer resp.Body.Close()
 ```
 
-## Circuit Breaker States
+## Configuration Details
 
-The circuit breaker has three states:
+### Circuit Breaker Configuration
+```go
+type CircuitBreakerConfig struct {
+    Enabled               bool          // Enable/disable circuit breaker
+    FailureThreshold      uint          // Number of failures to open circuit
+    ResetTimeout          time.Duration // Time before trying half-open
+    HalfOpenSuccessNeeded uint          // Successes needed to close circuit
+}
+```
 
-1. **Closed** (default): Requests flow normally
-2. **Open**: Requests are immediately rejected
-3. **Half-Open**: Limited requests are allowed to test the service
+### Retry Strategy Configuration
+```go
+type RetryStrategyConfig struct {
+    Enabled         bool          // Enable/disable retry mechanism
+    MaxAttempts     uint          // Maximum number of attempts (including initial)
+    InitialInterval time.Duration // Initial retry delay
+    MaxInterval     time.Duration // Maximum retry delay
+    Multiplier      float64       // Backoff multiplier
+    RandomFactor    float64       // Jitter factor (0.0 to 1.0)
+}
+```
 
-## Retry Strategy
+## Testing
 
-The retry mechanism implements exponential backoff with optional jitter:
+The package includes comprehensive tests covering all four independent operation modes:
 
-- Initial retry interval grows exponentially with each attempt
-- Random jitter helps prevent thundering herd problems
-- Maximum interval caps the exponential growth
-- Configurable maximum number of attempts
+- `TestClientCircuitBreakerOnly`: Circuit breaker enabled, retry disabled
+- `TestClientRetryOnly`: Retry enabled, circuit breaker disabled
+- `TestClientCircuitBreakerAndRetryBoth`: Both features enabled with retry exhaustion
+- `TestClientCircuitBreakerOpensBeforeRetryExhaustion`: Circuit breaker opens before retries exhaust
+- `TestClientNoResilienceFeatures`: Both features disabled
 
-## Error Handling
+Run tests with:
+```bash
+go test -v ./httpclient
+```
 
-The client provides specific error types for different failure scenarios:
+## Best Practices
 
-- `ErrCircuitOpen`: When the circuit breaker is open
-- `ErrMaxRetries`: When maximum retry attempts are exceeded
-- `ErrRequestBodyNotRetriable`: When request body cannot be retried
+1. **Use Both for Critical Services**: Enable both circuit breaker and retry for mission-critical external services
+2. **Circuit Breaker for Unstable Services**: Use circuit breaker only for services known to have stability issues
+3. **Retry for Transient Errors**: Use retry only for services with temporary network issues
+4. **Monitor Metrics**: Track circuit breaker state and retry counts for observability
+5. **Configure Timeouts**: Always set appropriate request timeouts alongside these features
+
 
 ## Best Practices
 

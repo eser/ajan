@@ -17,7 +17,7 @@ const (
 type CircuitBreaker struct {
 	lastFailureTime time.Time
 
-	Config CircuitBreakerConfig
+	Config *CircuitBreakerConfig
 
 	state                CircuitState
 	failureCount         uint
@@ -25,7 +25,7 @@ type CircuitBreaker struct {
 	mu                   sync.RWMutex
 }
 
-func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
+func NewCircuitBreaker(config *CircuitBreakerConfig) *CircuitBreaker {
 	return &CircuitBreaker{ //nolint:exhaustruct
 		Config: config,
 		state:  StateClosed,

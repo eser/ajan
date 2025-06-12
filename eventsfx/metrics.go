@@ -13,24 +13,24 @@ var ErrFailedToBuildEventDispatchesCounter = errors.New(
 
 // Metrics holds event-specific metrics using the simplified MetricsBuilder approach.
 type Metrics struct {
-	builder *metricsfx.MetricsBuilder
+	Provider *metricsfx.MetricsProvider
 
 	EventDispatchesTotal *metricsfx.CounterMetric
 }
 
 // NewMetrics creates event metrics using the simplified MetricsBuilder.
 func NewMetrics(provider *metricsfx.MetricsProvider) *Metrics {
-	builder := provider.NewBuilder()
-
 	return &Metrics{
-		builder: builder,
+		Provider: provider,
 
 		EventDispatchesTotal: nil,
 	}
 }
 
 func (metrics *Metrics) Init() error {
-	eventDispatchesTotal, err := metrics.builder.Counter(
+	builder := metrics.Provider.NewBuilder()
+
+	eventDispatchesTotal, err := builder.Counter(
 		"event_dispatches_total",
 		"Total number of event dispatches",
 	).WithUnit("{dispatch}").Build()
