@@ -6,7 +6,7 @@
 standard `net/http` interfaces while providing additional features for
 improved reliability and fault tolerance.
 
-## Features
+## Key Features
 
 - Drop-in replacement for `net/http.Client`
 - Circuit breaker pattern implementation

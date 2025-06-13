@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"crypto/tls"
 	"net/http"
 )
 
@@ -8,14 +9,16 @@ import (
 type Client struct {
 	*http.Client
 
-	Config    *Config
-	Transport *ResilientTransport
+	Config          *Config
+	Transport       *ResilientTransport
+	TLSClientConfig *tls.Config
 }
 
 // NewClient creates a new http client with the specified circuit breaker and retry strategy.
 func NewClient(options ...NewClientOption) *Client {
 	client := &Client{
-		Client: nil,
+		Client:          nil,
+		TLSClientConfig: nil,
 
 		Config: &Config{
 			CircuitBreaker: CircuitBreakerConfig{
@@ -43,12 +46,26 @@ func NewClient(options ...NewClientOption) *Client {
 	}
 
 	if client.Transport == nil {
-		transport := NewResilientTransport(
-			http.DefaultTransport,
+		// Create a copy of the default transport to avoid race conditions
+		defaultTransport, transportOk := http.DefaultTransport.(*http.Transport)
+		if !transportOk {
+			return nil
+		}
+
+		// Clone the transport to avoid modifying the shared default transport
+		transport := defaultTransport.Clone()
+
+		// Set TLS config if provided
+		if client.TLSClientConfig != nil {
+			transport.TLSClientConfig = client.TLSClientConfig
+		}
+
+		resilientTransport := NewResilientTransport(
+			transport,
 			client.Config,
 		)
 
-		client.Transport = transport
+		client.Transport = resilientTransport
 	}
 
 	client.Client = &http.Client{ //nolint:exhaustruct

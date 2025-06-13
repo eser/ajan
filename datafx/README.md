@@ -83,7 +83,7 @@ type NotificationMessage struct {
 }
 ```
 
-## Features
+## Key Features
 
 - **Technology Agnostic**: Same API works with Redis, SQL databases, document stores, message queues, etc.
 - **Automatic Marshaling**: Handles JSON serialization/deserialization transparently

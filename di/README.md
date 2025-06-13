@@ -8,7 +8,7 @@ implementations, interface bindings, and dependency resolution through
 reflection. The package is designed to be simple to use while providing robust
 dependency management capabilities.
 
-## Features
+## Key Features
 
 - Type-safe dependency injection
 - Interface-to-implementation binding

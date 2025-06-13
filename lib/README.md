@@ -4,7 +4,7 @@
 
 **lib** is a comprehensive utility library for Go applications that provides commonly used helper functions across various domains including networking, cryptography, environment handling, string manipulation, and more.
 
-## Features
+## Key Features
 
 - **Network Utilities**: IP address parsing, host/port splitting, local network detection
 - **Cryptography**: Self-signed certificate generation, random byte generation

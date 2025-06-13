@@ -62,6 +62,9 @@ func NewRegistryWithDefaults(logger *logfx.Logger) *Registry {
 	// adapter_amqp.go
 	registry.RegisterFactory(NewAMQPConnectionFactory("amqp"))
 
+	// adapter_otlp.go
+	registry.RegisterFactory(NewOTLPConnectionFactory("otlp"))
+
 	return registry
 }
 

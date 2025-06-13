@@ -19,14 +19,12 @@ func setupTestMetricsProvider(t *testing.T) *metricsfx.MetricsProvider {
 	t.Helper()
 
 	provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
-		ServiceName:              "",
-		ServiceVersion:           "",
-		OTLPEndpoint:             "",
-		OTLPInsecure:             false,
-		PrometheusEndpoint:       "",
-		ExportInterval:           0,
-		RegisterNativeCollectors: false,
-	})
+		ServiceName:                   "test-service",
+		ServiceVersion:                "1.0.0",
+		OTLPConnectionName:            "", // No connection for testing
+		ExportInterval:                30 * time.Second,
+		NoNativeCollectorRegistration: true,
+	}, nil) // nil registry for testing
 
 	err := provider.Init()
 	require.NoError(t, err)

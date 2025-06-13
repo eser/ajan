@@ -13,8 +13,8 @@ var (
 	ErrFailedToParseLogLevel = errors.New("failed to parse log level")
 	ErrFailedToWriteLog      = errors.New("failed to write log")
 	ErrFailedToHandleLog     = errors.New("failed to handle log")
-	ErrFailedToInitLoki      = errors.New("failed to initialize loki client")
-	ErrFailedToInitOTLP      = errors.New("failed to initialize OTLP client")
+	ErrConnectionNotFound    = errors.New("connection not found")
+	ErrConnectionNotOTLP     = errors.New("connection is not an OTLP connection")
 )
 
 type Handler struct {
@@ -25,12 +25,11 @@ type Handler struct {
 	InnerWriter io.Writer
 	InnerConfig *Config
 
-	// Export clients (prioritized: OTLP -> Loki)
-	OTLPClient *OTLPClient
-	LokiClient *LokiClient
+	// OTLP bridge for sending logs
+	OTLPBridge *OTLPBridge
 }
 
-func NewHandler(w io.Writer, config *Config) *Handler {
+func NewHandler(w io.Writer, config *Config, registry ConnectionRegistry) *Handler {
 	var initError error
 
 	var l slog.Level
@@ -52,30 +51,10 @@ func NewHandler(w io.Writer, config *Config) *Handler {
 
 	innerHandler := slog.NewJSONHandler(w, opts)
 
-	// Initialize OTLP client if configured (preferred)
-	var otlpClient *OTLPClient
-	if config.OTLPEndpoint != "" {
-		otlpClient, err = NewOTLPClient(config.OTLPEndpoint, config.OTLPInsecure)
-		if err != nil {
-			if initError != nil {
-				initError = fmt.Errorf("%w; %w: %w", initError, ErrFailedToInitOTLP, err)
-			} else {
-				initError = fmt.Errorf("%w: %w", ErrFailedToInitOTLP, err)
-			}
-		}
-	}
-
-	// Initialize Loki client if configured (fallback or additional)
-	var lokiClient *LokiClient
-	if config.LokiURI != "" {
-		lokiClient, err = NewLokiClient(config.LokiURI, config.LokiLabel)
-		if err != nil {
-			if initError != nil {
-				initError = fmt.Errorf("%w; %w: %w", initError, ErrFailedToInitLoki, err)
-			} else {
-				initError = fmt.Errorf("%w: %w", ErrFailedToInitLoki, err)
-			}
-		}
+	// Create OTLP bridge if registry is provided
+	var otlpBridge *OTLPBridge
+	if registry != nil {
+		otlpBridge = NewOTLPBridge(registry)
 	}
 
 	return &Handler{
@@ -85,8 +64,7 @@ func NewHandler(w io.Writer, config *Config) *Handler {
 		InnerWriter:  w,
 		InnerConfig:  config,
 
-		OTLPClient: otlpClient,
-		LokiClient: lokiClient,
+		OTLPBridge: otlpBridge,
 	}
 }
 
@@ -100,14 +78,9 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 		rec.AddAttrs(slog.String("correlation_id", correlationID))
 	}
 
-	// Send to OTLP collector if configured (preferred for OpenTelemetry)
-	if h.OTLPClient != nil {
-		h.OTLPClient.SendLog(ctx, rec)
-	}
-
-	// Send to Loki if configured (legacy/additional option)
-	if h.LokiClient != nil {
-		h.LokiClient.SendLog(ctx, rec)
+	// Send to OTLP collector if configured
+	if h.InnerConfig.OTLPConnectionName != "" && h.OTLPBridge != nil {
+		h.sendToOTLP(ctx, rec)
 	}
 
 	if h.InnerConfig.PrettyMode {
@@ -147,8 +120,7 @@ func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		InnerWriter: h.InnerWriter,
 		InnerConfig: h.InnerConfig,
 
-		OTLPClient: h.OTLPClient,
-		LokiClient: h.LokiClient,
+		OTLPBridge: h.OTLPBridge,
 	}
 }
 
@@ -161,22 +133,23 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 		InnerWriter: h.InnerWriter,
 		InnerConfig: h.InnerConfig,
 
-		OTLPClient: h.OTLPClient,
-		LokiClient: h.LokiClient,
+		OTLPBridge: h.OTLPBridge,
 	}
 }
 
 // Shutdown gracefully shuts down any active export clients.
 func (h *Handler) Shutdown(ctx context.Context) error {
-	var err error
+	// The connection registry handles shutdown of connections
+	// No need to shutdown OTLP client directly
+	return nil
+}
 
-	if h.OTLPClient != nil {
-		if shutdownErr := h.OTLPClient.Shutdown(ctx); shutdownErr != nil {
-			err = fmt.Errorf("failed to shutdown OTLP client: %w", shutdownErr)
+// sendToOTLP sends a log record to the OTLP connection asynchronously.
+func (h *Handler) sendToOTLP(ctx context.Context, rec slog.Record) {
+	go func() {
+		if err := h.OTLPBridge.SendLog(ctx, h.InnerConfig.OTLPConnectionName, rec); err != nil {
+			// Use slog for error logging to avoid infinite recursion
+			slog.Error("Failed to send log to OTLP collector", "error", err)
 		}
-	}
-
-	// Note: Loki client doesn't need shutdown as it uses simple HTTP client
-
-	return err
+	}()
 }

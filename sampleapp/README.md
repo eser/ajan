@@ -18,14 +18,15 @@ Infrastructure (SQLite, Redis, AMQP, etc.)
 
 ## Features Demonstrated
 
-- **🔌 Connection Management**: Multi-protocol connection registry with health checks
-- **📊 Data Operations**: Technology-agnostic CRUD operations with automatic JSON marshaling
-- **💾 Transaction Support**: ACID transactions for compatible storage backends
-- **⚡ Cache Operations**: High-performance caching with TTL/expiration support
-- **📨 Message Queues**: Reliable message publishing and consumption with acknowledgments
-- **📝 Structured Logging**: JSON-formatted logs with configurable levels
-- **📈 Metrics Collection**: Runtime and custom metrics with Prometheus integration
-- **🐳 Docker Support**: Multi-stage builds for development and production
+- **🚀 Modern Architecture**: Clean separation using Hexagonal Architecture
+- **🔄 Observability-First**: Comprehensive logging, metrics, and tracing
+- **📊 OpenTelemetry Integration**: Modern observability standards with collector support
+- **📈 Metrics Collection**: Runtime and custom metrics with OpenTelemetry export
+- **🔧 Flexible Configuration**: Environment-aware configuration system
+- **🌐 HTTP Server**: Production-ready HTTP service with middleware
+- **💾 Database Support**: Multi-database connectivity with behavior patterns
+- **🛡️ Security**: Authentication, CORS, and security middleware
+- **📝 Documentation**: OpenAPI/Swagger documentation generation
 
 ## Quick Start
 

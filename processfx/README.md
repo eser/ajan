@@ -2,7 +2,7 @@
 
 ProcessFX is a process and goroutine lifecycle management utility for Go applications that provides graceful shutdown handling, signal management, and coordinated cleanup of concurrent operations.
 
-## Features
+## Key Features
 
 - **Graceful Shutdown**: Automatic handling of OS signals (SIGINT, SIGTERM)
 - **Goroutine Management**: Named goroutine tracking with lifecycle management

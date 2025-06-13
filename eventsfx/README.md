@@ -26,13 +26,13 @@ config := &eventsfx.Config{
 }
 ```
 
-## Features
+## Key Features
 
 - Synchronous and asynchronous event handling
 - Event buffering with configurable queue size
 - Timeout handling for synchronous events
 - Support for multiple subscribers per event
-- Metrics integration with Prometheus
+- Observability and metrics integration
 - Integration with dependency injection
 
 ## API
@@ -65,3 +65,15 @@ reply, err := bus.PublishSync(Event{
   Data: userData,
 })
 ```
+
+### Key Features
+
+- 🎯 **Event-driven architecture** - Clean separation of concerns through events
+- 🔄 **Automatic retries** - Built-in retry mechanisms with exponential backoff
+- 📊 **Observability** - Built-in tracing and logging for all operations
+- ⚡ **High performance** - Optimized for throughput and low latency
+- 🎛️ **Flexible routing** - Route events based on type, source, or custom logic
+- 🔧 **Extensible** - Easy to add custom event types and handlers
+- 📈 **Monitoring** - Health checks and operational metrics
+- 🚦 **Circuit breaker** - Prevents cascading failures
+- 💪 **Type safety** - Strongly typed event system

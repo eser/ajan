@@ -67,7 +67,7 @@ router := httpfx.NewRouter("/")
 hs := httpfx.NewHTTPService(config, router)
 ```
 
-## Features
+## Key Features
 
 - HTTP routing with support for path parameters and wildcards
 - Middleware support for request/response processing

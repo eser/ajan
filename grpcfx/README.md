@@ -30,7 +30,7 @@ config := &grpcfx.Config{
 }
 ```
 
-## Features
+## Key Features
 
 - gRPC service setup and configuration
 - Server reflection support

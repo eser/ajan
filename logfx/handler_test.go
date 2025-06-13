@@ -2,12 +2,8 @@ package logfx_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,14 +31,11 @@ func TestNewHandler(t *testing.T) {
 			name:   "ValidConfig",
 			writer: &bytes.Buffer{},
 			config: &logfx.Config{
-				Level:         "INFO",
-				PrettyMode:    true,
-				AddSource:     false,
-				DefaultLogger: false,
-				OTLPEndpoint:  "",
-				OTLPInsecure:  false,
-				LokiURI:       "",
-				LokiLabel:     "",
+				Level:              "INFO",
+				PrettyMode:         true,
+				AddSource:          false,
+				DefaultLogger:      false,
+				OTLPConnectionName: "", // No connection for testing
 			},
 			expectedErr: nil,
 		},
@@ -50,14 +43,11 @@ func TestNewHandler(t *testing.T) {
 			name:   "InvalidLogLevel",
 			writer: &bytes.Buffer{},
 			config: &logfx.Config{
-				Level:         "INVALID",
-				PrettyMode:    true,
-				AddSource:     false,
-				DefaultLogger: false,
-				OTLPEndpoint:  "",
-				OTLPInsecure:  false,
-				LokiURI:       "",
-				LokiLabel:     "",
+				Level:              "INVALID",
+				PrettyMode:         true,
+				AddSource:          false,
+				DefaultLogger:      false,
+				OTLPConnectionName: "", // No connection for testing
 			},
 			expectedErr: logfx.ErrFailedToParseLogLevel,
 		},
@@ -67,7 +57,7 @@ func TestNewHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := logfx.NewHandler(tt.writer, tt.config)
+			handler := logfx.NewHandler(tt.writer, tt.config, nil) // nil registry for testing
 
 			if tt.expectedErr != nil {
 				require.Error(t, handler.InitError)
@@ -149,7 +139,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 			handler := logfx.NewHandler(writer, &logfx.Config{ //nolint:exhaustruct
 				Level:      tt.level,
 				PrettyMode: true,
-			})
+			}, nil)
 
 			err := handler.Handle(t.Context(), tt.record)
 			require.NoError(t, err)
@@ -164,7 +154,7 @@ func TestHandler_Handle(t *testing.T) { //nolint:funlen
 		handler := logfx.NewHandler(&mockFailWriter{}, &logfx.Config{ //nolint:exhaustruct
 			Level:      "info",
 			PrettyMode: true,
-		})
+		}, nil)
 		err := handler.Handle(t.Context(), slog.NewRecord(time.Time{}, slog.LevelInfo, "test", 0))
 		assert.EqualError(t, err, "failed to write log: failed to write")
 	})
@@ -175,7 +165,7 @@ func TestHandler_WithAttrs(t *testing.T) {
 
 	handler := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
 		Level: "info",
-	})
+	}, nil)
 	newHandler := handler.WithAttrs(make([]slog.Attr, 0))
 	// FIXME(@eser) should equal or not?
 	assert.Equal(t, handler, newHandler)
@@ -186,227 +176,7 @@ func TestHandler_WithGroup(t *testing.T) {
 
 	handler := logfx.NewHandler(&bytes.Buffer{}, &logfx.Config{ //nolint:exhaustruct
 		Level: "info",
-	})
+	}, nil)
 	newHandler := handler.WithGroup("test")
 	assert.NotEqual(t, handler, newHandler)
-}
-
-func TestHandler_LokiIntegration(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name         string
-		lokiURI      string
-		lokiLabel    string
-		expectLoki   bool
-		expectError  bool
-		responseCode int
-	}{
-		{
-			name:         "loki configured and working",
-			lokiURI:      "", // Will be set to test server URL
-			lokiLabel:    "app=test,env=dev",
-			expectLoki:   true,
-			expectError:  false,
-			responseCode: 200,
-		},
-		{
-			name:         "loki not configured",
-			lokiURI:      "",
-			lokiLabel:    "",
-			expectLoki:   false,
-			expectError:  false,
-			responseCode: 0,
-		},
-		{
-			name:         "loki server error",
-			lokiURI:      "", // Will be set to test server URL
-			lokiLabel:    "app=test",
-			expectLoki:   true,
-			expectError:  false, // Handler should not fail even if Loki fails
-			responseCode: 500,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			testLokiIntegrationCase(t, tt)
-		})
-	}
-}
-
-func testLokiIntegrationCase(t *testing.T, tt struct {
-	name         string
-	lokiURI      string
-	lokiLabel    string
-	expectLoki   bool
-	expectError  bool
-	responseCode int
-},
-) {
-	t.Helper()
-
-	var lokiRequestReceived atomic.Bool
-
-	var receivedPayload *logfx.LokiPayload
-
-	// Create test server for Loki if needed
-	server := createTestServerIfNeeded(t, tt, &lokiRequestReceived, &receivedPayload)
-	if server != nil {
-		defer server.Close()
-		tt.lokiURI = server.URL
-	}
-
-	// Create and test handler
-	handler, buf := createAndTestHandler(t, tt)
-
-	// Create and handle a log record
-	testLogRecord(t, handler, buf, tt, &lokiRequestReceived, receivedPayload)
-}
-
-func createTestServerIfNeeded(t *testing.T, tt struct {
-	name         string
-	lokiURI      string
-	lokiLabel    string
-	expectLoki   bool
-	expectError  bool
-	responseCode int
-}, lokiRequestReceived *atomic.Bool, receivedPayload **logfx.LokiPayload,
-) *httptest.Server {
-	t.Helper()
-
-	if !tt.expectLoki {
-		return nil
-	}
-
-	return httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			lokiRequestReceived.Store(true)
-
-			assert.Equal(t, "POST", r.Method)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-			if tt.responseCode == 200 {
-				var payload logfx.LokiPayload
-
-				err := json.NewDecoder(r.Body).Decode(&payload)
-				if err == nil {
-					*receivedPayload = &payload
-				}
-			}
-
-			w.WriteHeader(tt.responseCode)
-		}),
-	)
-}
-
-func createAndTestHandler(t *testing.T, tt struct {
-	name         string
-	lokiURI      string
-	lokiLabel    string
-	expectLoki   bool
-	expectError  bool
-	responseCode int
-},
-) (*logfx.Handler, *bytes.Buffer) {
-	t.Helper()
-
-	// Create config
-	config := &logfx.Config{
-		Level:         "INFO",
-		PrettyMode:    false,
-		AddSource:     false,
-		DefaultLogger: false,
-		LokiURI:       tt.lokiURI,
-		LokiLabel:     tt.lokiLabel,
-		OTLPEndpoint:  "",
-		OTLPInsecure:  false,
-	}
-
-	// Create handler
-	var buf bytes.Buffer
-	handler := logfx.NewHandler(&buf, config)
-
-	// Verify initialization
-	if tt.expectError {
-		require.Error(t, handler.InitError)
-	} else {
-		if tt.expectLoki {
-			assert.NotNil(t, handler.LokiClient)
-		} else {
-			assert.Nil(t, handler.LokiClient)
-		}
-	}
-
-	return handler, &buf
-}
-
-func testLogRecord(t *testing.T, handler *logfx.Handler, buf *bytes.Buffer, tt struct {
-	name         string
-	lokiURI      string
-	lokiLabel    string
-	expectLoki   bool
-	expectError  bool
-	responseCode int
-}, lokiRequestReceived *atomic.Bool, receivedPayload *logfx.LokiPayload,
-) {
-	t.Helper()
-
-	// Create and handle a log record
-	ctx := t.Context()
-	rec := slog.NewRecord(time.Now(), slog.LevelInfo, "test log message", 0)
-	rec.AddAttrs(
-		slog.String("user_id", "12345"),
-		slog.String("action", "login"),
-	)
-
-	err := handler.Handle(ctx, rec)
-	require.NoError(t, err, "Handler.Handle should not fail even if Loki fails")
-
-	// Verify log was written to buffer (normal logging should always work)
-	logOutput := buf.String()
-	assert.Contains(t, logOutput, "test log message")
-
-	// Give time for async Loki call to complete
-	if tt.expectLoki {
-		time.Sleep(200 * time.Millisecond)
-
-		// Verify Loki received the request
-		assert.True(t, lokiRequestReceived.Load(), "Loki should have received a request")
-
-		if tt.responseCode == 200 && receivedPayload != nil {
-			verifyLokiPayload(t, receivedPayload)
-		}
-	} else {
-		assert.False(t, lokiRequestReceived.Load(), "Loki should not have received a request")
-	}
-}
-
-func verifyLokiPayload(t *testing.T, receivedPayload *logfx.LokiPayload) {
-	t.Helper()
-
-	// Verify payload structure
-	assert.Len(t, receivedPayload.Streams, 1)
-	stream := receivedPayload.Streams[0]
-
-	// Verify labels
-	assert.Equal(t, "test", stream.Stream["app"])
-	assert.Equal(t, "dev", stream.Stream["env"])
-	assert.Equal(t, "INFO", stream.Stream["level"])
-
-	// Verify log entry
-	assert.Len(t, stream.Values, 1)
-	assert.Len(t, stream.Values[0], 2) // timestamp and log line
-
-	// Parse the log line
-	var logData map[string]any
-	err := json.Unmarshal([]byte(stream.Values[0][1]), &logData)
-	require.NoError(t, err)
-
-	assert.Equal(t, "test log message", logData["msg"])
-	assert.Equal(t, "INFO", logData["level"])
-	assert.Equal(t, "12345", logData["user_id"])
-	assert.Equal(t, "login", logData["action"])
 }

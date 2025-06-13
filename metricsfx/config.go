@@ -8,16 +8,11 @@ type Config struct {
 	ServiceName    string `conf:"service_name"    default:""`
 	ServiceVersion string `conf:"service_version" default:""`
 
-	// OpenTelemetry Collector configuration (preferred)
-	OTLPEndpoint string `conf:"otlp_endpoint" default:""`
-
-	// Legacy direct exporters (still supported)
-	PrometheusEndpoint string `conf:"prometheus_endpoint" default:""`
+	// Connection name for OTLP export (uses connfx registry)
+	OTLPConnectionName string `conf:"otlp_connection_name" default:""`
 
 	// Export interval
 	ExportInterval time.Duration `conf:"export_interval" default:"30s"`
 
-	RegisterNativeCollectors bool `conf:"register_native_collectors" default:"true"`
-
-	OTLPInsecure bool `conf:"otlp_insecure" default:"true"`
+	NoNativeCollectorRegistration bool `conf:"no_native_collector_registration" default:"false"`
 }

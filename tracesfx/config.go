@@ -8,9 +8,8 @@ type Config struct {
 	ServiceName    string `conf:"service_name"    default:""`
 	ServiceVersion string `conf:"service_version" default:""`
 
-	// OpenTelemetry Collector configuration
-	OTLPEndpoint string `conf:"otlp_endpoint" default:""`
-	OTLPInsecure bool   `conf:"otlp_insecure" default:"true"`
+	// Connection name for OTLP export (uses connfx registry)
+	OTLPConnectionName string `conf:"otlp_connection_name" default:""`
 
 	// Sampling configuration
 	SampleRatio float64 `conf:"sample_ratio" default:"1.0"`

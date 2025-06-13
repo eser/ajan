@@ -27,7 +27,7 @@ func NewLogger(options ...NewLoggerOption) *Logger {
 	}
 
 	if logger.Logger == nil {
-		handler := NewHandler(logger.Writer, logger.Config)
+		handler := NewHandler(logger.Writer, logger.Config, nil)
 		logger.Logger = slog.New(handler)
 
 		if handler.InitError != nil {

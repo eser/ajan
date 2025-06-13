@@ -108,8 +108,7 @@ func (c *OTLPClient) Shutdown(ctx context.Context) error {
 }
 
 // sendLogSync sends a log record to OpenTelemetry collector synchronously.
-// Note: Always returns nil since OpenTelemetry's Emit method doesn't return errors,
-// but kept for interface consistency with loki_client.go.
+// Note: Always returns nil since OpenTelemetry's Emit method doesn't return errors.
 func (c *OTLPClient) sendLogSync(ctx context.Context, rec slog.Record) error { //nolint:unparam
 	// Convert slog level to OpenTelemetry log severity
 	severity := convertSlogLevel(rec.Level)

@@ -1,518 +1,455 @@
-# 🔍 **tracesfx** - Distributed Tracing with OpenTelemetry
+# ajan/tracesfx
 
-**tracesfx** provides a clean, lightweight wrapper around OpenTelemetry tracing that integrates seamlessly with `logfx` and `metricsfx` to create a complete observability stack.
+## Overview
 
-## ✨ **Key Features**
+**tracesfx** provides comprehensive distributed tracing capabilities built on OpenTelemetry with **centralized OTLP connection management** through `connfx`. It offers request correlation, automatic span management, and seamless integration with other observability packages for complete telemetry coverage.
 
-- 🚀 **Zero-Config Start** - Works out of the box with sensible defaults
-- 🔗 **Seamless Integration** - Native correlation with logs and metrics
-- 📊 **OTLP Support** - Built-in OpenTelemetry Protocol export
-- 🎯 **Clean API** - Simple, focused interface without unnecessary complexity
-- 🔧 **Configurable Sampling** - Control trace volume with ratio-based sampling
-- 📝 **Auto-Correlation** - Automatic correlation ID propagation from `logfx`
+### Key Features
 
-## 🏗️ **Architecture Integration**
+- 🔍 **Distributed Tracing** - Full request tracing across service boundaries
+- 🔄 **Automatic Correlation** - Request correlation with logs and metrics
+- 🌐 **Centralized OTLP Integration** - Uses `connfx` registry for shared OTLP connections
+- ⚡ **Performance Optimized** - Efficient batch exports with configurable sampling
+- 🎛️ **Flexible Configuration** - Environment-based configuration with sensible defaults
+- 🔗 **Service Integration** - Seamless integration with `httpfx`, `grpcfx`, and other packages
+- 📊 **Context Propagation** - Automatic trace context propagation across HTTP calls
 
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   logfx     │◄──►│  tracesfx   │◄──►│ metricsfx   │
-│ (Logging)   │    │ (Tracing)   │    │ (Metrics)   │
-└─────────────┘    └─────────────┘    └─────────────┘
-       │                   │                   │
-       └───────────────────┼───────────────────┘
-                           │
-               ┌─────────────────────┐
-               │  OpenTelemetry      │
-               │  Collector/Backend  │
-               └─────────────────────┘
-```
+## Quick Start
 
-## 📦 **Installation**
-
-```bash
-go get go.opentelemetry.io/otel
-```
-
-The required OpenTelemetry dependencies are automatically included.
-
-## 🚀 **Quick Start**
-
-### Basic Setup
+### Basic Usage
 
 ```go
 package main
 
 import (
     "context"
-    "log"
+    "time"
 
-    "github.com/eser/ajan/tracesfx"
-)
-
-func main() {
-    // Create and initialize traces provider
-    provider := tracesfx.NewTracesProvider(&tracesfx.Config{
-        ServiceName:    "my-service",
-        ServiceVersion: "1.0.0",
-        OTLPEndpoint:   "http://localhost:4318",
-        OTLPInsecure:   true,
-        SampleRatio:    1.0, // Sample 100% for development
-    })
-
-    if err := provider.Init(); err != nil {
-        log.Fatal(err)
-    }
-    defer provider.Shutdown(context.Background())
-
-    // Get a tracer
-    tracer := provider.Tracer("my-component")
-
-    // Create spans
-    ctx, span := tracer.Start(context.Background(), "do-work")
-    defer span.End()
-
-    // Your business logic here
-    doWork(ctx)
-}
-
-func doWork(ctx context.Context) {
-    // Spans automatically propagate through context
-    span := trace.SpanFromContext(ctx)
-    span.SetAttributes(attribute.String("work.type", "important"))
-}
-```
-
-### Integration with logfx
-
-```go
-import (
+    "github.com/eser/ajan/connfx"
     "github.com/eser/ajan/logfx"
     "github.com/eser/ajan/tracesfx"
 )
 
-func setupObservability() {
-    // Setup tracing
-    tracesProvider := tracesfx.NewTracesProvider(&tracesfx.Config{
-        ServiceName:  "my-service",
-        OTLPEndpoint: "http://localhost:4318",
+func main() {
+    ctx := context.Background()
+
+    // Create logger and connection registry
+    logger := logfx.NewLogger()
+    registry := connfx.NewRegistryWithDefaults(logger)
+
+    // Configure OTLP connection once, use everywhere
+    _, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":    "my-service",
+            "service_version": "1.0.0",
+            "insecure":        true,
+        },
     })
-    tracesProvider.Init()
-
-    // Setup logging
-    logger := logfx.NewLogger(
-        logfx.WithOTLP("http://localhost:4318", false),
-    )
-
-    // Use together - trace IDs automatically appear in logs
-    tracer := tracesProvider.Tracer("my-service")
-    ctx, span := tracer.Start(context.Background(), "user-request")
-
-    // This log will include trace_id and span_id
-    logger.InfoContext(ctx, "Processing user request",
-        slog.String("user_id", "12345"))
-
-    span.End()
-}
-```
-
-### Correlation ID Integration
-
-```go
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-    // Extract or generate correlation ID (typically done by middleware)
-    correlationID := r.Header.Get("X-Correlation-ID")
-    if correlationID == "" {
-        correlationID = generateCorrelationID()
+    if err != nil {
+        panic(err)
     }
 
-    // Add to context
-    ctx := tracesfx.SetCorrelationIDInContext(r.Context(), correlationID)
+    // Create traces provider with connection registry
+    provider := tracesfx.NewTracesProvider(&tracesfx.Config{
+        ServiceName:        "my-service",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel", // Reference the connection
+        SampleRatio:        1.0,    // Sample 100% of traces for development
+        BatchTimeout:       5 * time.Second,
+        BatchSize:          512,
+    }, registry) // Pass the registry
 
-    // Start span with automatic correlation
-    tracer := getTracer()
-    ctx, span := tracer.StartSpanWithCorrelation(ctx, "handle-request")
+    // Initialize provider (enables OTLP export)
+    err = provider.Init()
+    if err != nil {
+        panic(err)
+    }
+    defer provider.Shutdown(ctx)
+
+    // Create tracer for your service
+    tracer := provider.Tracer("my-service")
+
+    // Start tracing operations
+    spanCtx, span := tracer.Start(ctx, "main_operation")
     defer span.End()
 
-    // Both traces and logs will include correlation_id
-    processRequest(ctx)
+    // Add attributes to spans
+    span.SetAttributes(
+        tracesfx.StringAttr("user_id", "123"),
+        tracesfx.StringAttr("operation", "data_processing"),
+    )
+
+    // Nested operations are automatically child spans
+    processData(spanCtx, tracer)
+
+    // Add events to spans
+    span.AddEvent("operation_completed")
+}
+
+func processData(ctx context.Context, tracer *tracesfx.Tracer) {
+    // Child spans are automatically created with proper parent relationship
+    _, span := tracer.Start(ctx, "process_data")
+    defer span.End()
+
+    // Simulate work
+    time.Sleep(100 * time.Millisecond)
+
+    span.SetAttributes(tracesfx.IntAttr("records_processed", 42))
 }
 ```
 
-## ⚙️ **Configuration**
+### Complete Observability Stack Integration
 
-### Config Structure
+```go
+package main
+
+import (
+    "context"
+    "net/http"
+    "time"
+
+    "github.com/eser/ajan/connfx"
+    "github.com/eser/ajan/httpfx"
+    "github.com/eser/ajan/httpfx/middlewares"
+    "github.com/eser/ajan/logfx"
+    "github.com/eser/ajan/metricsfx"
+    "github.com/eser/ajan/tracesfx"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Step 1: Create shared OTLP connection
+    logger := logfx.NewLogger()
+    registry := connfx.NewRegistryWithDefaults(logger)
+
+    _, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":     "my-api",
+            "service_version":  "1.0.0",
+            "insecure":         true,
+            "sample_ratio":     1.0,
+            "batch_timeout":    "5s",
+            "batch_size":       512,
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    // Step 2: Create observability stack using shared connection
+
+    // Traces for request tracing
+    tracesProvider := tracesfx.NewTracesProvider(&tracesfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        SampleRatio:        1.0,
+        BatchTimeout:       5 * time.Second,
+        BatchSize:          512,
+    }, registry)
+    _ = tracesProvider.Init()
+
+    // Metrics with automatic correlation
+    metricsProvider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        ExportInterval:     15 * time.Second,
+    }, registry)
+    _ = metricsProvider.Init()
+
+    // Logs with trace correlation
+    logger = logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:              "INFO",
+            OTLPConnectionName: "otel",
+        }),
+        logfx.WithRegistry(registry),
+    )
+
+    // Step 3: Setup HTTP service with tracing middleware
+    router := httpfx.NewRouter("/api")
+
+    // Get tracer for HTTP service
+    tracer := tracesProvider.Tracer("my-api-http")
+
+    // Add observability middleware
+    router.Use(middlewares.CorrelationIDMiddleware())
+    router.Use(middlewares.TracingMiddleware(tracer))  // Automatic request tracing
+    router.Use(middlewares.LoggingMiddleware(logger))  // Logs include trace context
+
+    // Create custom business metrics that are correlated with traces
+    builder := metricsProvider.NewBuilder()
+    userOperations, _ := builder.Counter(
+        "user_operations_total",
+        "Total user operations performed",
+    ).WithUnit("{operation}").Build()
+
+    router.Route("GET /users/{id}", func(ctx *httpfx.Context) httpfx.Result {
+        // Get tracer from context (set by tracing middleware)
+        span := tracesfx.SpanFromContext(ctx.Request.Context())
+
+        // Add business attributes to the span
+        span.SetAttributes(
+            tracesfx.StringAttr("user_id", "123"),
+            tracesfx.StringAttr("operation", "lookup"),
+        )
+
+        // Business metrics automatically correlated with trace
+        userOperations.Inc(ctx.Request.Context(),
+            tracesfx.StringAttr("operation", "lookup"),
+            tracesfx.StringAttr("user_id", "123"),
+        )
+
+        // Nested operation creates child span automatically
+        userData := fetchUserData(ctx.Request.Context(), tracer, "123")
+
+        // Add event to span
+        span.AddEvent("user_data_retrieved")
+
+        return ctx.Results.JSON(userData)
+    })
+
+    http.ListenAndServe(":8080", router.GetMux())
+}
+
+func fetchUserData(ctx context.Context, tracer *tracesfx.Tracer, userID string) map[string]string {
+    // Create child span for database operation
+    _, span := tracer.Start(ctx, "fetch_user_from_db")
+    defer span.End()
+
+    // Add database-specific attributes
+    span.SetAttributes(
+        tracesfx.StringAttr("db.operation", "SELECT"),
+        tracesfx.StringAttr("db.table", "users"),
+        tracesfx.StringAttr("user_id", userID),
+    )
+
+    // Simulate database operation
+    time.Sleep(50 * time.Millisecond)
+
+    return map[string]string{"name": "John Doe", "email": "john@example.com"}
+}
+```
+
+**Trace Output (automatically exported to OTLP):**
+```json
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "my-api"}},
+          {"key": "service.version", "value": {"stringValue": "1.0.0"}}
+        ]
+      },
+      "scopeSpans": [
+        {
+          "spans": [
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0bb902b7",
+              "name": "GET /api/users/{id}",
+              "kind": "SPAN_KIND_SERVER",
+              "attributes": [
+                {"key": "http.method", "value": {"stringValue": "GET"}},
+                {"key": "http.route", "value": {"stringValue": "/api/users/{id}"}},
+                {"key": "user_id", "value": {"stringValue": "123"}},
+                {"key": "operation", "value": {"stringValue": "lookup"}}
+              ],
+              "events": [
+                {"name": "user_data_retrieved", "timeUnixNano": "1641024000000000000"}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "b7ad6b7169203331",
+              "parentSpanId": "00f067aa0bb902b7",
+              "name": "fetch_user_from_db",
+              "attributes": [
+                {"key": "db.operation", "value": {"stringValue": "SELECT"}},
+                {"key": "db.table", "value": {"stringValue": "users"}},
+                {"key": "user_id", "value": {"stringValue": "123"}}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Configuration
 
 ```go
 type Config struct {
-    // Service identification
-    ServiceName    string        `conf:"service_name"`
-    ServiceVersion string        `conf:"service_version"`
+    // Service identification (automatically applied to all spans)
+    ServiceName    string `conf:"service_name"    default:""`
+    ServiceVersion string `conf:"service_version" default:""`
 
-    // OpenTelemetry Collector
-    OTLPEndpoint   string        `conf:"otlp_endpoint"`     // e.g. "http://localhost:4318"
-    OTLPInsecure   bool          `conf:"otlp_insecure"`     // default: true
+    // Connection-based OTLP configuration (replaces direct endpoint config)
+    OTLPConnectionName string `conf:"otlp_connection_name" default:""`
 
-    // Sampling
-    SampleRatio    float64       `conf:"sample_ratio"`      // 0.0 to 1.0, default: 1.0
+    // Sampling configuration
+    SampleRatio float64 `conf:"sample_ratio" default:"1.0"`
 
-    // Batching
-    BatchTimeout   time.Duration `conf:"batch_timeout"`     // default: 5s
-    BatchSize      int           `conf:"batch_size"`        // default: 512
+    // Batch export configuration
+    BatchTimeout time.Duration `conf:"batch_timeout" default:"5s"`
+    BatchSize    int           `conf:"batch_size"    default:"512"`
 }
 ```
 
-### Environment Variables
+## Centralized Connection Management
+
+### Why Use connfx for OTLP Connections?
+
+The new architecture centralizes OTLP connection management through `connfx`, providing significant advantages:
+
+**Before (Old Architecture):**
+```go
+// Each package configured separately - duplicated configuration
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{
+    OTLPEndpoint: "otel-collector:4318",
+    ServiceName:  "my-service",
+})
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    OTLPEndpoint: "otel-collector:4318",
+    ServiceName:  "my-service",
+})
+```
+
+**After (New Architecture):**
+```go
+// Single OTLP connection shared across all packages
+registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        "service_name": "my-service",
+        "service_version": "1.0.0",
+    },
+})
+
+// All packages reference the same connection
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{OTLPConnectionName: "otel"}, registry)
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{OTLPConnectionName: "otel"}, registry)
+```
+
+**Benefits:**
+- 🔧 **Single Configuration Point** - Configure OTLP once, use everywhere
+- 🔄 **Shared Connections** - Efficient resource usage and connection pooling
+- 🎛️ **Centralized Management** - Health checks, monitoring, and lifecycle management
+- 🔗 **Consistent Attribution** - Service name/version automatically applied to all spans
+- 💰 **Cost Optimization** - Single connection reduces overhead
+- 🛡️ **Error Handling** - Graceful fallbacks when connections are unavailable
+
+### OTLP Connection Configuration
+
+```go
+// Configure OTLP connection with traces-specific options
+otlpConfig := &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        // Service identification (applied to all spans automatically)
+        "service_name":    "my-service",
+        "service_version": "1.0.0",
+
+        // Connection settings
+        "insecure":        true,                    // Use HTTP instead of HTTPS
+
+        // Traces-specific export configuration
+        "sample_ratio":    1.0,                    // Trace sampling ratio (0.0-1.0)
+        "batch_timeout":   5 * time.Second,        // Maximum time to wait for batch
+        "batch_size":      512,                    // Maximum batch size
+    },
+}
+
+_, err := registry.AddConnection(ctx, "otel", otlpConfig)
+```
+
+### Environment-Based Configuration
 
 ```bash
-# Service information
-SERVICE_NAME=my-service
-SERVICE_VERSION=1.0.0
+# Connection configuration via environment
+CONN_TARGETS_OTEL_PROTOCOL=otlp
+CONN_TARGETS_OTEL_DSN=otel-collector:4318
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_NAME=my-service
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_VERSION=1.0.0
+CONN_TARGETS_OTEL_PROPERTIES_SAMPLE_RATIO=1.0
+CONN_TARGETS_OTEL_PROPERTIES_BATCH_TIMEOUT=5s
 
-# OTLP configuration
-OTLP_ENDPOINT=http://localhost:4318
-OTLP_INSECURE=true
-
-# Sampling configuration
-SAMPLE_RATIO=0.1  # Sample 10% in production
-
-# Batch configuration
-BATCH_TIMEOUT=5s
-BATCH_SIZE=512
+# Package configuration references the connection
+TRACES_SERVICE_NAME=my-service
+TRACES_SERVICE_VERSION=1.0.0
+TRACES_OTLP_CONNECTION_NAME=otel
+TRACES_SAMPLE_RATIO=1.0
 ```
 
-## 🔗 **Integration Patterns**
-
-### Complete Observability Stack
+### Multiple OTLP Endpoints
 
 ```go
-type ObservabilityStack struct {
-    Traces  *tracesfx.TracesProvider
-    Metrics *metricsfx.MetricsProvider
-    Logger  *logfx.Logger
-}
+// Different endpoints for different environments
+_, err := registry.AddConnection(ctx, "otel-dev", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "http://dev-collector:4318",
+    Properties: map[string]any{
+        "service_name":  "my-service-dev",
+        "sample_ratio":  1.0,  // Sample all traces in development
+    },
+})
 
-func NewObservabilityStack(config *Config) *ObservabilityStack {
-    // Shared OTLP endpoint for all signals
-    otlpEndpoint := config.OTLPEndpoint
+_, err = registry.AddConnection(ctx, "otel-prod", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "https://prod-collector:4317",
+    TLS:      true,
+    Properties: map[string]any{
+        "service_name":  "my-service",
+        "sample_ratio":  0.1,  // Sample 10% of traces in production
+        "insecure":      false,
+    },
+})
 
-    return &ObservabilityStack{
-        Traces: tracesfx.NewTracesProvider(&tracesfx.Config{
-            ServiceName:  config.ServiceName,
-            OTLPEndpoint: otlpEndpoint,
-            SampleRatio:  config.TraceSampleRatio,
-        }),
-        Metrics: metricsfx.NewMetricsProvider(&metricsfx.Config{
-            ServiceName:  config.ServiceName,
-            OTLPEndpoint: otlpEndpoint,
-        }),
-        Logger: logfx.NewLogger(
-            logfx.WithWriter(os.Stdout),
-            logfx.WithConfig(&logfx.Config{
-                Level:        config.LogLevel,
-                OTLPEndpoint: otlpEndpoint,
-            }),
-        ),
-    }
-}
+// Use different connections for different environments
+devTraces := tracesfx.NewTracesProvider(&tracesfx.Config{
+    OTLPConnectionName: "otel-dev",
+}, registry)
 
-func (o *ObservabilityStack) Init() error {
-    if err := o.Traces.Init(); err != nil {
-        return err
-    }
-    if err := o.Metrics.Init(); err != nil {
-        return err
-    }
-    return nil
-}
+prodTraces := tracesfx.NewTracesProvider(&tracesfx.Config{
+    OTLPConnectionName: "otel-prod",
+}, registry)
 ```
 
-### HTTP Middleware Integration
-
-```go
-func TracingMiddleware(tracer *tracesfx.Tracer) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            ctx, span := tracer.Start(r.Context(), fmt.Sprintf("%s %s", r.Method, r.URL.Path))
-            defer span.End()
-
-            // Add HTTP attributes
-            span.SetAttributes(
-                attribute.String("http.method", r.Method),
-                attribute.String("http.url", r.URL.String()),
-                attribute.String("http.user_agent", r.UserAgent()),
-            )
-
-            // Continue with tracing context
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-```
-
-## 📊 **Span Management**
-
-### Creating Spans
-
-```go
-// Basic span
-ctx, span := tracer.Start(ctx, "operation-name")
-defer span.End()
-
-// With attributes
-ctx, span := tracer.Start(ctx, "database-query",
-    trace.WithAttributes(
-        attribute.String("db.table", "users"),
-        attribute.String("db.operation", "SELECT"),
-    ))
-defer span.End()
-
-// With correlation (automatic)
-ctx, span := tracer.StartSpanWithCorrelation(ctx, "api-call")
-defer span.End()
-```
-
-### Span Operations
-
-```go
-// Set attributes
-span.SetAttributes(
-    attribute.String("user.id", "12345"),
-    attribute.Int("batch.size", 100),
-)
-
-// Add events
-span.AddEvent("cache-miss")
-span.AddEvent("retry-attempt",
-    attribute.Int("attempt", 2))
-
-// Record errors
-if err != nil {
-    span.RecordError(err)
-    span.SetStatus(codes.Error, "operation failed")
-}
-
-// Success
-span.SetStatus(codes.Ok, "completed successfully")
-```
-
-## 🔄 **Context Propagation**
-
-### Automatic Propagation
-
-```go
-func parentOperation(ctx context.Context) {
-    tracer := getTracer()
-    ctx, span := tracer.Start(ctx, "parent")
-    defer span.End()
-
-    // Child operations automatically inherit trace context
-    childOperation(ctx)  // Will be a child span
-}
-
-func childOperation(ctx context.Context) {
-    tracer := getTracer()
-    ctx, span := tracer.Start(ctx, "child")
-    defer span.End()
-
-    // This span will be a child of "parent"
-}
-```
-
-### Cross-Service Propagation
-
-```go
-func makeHTTPRequest(ctx context.Context, url string) {
-    req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
-
-    // OpenTelemetry automatically injects trace headers
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    // Trace context is propagated to the remote service
-}
-```
-
-## 🎯 **Best Practices**
-
-### 1. Span Naming
-
-```go
-// ✅ Good - descriptive, hierarchical
-tracer.Start(ctx, "user.authentication.validate")
-tracer.Start(ctx, "database.users.query")
-tracer.Start(ctx, "cache.redis.get")
-
-// ❌ Avoid - too generic
-tracer.Start(ctx, "process")
-tracer.Start(ctx, "operation")
-```
-
-### 2. Attribute Management
-
-```go
-// ✅ Good - semantic conventions
-span.SetAttributes(
-    semconv.HTTPMethodKey.String("GET"),
-    semconv.HTTPURLKey.String(url),
-    semconv.HTTPStatusCodeKey.Int(200),
-)
-
-// ✅ Good - business context
-span.SetAttributes(
-    attribute.String("user.role", "admin"),
-    attribute.String("tenant.id", "org-123"),
-)
-```
-
-### 3. Error Handling
-
-```go
-func operationWithTracing(ctx context.Context) error {
-    ctx, span := tracer.Start(ctx, "risky-operation")
-    defer span.End()
-
-    result, err := riskyOperation()
-    if err != nil {
-        span.RecordError(err)
-        span.SetStatus(codes.Error, "operation failed")
-        return err
-    }
-
-    span.SetStatus(codes.Ok, "success")
-    span.SetAttributes(attribute.String("result", result))
-    return nil
-}
-```
-
-### 4. Sampling Configuration
-
-```go
-// Development - trace everything
-config.SampleRatio = 1.0
-
-// Production - sample based on load
-config.SampleRatio = 0.1  // 10%
-
-// High-volume services
-config.SampleRatio = 0.01 // 1%
-```
-
-## 🔧 **Advanced Usage**
-
-### Custom Attributes
-
-```go
-// Business-specific attributes
-span.SetAttributes(
-    attribute.String("order.id", orderID),
-    attribute.String("customer.tier", "premium"),
-    attribute.Int("item.count", len(items)),
-    attribute.Float64("order.total", 299.99),
-)
-```
-
-### Span Links
-
-```go
-// Link to related operations
-ctx, span := tracer.Start(ctx, "batch-process",
-    trace.WithLinks(trace.Link{
-        SpanContext: relatedSpanContext,
-    }))
-```
-
-### Manual Instrumentation
-
-```go
-func instrumentedFunction(ctx context.Context) {
-    tracer := otel.Tracer("my-component")
-    ctx, span := tracer.Start(ctx, "custom-operation")
-    defer span.End()
-
-    // Add custom logic
-    span.AddEvent("starting-phase-1")
-    phase1(ctx)
-
-    span.AddEvent("starting-phase-2")
-    phase2(ctx)
-}
-```
-
-## 🐛 **Debugging**
-
-### Trace Verification
-
-```go
-// Check if tracing is active
-if span := trace.SpanFromContext(ctx); span.IsRecording() {
-    // Tracing is active
-    traceID := span.SpanContext().TraceID().String()
-    fmt.Printf("Trace ID: %s\n", traceID)
-}
-
-// Get trace/span IDs for logging
-traceID := tracesfx.GetTraceIDFromContext(ctx)
-spanID := tracesfx.GetSpanIDFromContext(ctx)
-```
-
-### No-Op Mode
-
-```go
-// When OTLPEndpoint is empty, tracesfx uses no-op tracers
-config := &tracesfx.Config{
-    ServiceName:  "my-service",
-    OTLPEndpoint: "", // No tracing overhead
-}
-```
-
-## 📈 **Performance Considerations**
-
-- **Sampling**: Use appropriate sample ratios for production workloads
-- **Batch Configuration**: Tune batch size and timeout for your throughput
-- **Attribute Limits**: Be mindful of attribute cardinality
-- **Context Overhead**: Minimal overhead when properly configured
-
-## 🔗 **Integration Examples**
-
-### With HTTP Server
-
-```go
-func main() {
-    provider := tracesfx.NewTracesProvider(&tracesfx.Config{
-        ServiceName:  "web-api",
-        OTLPEndpoint: "http://localhost:4318",
-    })
-    provider.Init()
-    defer provider.Shutdown(context.Background())
-
-    tracer := provider.Tracer("http-server")
-
-    http.HandleFunc("/users", TracingMiddleware(tracer)(UsersHandler))
-    http.ListenAndServe(":8080", nil)
-}
-```
-
-### With gRPC
-
-```go
-import "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-
-func setupGRPCServer() {
-    provider := tracesfx.NewTracesProvider(config)
-    provider.Init()
-
-    server := grpc.NewServer(
-        grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
-        grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
-    )
-}
-```
-
-## 🏷️ **Related Packages**
-
-- **[logfx](../logfx/README.md)** - Structured logging with automatic trace correlation
-- **[metricsfx](../metricsfx/README.md)** - Metrics collection and export
-- **[httpfx](../httpfx/README.md)** - HTTP server with observability middleware
-
----
-
-**tracesfx** provides the distributed tracing foundation for your observability stack, seamlessly integrating with logs and metrics to give you complete visibility into your application's behavior.
+## Best Practices
+
+1. **Use Centralized Connections**: Configure OTLP connections once in `connfx`, use everywhere
+2. **Connection Health Monitoring**: Use `registry.HealthCheck(ctx)` to monitor OTLP connection health
+3. **Graceful Degradation**: Traces provider works with or without OTLP connections
+4. **Meaningful Span Names**: Use descriptive names that indicate what the span does
+5. **Appropriate Attributes**: Add relevant context but avoid high cardinality values
+6. **Resource Attribution**: Set service name/version in connection properties for proper attribution
+7. **Sampling Strategy**: Use appropriate sampling ratios for your environment (higher for dev, lower for prod)
+8. **Batch Configuration**: Balance between latency and efficiency with batch settings
+9. **Error Recording**: Always record errors and set appropriate span status
+10. **Context Propagation**: Use context.Context consistently to maintain trace relationships
+11. **Connection Lifecycle**: Use `registry.Close(ctx)` during shutdown to properly cleanup connections
+12. **Environment-Specific Config**: Use different connection names and sampling for dev/staging/prod
+
+## Architecture Benefits
+
+- **Unified Configuration** - Single place to configure OTLP connections for all observability signals
+- **Shared Resources** - Efficient connection pooling and resource utilization
+- **Consistent Attribution** - Service information automatically applied to all spans
+- **Health Monitoring** - Built-in connection health checks and monitoring
+- **Graceful Fallbacks** - Continue working even when OTLP connections fail
+- **Environment Flexibility** - Easy switching between different collectors/environments
+- **Import Cycle Prevention** - Bridge pattern avoids circular dependencies
+- **Thread Safety** - All connection operations are thread-safe
+- **Context Propagation** - Automatic trace context propagation across service boundaries
+- **Correlation Integration** - Seamless integration with correlation IDs and logging

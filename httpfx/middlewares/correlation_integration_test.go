@@ -79,14 +79,11 @@ func executeTestRequest(t *testing.T, incomingCorrelationID string) (string, str
 
 	// Create logger with JSON output for easy parsing
 	logConfig := &logfx.Config{
-		Level:         "DEBUG",
-		PrettyMode:    false,
-		AddSource:     false,
-		DefaultLogger: false,
-		OTLPEndpoint:  "",
-		OTLPInsecure:  false,
-		LokiURI:       "",
-		LokiLabel:     "",
+		Level:              "INFO",
+		DefaultLogger:      false,
+		PrettyMode:         false,
+		AddSource:          false,
+		OTLPConnectionName: "", // No connection for testing
 	}
 	logger := logfx.NewLogger(
 		logfx.WithWriter(&logBuffer),

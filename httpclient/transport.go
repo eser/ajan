@@ -41,13 +41,9 @@ type ResilientTransport struct {
 }
 
 func NewResilientTransport(
-	transport http.RoundTripper,
+	transport *http.Transport,
 	config *Config,
 ) *ResilientTransport {
-	if transport == nil {
-		transport = http.DefaultTransport
-	}
-
 	cb := NewCircuitBreaker(&config.CircuitBreaker)
 	rs := NewRetryStrategy(&config.RetryStrategy)
 

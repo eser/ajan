@@ -49,16 +49,8 @@ func WithAddSource(addSource bool) NewLoggerOption {
 	}
 }
 
-func WithOTLP(endpoint string, insecure bool) NewLoggerOption {
+func WithOTLP(otlpConnectionName string) NewLoggerOption {
 	return func(logger *Logger) {
-		logger.Config.OTLPEndpoint = endpoint
-		logger.Config.OTLPInsecure = insecure
-	}
-}
-
-func WithLoki(uri string, label string) NewLoggerOption {
-	return func(logger *Logger) {
-		logger.Config.LokiURI = uri
-		logger.Config.LokiLabel = label
+		logger.Config.OTLPConnectionName = otlpConnectionName
 	}
 }

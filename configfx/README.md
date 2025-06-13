@@ -4,7 +4,7 @@
 
 **configfx** is a powerful and flexible configuration management framework for Go applications that supports multiple configuration sources, type-safe loading, and environment-aware configuration handling.
 
-## Features
+## Key Features
 
 - **Multiple Configuration Sources**: JSON files, environment files (.env), system environment variables
 - **Type-Safe Configuration**: Struct-based configuration with compile-time type safety

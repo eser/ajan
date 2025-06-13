@@ -18,28 +18,26 @@ func TestNewTracesProvider(t *testing.T) {
 		expectProvider bool
 	}{
 		{
-			name: "no_otlp_endpoint",
+			name: "no_otlp_connection",
 			config: &tracesfx.Config{
-				ServiceName:    "test-service",
-				ServiceVersion: "1.0.0",
-				OTLPEndpoint:   "",
-				OTLPInsecure:   false,
-				SampleRatio:    1.0,
-				BatchTimeout:   0,
-				BatchSize:      0,
+				ServiceName:        "test-service",
+				ServiceVersion:     "1.0.0",
+				OTLPConnectionName: "", // No connection for testing
+				SampleRatio:        1.0,
+				BatchTimeout:       0,
+				BatchSize:          0,
 			},
 			expectProvider: true,
 		},
 		{
-			name: "with_otlp_endpoint",
+			name: "with_connection",
 			config: &tracesfx.Config{
-				ServiceName:    "test-service",
-				ServiceVersion: "1.0.0",
-				OTLPEndpoint:   "http://localhost:4318",
-				OTLPInsecure:   true,
-				SampleRatio:    1.0,
-				BatchTimeout:   5 * time.Second,
-				BatchSize:      512,
+				ServiceName:        "test-service",
+				ServiceVersion:     "1.0.0",
+				OTLPConnectionName: "otlp-connection", // Connection configured
+				SampleRatio:        1.0,
+				BatchTimeout:       5 * time.Second,
+				BatchSize:          512,
 			},
 			expectProvider: true,
 		},
@@ -57,7 +55,7 @@ func TestNewTracesProvider(t *testing.T) {
 func testTracesProvider(t *testing.T, config *tracesfx.Config, expectProvider bool) {
 	t.Helper()
 
-	provider := tracesfx.NewTracesProvider(config)
+	provider := tracesfx.NewTracesProvider(config, nil) // nil registry for testing
 	require.NotNil(t, provider)
 
 	err := provider.Init()
@@ -91,14 +89,13 @@ func TestCorrelationIntegration(t *testing.T) {
 	t.Parallel()
 
 	provider := tracesfx.NewTracesProvider(&tracesfx.Config{
-		ServiceName:    "test-service",
-		ServiceVersion: "",
-		OTLPEndpoint:   "", // No-op for testing
-		OTLPInsecure:   false,
-		SampleRatio:    1.0,
-		BatchTimeout:   0,
-		BatchSize:      0,
-	})
+		ServiceName:        "test-service",
+		ServiceVersion:     "",
+		OTLPConnectionName: "", // No connection for testing
+		SampleRatio:        1.0,
+		BatchTimeout:       0,
+		BatchSize:          0,
+	}, nil) // nil registry for testing
 
 	err := provider.Init()
 	require.NoError(t, err)

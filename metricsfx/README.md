@@ -2,19 +2,21 @@
 
 ## Overview
 
-**metricsfx** package provides a comprehensive metrics solution built on OpenTelemetry SDK, designed for modern observability pipelines. The package emphasizes **OpenTelemetry collector integration** as the preferred approach, while maintaining backward compatibility with direct Prometheus exports.
+**metricsfx** provides a comprehensive metrics solution built on OpenTelemetry with **centralized OTLP connection management** through `connfx`. It offers a simplified metrics builder API, automatic runtime metrics collection, and native integration with HTTP services and other observability packages for complete telemetry coverage.
 
 ### Key Features
 
-- 🎯 **OpenTelemetry Collector Ready** - Native OTLP export to unified pipelines
-- 📊 **Simplified Metrics Builder** - Intuitive API for creating metrics
-- ⚡ **High Performance** - Optimized for production workloads
-- 🔄 **Unified Observability** - Works seamlessly with logfx and tracesfx
-- 🎛️ **Flexible Configuration** - Multiple export options and custom intervals
+- 🎯 **Simplified Metrics Builder** - Fluent API for creating counters, gauges, and histograms
+- 📊 **Runtime Metrics** - Automatic Go runtime metrics (memory, GC, goroutines)
+- 🔄 **HTTP Metrics** - Built-in request/response metrics for HTTP services
+- 🌐 **Centralized OTLP Integration** - Uses `connfx` registry for shared OTLP connections
+- ⚡ **Performance Optimized** - Efficient periodic exports with configurable intervals
+- 🎛️ **Flexible Configuration** - Environment-based configuration with sensible defaults
+- 🔗 **Service Integration** - Seamless integration with `httpfx`, `grpcfx`, and other packages
 
 ## Quick Start
 
-### Basic Usage with OpenTelemetry Collector
+### Basic Usage
 
 ```go
 package main
@@ -23,45 +25,76 @@ import (
     "context"
     "time"
 
+    "github.com/eser/ajan/connfx"
+    "github.com/eser/ajan/logfx"
     "github.com/eser/ajan/metricsfx"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Configure for OpenTelemetry collector (recommended)
-    config := &metricsfx.Config{
-        ServiceName:    "my-service",
-        ServiceVersion: "1.0.0",
-        OTLPEndpoint:   "http://otel-collector:4318",
-        OTLPInsecure:   true,
-        ExportInterval: 30 * time.Second,
-    }
+    // Create logger and connection registry
+    logger := logfx.NewLogger()
+    registry := connfx.NewRegistryWithDefaults(logger)
 
-    // Create provider with collector integration
-    provider := metricsfx.NewMetricsProvider(config)
-    if err := provider.Init(); err != nil {
-        panic(err)
-    }
-    defer provider.Shutdown(ctx)
-
-    // Create metrics using the builder
-    builder := provider.NewBuilder()
-
-    requestCounter, err := builder.Counter(
-        "requests_total",
-        "Total number of requests",
-    ).WithUnit("{request}").Build()
+    // Configure OTLP connection once, use everywhere
+    _, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":    "my-service",
+            "service_version": "1.0.0",
+            "insecure":        true,
+        },
+    })
     if err != nil {
         panic(err)
     }
 
+    // Create metrics provider with connection registry
+    provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+        ServiceName:        "my-service",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel", // Reference the connection
+        ExportInterval:     30 * time.Second,
+    }, registry) // Pass the registry
+
+    // Initialize provider (enables OTLP export and runtime metrics)
+    err = provider.Init()
+    if err != nil {
+        panic(err)
+    }
+    defer provider.Shutdown(ctx)
+
+    // Create custom application metrics
+    builder := provider.NewBuilder()
+
+    // Counter - tracks total events
+    requestCounter, _ := builder.Counter(
+        "http_requests_total",
+        "Total HTTP requests processed",
+    ).WithUnit("{request}").Build()
+
+    // Gauge - tracks current state
+    activeConnections, _ := builder.Gauge(
+        "active_connections",
+        "Current number of active connections",
+    ).WithUnit("{connection}").Build()
+
+    // Histogram - tracks distributions
+    requestDuration, _ := builder.Histogram(
+        "http_request_duration_seconds",
+        "HTTP request processing duration",
+    ).WithDurationBuckets().Build()
+
     // Use metrics in your application
-    requestCounter.Inc(ctx, metricsfx.StringAttr("endpoint", "/api/users"))
+    requestCounter.Inc(ctx, metricsfx.StringAttr("method", "GET"))
+    activeConnections.Set(ctx, 42)
+    requestDuration.Record(ctx, 0.123, metricsfx.StringAttr("status", "200"))
 }
 ```
 
-### HTTP Integration with Correlation
+### Complete Observability Stack Integration
 
 ```go
 package main
@@ -71,37 +104,93 @@ import (
     "net/http"
     "time"
 
+    "github.com/eser/ajan/connfx"
     "github.com/eser/ajan/httpfx"
     "github.com/eser/ajan/httpfx/middlewares"
+    "github.com/eser/ajan/logfx"
     "github.com/eser/ajan/metricsfx"
+    "github.com/eser/ajan/tracesfx"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Setup metrics with OpenTelemetry collector
-    provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
-        ServiceName:    "api-service",
-        ServiceVersion: "1.0.0",
-        OTLPEndpoint:   "http://otel-collector:4318",
-        ExportInterval: 15 * time.Second,
+    // Step 1: Create shared OTLP connection
+    logger := logfx.NewLogger()
+    registry := connfx.NewRegistryWithDefaults(logger)
+
+    _, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":     "my-api",
+            "service_version":  "1.0.0",
+            "insecure":         true,
+            "export_interval":  "15s",
+            "batch_timeout":    "5s",
+        },
     })
-    _ = provider.Init()
-    defer provider.Shutdown(ctx)
+    if err != nil {
+        panic(err)
+    }
 
-    // Create HTTP metrics
-    httpMetrics, _ := metricsfx.NewHTTPMetrics(provider, "api-service", "1.0.0")
+    // Step 2: Create observability stack using shared connection
 
-    // Setup HTTP router with observability middleware
+    // Metrics with automatic runtime collection
+    metricsProvider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        ExportInterval:     15 * time.Second,
+        NoNativeCollectorRegistration: false, // Enable runtime metrics
+    }, registry)
+    _ = metricsProvider.Init()
+
+    // Traces for request tracing
+    tracesProvider := tracesfx.NewTracesProvider(&tracesfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        SampleRatio:        1.0,
+    }, registry)
+    _ = tracesProvider.Init()
+
+    // Logs with correlation
+    logger = logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:              "INFO",
+            OTLPConnectionName: "otel",
+        }),
+        logfx.WithRegistry(registry),
+    )
+
+    // Step 3: Setup HTTP service with metrics middleware
     router := httpfx.NewRouter("/api")
-    router.Use(middlewares.CorrelationIDMiddleware())        // Request correlation
-    router.Use(middlewares.MetricsMiddleware(httpMetrics))   // Automatic metrics
+
+    // Create HTTP metrics using the provider
+    httpMetrics := metricsfx.NewHTTPMetrics(metricsProvider)
+    err = httpMetrics.Init()
+    if err != nil {
+        panic(err)
+    }
+
+    // Add observability middleware
+    router.Use(middlewares.CorrelationIDMiddleware())
+    router.Use(middlewares.LoggingMiddleware(logger))
+    router.Use(middlewares.MetricsMiddleware(httpMetrics))
+
+    // Create custom business metrics
+    builder := metricsProvider.NewBuilder()
+    userOperations, _ := builder.Counter(
+        "user_operations_total",
+        "Total user operations performed",
+    ).WithUnit("{operation}").Build()
 
     router.Route("GET /users/{id}", func(ctx *httpfx.Context) httpfx.Result {
-        // Custom business metrics
-        httpMetrics.RequestsTotal.Inc(ctx.Request.Context(),
-            metricsfx.StringAttr("operation", "get_user"),
-            metricsfx.StringAttr("user_type", "premium"),
+        // Business metrics automatically correlated with HTTP metrics
+        userOperations.Inc(ctx.Request.Context(),
+            metricsfx.StringAttr("operation", "lookup"),
+            metricsfx.StringAttr("user_id", "123"),
         )
 
         return ctx.Results.JSON(map[string]string{"status": "success"})
@@ -111,189 +200,283 @@ func main() {
 }
 ```
 
+**Metrics Output (automatically exported to OTLP):**
+```json
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "my-api"}},
+          {"key": "service.version", "value": {"stringValue": "1.0.0"}}
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "metrics": [
+            {
+              "name": "http_requests_total",
+              "unit": "{request}",
+              "sum": {"dataPoints": [{"asInt": "42", "attributes": [{"key": "method", "value": {"stringValue": "GET"}}]}]}
+            },
+            {
+              "name": "go_memstats_heap_objects",
+              "unit": "{object}",
+              "gauge": {"dataPoints": [{"asInt": "1234567"}]}
+            },
+            {
+              "name": "http_request_duration_seconds",
+              "unit": "s",
+              "histogram": {"dataPoints": [{"count": "1", "sum": 0.123, "bucketCounts": ["0", "1", "0"]}]}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Configuration
 
 ```go
 type Config struct {
-	// Service information for resource attribution
-	ServiceName    string        `conf:"service_name"    default:""`
-	ServiceVersion string        `conf:"service_version" default:""`
+    // Service identification (automatically applied to all metrics)
+    ServiceName    string `conf:"service_name"    default:""`
+    ServiceVersion string `conf:"service_version" default:""`
 
-	// OpenTelemetry Collector configuration (preferred)
-	OTLPEndpoint string        `conf:"otlp_endpoint" default:""`
-	OTLPInsecure bool          `conf:"otlp_insecure" default:"true"`
+    // Connection-based OTLP configuration (replaces direct endpoint config)
+    OTLPConnectionName string `conf:"otlp_connection_name" default:""`
 
-	// Export interval for batching
-	ExportInterval time.Duration `conf:"export_interval" default:"30s"`
+    // Export configuration
+    ExportInterval time.Duration `conf:"export_interval" default:"30s"`
 
-	// Legacy direct exporters (still supported)
-	PrometheusEndpoint string `conf:"prometheus_endpoint" default:""`
+    // Runtime metrics collection
+    NoNativeCollectorRegistration bool `conf:"no_native_collector_registration" default:"false"`
 }
 ```
 
-### Export Priority
+## Centralized Connection Management
 
-The package automatically chooses the best export method:
+### Why Use connfx for OTLP Connections?
 
-1. **🥇 OTLP Collector** (`OTLPEndpoint`) - Preferred for production
-2. **🥈 Direct Prometheus** (`PrometheusEndpoint`) - Legacy/fallback option
-3. **Both can run simultaneously** if needed
+The new architecture centralizes OTLP connection management through `connfx`, providing significant advantages:
 
-## OpenTelemetry Collector Integration
-
-### Why Use OpenTelemetry Collector?
-
-The collector provides a unified observability pipeline that offers significant advantages over direct exports:
-
+**Before (Old Architecture):**
+```go
+// Each package configured separately - duplicated configuration
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    OTLPEndpoint: "otel-collector:4318",
+    ServiceName:  "my-service",
+})
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{
+    OTLPEndpoint: "otel-collector:4318",
+    ServiceName:  "my-service",
+})
 ```
-┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
-│                 │    │                     │    │                 │
-│   Your App      │───▶│ OpenTelemetry       │───▶│   Backends      │
-│                 │    │ Collector           │    │                 │
-│ • metricsfx     │    │                     │    │ • Prometheus    │
-│ • logfx         │    │ • Receives all 3    │    │ • Grafana       │
-│ • tracesfx      │    │   pillars (L+M+T)   │    │ • DataDog       │
-│                 │    │ • Routes & filters  │    │ • New Relic     │
-│                 │    │ • Transforms        │    │ • Custom        │
-└─────────────────┘    └─────────────────────┘    └─────────────────┘
+
+**After (New Architecture):**
+```go
+// Single OTLP connection shared across all packages
+registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        "service_name": "my-service",
+        "service_version": "1.0.0",
+    },
+})
+
+// All packages reference the same connection
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{OTLPConnectionName: "otel"}, registry)
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{OTLPConnectionName: "otel"}, registry)
 ```
 
 **Benefits:**
-- **🔄 Unified Pipeline** - All observability data flows through one point
-- **🎛️ Flexibility** - Change backends without code changes
-- **⚡ Performance** - Built-in batching, compression, and retries
-- **💰 Cost Optimization** - Sampling and filtering before expensive exports
-- **🔧 Data Processing** - Transform, enrich, and route telemetry data
+- 🔧 **Single Configuration Point** - Configure OTLP once, use everywhere
+- 🔄 **Shared Connections** - Efficient resource usage and connection pooling
+- 🎛️ **Centralized Management** - Health checks, monitoring, and lifecycle management
+- 🔗 **Consistent Attribution** - Service name/version automatically applied to all metrics
+- 💰 **Cost Optimization** - Single connection reduces overhead
+- 🛡️ **Error Handling** - Graceful fallbacks when connections are unavailable
 
-### Recommended Configuration
+### OTLP Connection Configuration
 
 ```go
-// Production setup
-config := &metricsfx.Config{
-    ServiceName:    "my-service",
-    ServiceVersion: "1.2.3",
-    OTLPEndpoint:   "http://otel-collector:4318",
-    OTLPInsecure:   false,  // Use TLS in production
-    ExportInterval: 30 * time.Second,
+// Configure OTLP connection with metrics-specific options
+otlpConfig := &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        // Service identification (applied to all metrics automatically)
+        "service_name":    "my-service",
+        "service_version": "1.0.0",
+
+        // Connection settings
+        "insecure":        true,                    // Use HTTP instead of HTTPS
+
+        // Metrics-specific export configuration
+        "export_interval": 30 * time.Second,       // How often to export metrics
+        "batch_timeout":   5 * time.Second,        // Maximum time to wait for batch
+        "batch_size":      512,                    // Maximum batch size
+    },
 }
 
-// Development setup
-devConfig := &metricsfx.Config{
-    ServiceName:    "my-service",
-    ServiceVersion: "dev",
-    OTLPEndpoint:   "http://localhost:4318",
-    OTLPInsecure:   true,
-    ExportInterval: 5 * time.Second,  // Faster for development
-}
+_, err := registry.AddConnection(ctx, "otel", otlpConfig)
 ```
 
-### Example Collector Configuration
+### Environment-Based Configuration
 
-```yaml
-# otel-collector-config.yaml
-receivers:
-  otlp:
-    protocols:
-      http:
-        endpoint: 0.0.0.0:4318
-      grpc:
-        endpoint: 0.0.0.0:4317
+```bash
+# Connection configuration via environment
+CONN_TARGETS_OTEL_PROTOCOL=otlp
+CONN_TARGETS_OTEL_DSN=otel-collector:4318
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_NAME=my-service
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_VERSION=1.0.0
+CONN_TARGETS_OTEL_PROPERTIES_EXPORT_INTERVAL=30s
 
-processors:
-  batch:
-    timeout: 10s
-    send_batch_size: 1024
+# Package configuration references the connection
+METRICS_SERVICE_NAME=my-service
+METRICS_SERVICE_VERSION=1.0.0
+METRICS_OTLP_CONNECTION_NAME=otel
+METRICS_EXPORT_INTERVAL=30s
+```
 
-  resource:
-    attributes:
-      - key: environment
-        value: production
-        action: upsert
+### Multiple OTLP Endpoints
 
-exporters:
-  prometheus:
-    endpoint: "0.0.0.0:8889"
+```go
+// Different endpoints for different metric types
+_, err := registry.AddConnection(ctx, "otel-business", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "http://business-metrics-collector:4318",
+    Properties: map[string]any{
+        "service_name":    "my-service",
+        "export_interval": 60 * time.Second,  // Less frequent export for business metrics
+    },
+})
 
-  # Add other exporters as needed
-  datadog:
-    api:
-      key: ${DD_API_KEY}
+_, err = registry.AddConnection(ctx, "otel-system", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "http://system-metrics-collector:4318",
+    Properties: map[string]any{
+        "service_name":    "my-service",
+        "export_interval": 15 * time.Second,  // More frequent export for system metrics
+    },
+})
 
-service:
-  pipelines:
-    metrics:
-      receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [prometheus, datadog]
+// Use different connections for different metric types
+businessMetrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    OTLPConnectionName: "otel-business",
+}, registry)
+
+systemMetrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    OTLPConnectionName: "otel-system",
+}, registry)
 ```
 
 ## Metrics Builder API
 
-The simplified metrics builder provides an intuitive interface for creating metrics:
-
 ### Counter Metrics
+
+Track cumulative values that only increase:
 
 ```go
 builder := provider.NewBuilder()
 
-// Simple counter
-requestCounter, err := builder.Counter(
-    "requests_total",
-    "Total number of HTTP requests",
+// Basic counter
+requests, _ := builder.Counter(
+    "http_requests_total",
+    "Total HTTP requests processed",
 ).Build()
 
-// Counter with unit
-bytesCounter, err := builder.Counter(
-    "bytes_processed_total",
+// Counter with custom unit
+bytes, _ := builder.Counter(
+    "data_processed_bytes",
     "Total bytes processed",
-).WithUnit("byte").Build()
+).WithUnit("By").Build()
 
 // Usage
-requestCounter.Inc(ctx,
-    metricsfx.StringAttr("method", "GET"),
-    metricsfx.StringAttr("status", "200"),
-)
-```
-
-### Histogram Metrics
-
-```go
-// Request duration with custom buckets
-requestDuration, err := builder.Histogram(
-    "request_duration_seconds",
-    "HTTP request processing time",
-).WithDurationBuckets().Build()
-
-// Custom buckets
-responseSizeHist, err := builder.Histogram(
-    "response_size_bytes",
-    "HTTP response sizes",
-).WithBuckets([]float64{100, 1024, 10240, 102400}).Build()
-
-// Usage
-requestDuration.RecordDuration(ctx, duration,
-    metricsfx.StringAttr("endpoint", "/api/users"),
-)
+ctx := context.Background()
+requests.Inc(ctx, metricsfx.StringAttr("method", "GET"))
+requests.Add(ctx, 5, metricsfx.StringAttr("method", "POST"))
+bytes.Add(ctx, 1024, metricsfx.StringAttr("type", "upload"))
 ```
 
 ### Gauge Metrics
 
+Track current values that can go up and down:
+
 ```go
-// Current active connections
-activeConnections, err := builder.Gauge(
+// Basic gauge
+connections, _ := builder.Gauge(
     "active_connections",
     "Number of active connections",
 ).Build()
 
-// Memory usage
-memoryUsage, err := builder.Gauge(
-    "memory_usage_bytes",
-    "Current memory usage",
-).WithUnit("byte").Build()
+// Gauge with custom unit
+temperature, _ := builder.Gauge(
+    "cpu_temperature_celsius",
+    "CPU temperature",
+).WithUnit("Cel").Build()
 
 // Usage
-activeConnections.Set(ctx, 42,
-    metricsfx.StringAttr("pool", "database"),
+connections.Set(ctx, 42, metricsfx.StringAttr("pool", "main"))
+connections.Add(ctx, 5, metricsfx.StringAttr("pool", "cache"))
+temperature.Set(ctx, 65.5)
+
+// Boolean convenience method
+healthy, _ := builder.Gauge("system_healthy", "System health status").Build()
+healthy.SetBool(ctx, true)
+```
+
+### Histogram Metrics
+
+Track distributions of values:
+
+```go
+// Duration histogram with pre-configured buckets
+duration, _ := builder.Histogram(
+    "http_request_duration_seconds",
+    "HTTP request processing duration",
+).WithDurationBuckets().Build()
+
+// Custom histogram buckets
+responseSize, _ := builder.Histogram(
+    "http_response_size_bytes",
+    "HTTP response size distribution",
+).WithBuckets([]float64{100, 1000, 10000, 100000}).Build()
+
+// Usage
+duration.Record(ctx, 0.123, metricsfx.StringAttr("method", "GET"))
+responseSize.Record(ctx, 2048, metricsfx.StringAttr("endpoint", "/api/users"))
+
+// Convenience method for duration tracking
+start := time.Now()
+// ... do work ...
+duration.RecordDuration(ctx, time.Since(start), metricsfx.StringAttr("operation", "db_query"))
+```
+
+### Attributes
+
+Add dimensions to your metrics:
+
+```go
+// String attributes
+metricsfx.StringAttr("method", "GET")
+metricsfx.StringAttr("status", "success")
+
+// Numeric attributes
+metricsfx.IntAttr("status_code", 200)
+metricsfx.Float64Attr("cpu_usage", 0.85)
+
+// Boolean attributes
+metricsfx.BoolAttr("cache_hit", true)
+
+// Multiple attributes
+counter.Inc(ctx,
+    metricsfx.StringAttr("method", "POST"),
+    metricsfx.IntAttr("status_code", 201),
+    metricsfx.StringAttr("endpoint", "/api/users"),
 )
 ```
 
@@ -301,197 +484,330 @@ activeConnections.Set(ctx, 42,
 
 ### Automatic HTTP Metrics
 
+Create standardized HTTP metrics for your services:
+
 ```go
-// Create HTTP metrics
-httpMetrics, err := metricsfx.NewHTTPMetrics(provider, "web-service", "1.0.0")
+// Create HTTP metrics using the provider
+httpMetrics := metricsfx.NewHTTPMetrics(metricsProvider)
+err := httpMetrics.Init()
 if err != nil {
     panic(err)
 }
 
-// Add to router - automatically tracks all requests
+// Use with httpfx middleware
+router := httpfx.NewRouter("/api")
 router.Use(middlewares.MetricsMiddleware(httpMetrics))
-```
 
-**Automatically tracked metrics:**
-- `http_requests_total` - Counter of HTTP requests by method, path, status code
-- `http_request_duration_seconds` - Histogram of request durations
+// Automatically tracks:
+// - http_requests_total (counter)
+// - http_request_duration_seconds (histogram)
+// - http_response_size_bytes (histogram)
+// With attributes: method, status_code, endpoint
+```
 
 ### Custom HTTP Metrics
 
 ```go
-router.Route("POST /users", func(ctx *httpfx.Context) httpfx.Result {
-    // Track business-specific metrics
-    httpMetrics.RequestsTotal.Inc(ctx.Request.Context(),
-        metricsfx.StringAttr("operation", "create_user"),
-        metricsfx.StringAttr("user_type", "premium"),
-        metricsfx.StringAttr("plan", "enterprise"),
+// Create custom HTTP-related metrics
+builder := provider.NewBuilder()
+
+// Track API endpoints separately
+apiCalls, _ := builder.Counter(
+    "api_calls_total",
+    "Total API calls by endpoint",
+).Build()
+
+authFailures, _ := builder.Counter(
+    "auth_failures_total",
+    "Authentication failures",
+).Build()
+
+// Use in handlers
+router.Route("GET /users/{id}", func(ctx *httpfx.Context) httpfx.Result {
+    apiCalls.Inc(ctx.Request.Context(),
+        metricsfx.StringAttr("endpoint", "get_user"),
+        metricsfx.StringAttr("version", "v1"),
     )
 
-    // Track custom durations
-    start := time.Now()
-    // ... business logic ...
-    businessDuration := time.Since(start)
+    // ... handler logic ...
 
-    businessTimer.RecordDuration(ctx.Request.Context(), businessDuration,
-        metricsfx.StringAttr("operation", "user_creation"),
-    )
-
-    return ctx.Results.JSON(response)
+    return ctx.Results.JSON(user)
 })
+
+router.Route("POST /auth/login", func(ctx *httpfx.Context) httpfx.Result {
+    if !authenticate(ctx) {
+        authFailures.Inc(ctx.Request.Context(),
+            metricsfx.StringAttr("reason", "invalid_credentials"),
+        )
+        return ctx.Results.Unauthorized()
+    }
+
+    return ctx.Results.JSON(token)
+})
+```
+
+## Runtime Metrics
+
+### Automatic Go Runtime Metrics
+
+Enable automatic collection of Go runtime metrics:
+
+```go
+provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:                   "my-service",
+    OTLPConnectionName:            "otel",
+    NoNativeCollectorRegistration: false, // Enable runtime metrics (default)
+}, registry)
+
+_ = provider.Init()
+
+// Automatically collects:
+// - go_memstats_* (memory statistics)
+// - go_gc_* (garbage collection metrics)
+// - go_goroutines (goroutine count)
+// - go_threads (thread count)
+// - runtime_* (runtime performance metrics)
+```
+
+**Available Runtime Metrics:**
+- `go_memstats_alloc_bytes` - Currently allocated bytes
+- `go_memstats_heap_objects` - Number of heap objects
+- `go_memstats_gc_count_total` - Total number of GC cycles
+- `go_memstats_gc_duration_seconds` - GC pause duration
+- `go_goroutines` - Current number of goroutines
+- `go_threads` - Current number of OS threads
+- `runtime_uptime_milliseconds` - Process uptime
+
+### Disable Runtime Metrics
+
+```go
+// Disable runtime metrics for lightweight deployments
+provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:                   "my-service",
+    OTLPConnectionName:            "otel",
+    NoNativeCollectorRegistration: true, // Disable runtime metrics
+}, registry)
 ```
 
 ## Advanced Usage
 
-### Multiple Export Destinations
+### Migration from Direct OTLP Configuration
 
+**Old Code:**
 ```go
-config := &metricsfx.Config{
-    ServiceName:        "my-service",
-    OTLPEndpoint:       "http://otel-collector:4318",  // Primary
-    PrometheusEndpoint: "/metrics",                    // Direct fallback
-    ExportInterval:     30 * time.Second,
-}
-```
-
-### Resource Attribution
-
-```go
-// Metrics automatically include resource information
-config := &metricsfx.Config{
-    ServiceName:    "user-service",      // service.name
-    ServiceVersion: "2.1.0",             // service.version
-    OTLPEndpoint:   "http://collector:4318",
-}
-
-// All metrics will include these resource attributes automatically
-```
-
-### Correlation with Logs and Traces
-
-When used with the complete `ajan` observability stack:
-
-```go
-// All using the same collector endpoint
-observabilityConfig := struct {
-    ServiceName  string
-    ServiceVersion string
-    OTLPEndpoint string
-}{
+// Before: Direct OTLP configuration
+provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
     ServiceName:    "my-service",
-    ServiceVersion: "1.0.0",
-    OTLPEndpoint:   "http://otel-collector:4318",
+    OTLPEndpoint:   "otel-collector:4318",
+    ExportInterval: 30 * time.Second,
+})
+```
+
+**New Code:**
+```go
+// After: Connection-based configuration
+registry := connfx.NewRegistryWithDefaults(logger)
+_, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        "service_name":    "my-service",
+        "export_interval": 30 * time.Second,
+    },
+})
+
+provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:        "my-service",
+    OTLPConnectionName: "otel",
+    ExportInterval:     30 * time.Second,
+}, registry)
+```
+
+### Multiple Metrics Providers
+
+```go
+// Different providers for different purposes
+businessMetrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:        "my-service",
+    OTLPConnectionName: "otel-business",
+    ExportInterval:     60 * time.Second,
+}, registry)
+
+systemMetrics := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:        "my-service",
+    OTLPConnectionName: "otel-system",
+    ExportInterval:     15 * time.Second,
+}, registry)
+
+// Business metrics - less frequent, more detailed
+businessBuilder := businessMetrics.NewBuilder()
+revenue, _ := businessBuilder.Counter("revenue_total", "Total revenue").Build()
+orders, _ := businessBuilder.Counter("orders_total", "Total orders").Build()
+
+// System metrics - more frequent, operational focus
+systemBuilder := systemMetrics.NewBuilder()
+requests, _ := systemBuilder.Counter("requests_total", "Total requests").Build()
+errors, _ := systemBuilder.Counter("errors_total", "Total errors").Build()
+```
+
+### Custom Metric Buckets
+
+```go
+// Latency histogram with custom buckets optimized for your use case
+latency, _ := builder.Histogram(
+    "api_latency_seconds",
+    "API request latency distribution",
+).WithBuckets([]float64{
+    0.001, 0.005, 0.010, 0.025, 0.050,  // sub-50ms buckets
+    0.100, 0.250, 0.500,                // normal response times
+    1.0, 2.5, 5.0, 10.0,               // slow responses
+}).Build()
+
+// Response size histogram
+responseSize, _ := builder.Histogram(
+    "response_size_bytes",
+    "HTTP response size distribution",
+).WithBuckets([]float64{
+    100, 1000, 10000, 100000, 1000000, // 100B to 1MB
+}).Build()
+
+// Database connection pool size
+poolSize, _ := builder.Histogram(
+    "db_pool_size",
+    "Database connection pool size distribution",
+).WithBuckets([]float64{
+    1, 5, 10, 25, 50, 100, // pool sizes
+}).Build()
+```
+
+### Error Handling
+
+```go
+// Metrics provider handles connection failures gracefully
+provider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+    ServiceName:        "my-service",
+    OTLPConnectionName: "nonexistent-connection", // Connection doesn't exist
+}, registry)
+
+// Init may return error, but provider still works locally
+err := provider.Init()
+if err != nil {
+    log.Printf("Metrics export disabled: %v", err)
+    // Provider still works, just no OTLP export
 }
 
-// Metrics
-metricsProvider := metricsfx.NewMetricsProvider(&metricsfx.Config{
-    ServiceName:    observabilityConfig.ServiceName,
-    ServiceVersion: observabilityConfig.ServiceVersion,
-    OTLPEndpoint:   observabilityConfig.OTLPEndpoint,
-})
-_ = metricsProvider.Init()
+// Metrics continue to work even without export
+builder := provider.NewBuilder()
+counter, _ := builder.Counter("local_counter", "Local counter").Build()
+counter.Inc(context.Background()) // Works fine locally
+```
 
-// Logs (with automatic correlation)
-logger := logfx.NewLogger(
-    logfx.WithOTLP(observabilityConfig.OTLPEndpoint, false),
+## Integration with Other Services
+
+### gRPC Metrics
+
+```go
+import "github.com/eser/ajan/grpcfx"
+
+// Create gRPC metrics
+grpcMetrics := grpcfx.NewMetrics(metricsProvider)
+err := grpcMetrics.Init()
+if err != nil {
+    panic(err)
+}
+
+// Use with gRPC service
+grpcService := grpcfx.NewGRPCService(
+    &grpcfx.Config{Port: 9090},
+    metricsProvider,
+    logger,
 )
 
-// All telemetry data flows to the same collector with:
-// - Consistent resource attribution (service name/version)
-// - Automatic correlation via trace context
-// - HTTP correlation IDs in logs
-// - Unified export pipeline
+// Automatically tracks:
+// - grpc_requests_total
+// - grpc_request_duration_seconds
 ```
 
-## Error Handling
-
-The metrics provider handles export failures gracefully:
+### Event System Metrics
 
 ```go
-provider := metricsfx.NewMetricsProvider(config)
-if err := provider.Init(); err != nil {
-    log.Printf("Failed to create metrics provider: %v", err)
-    // Fallback to basic provider or handle appropriately
+import "github.com/eser/ajan/eventsfx"
+
+// Create event metrics
+eventMetrics := eventsfx.NewMetrics(metricsProvider)
+err := eventMetrics.Init()
+if err != nil {
+    panic(err)
 }
 
-// Metrics continue to work even if exports fail
-// Failures are logged but don't affect application performance
+// Use with event dispatcher
+dispatcher := eventsfx.NewDispatcher(eventMetrics)
+
+// Automatically tracks:
+// - event_dispatches_total
 ```
 
-## Migration from Direct Exports
+### Database Metrics
 
-### Before (Direct Prometheus)
 ```go
-// Old approach - direct to Prometheus
-config := &metricsfx.Config{
-    PrometheusEndpoint: "/metrics",
+// Custom database metrics
+builder := provider.NewBuilder()
+
+queryDuration, _ := builder.Histogram(
+    "db_query_duration_seconds",
+    "Database query execution time",
+).WithDurationBuckets().Build()
+
+connections, _ := builder.Gauge(
+    "db_connections_active",
+    "Active database connections",
+).Build()
+
+queryErrors, _ := builder.Counter(
+    "db_query_errors_total",
+    "Database query errors",
+).Build()
+
+// Use in database layer
+func (db *Database) Query(ctx context.Context, sql string) (*Rows, error) {
+    start := time.Now()
+    defer queryDuration.RecordDuration(ctx, time.Since(start))
+
+    connections.Set(ctx, float64(db.pool.ActiveCount()))
+
+    rows, err := db.conn.QueryContext(ctx, sql)
+    if err != nil {
+        queryErrors.Inc(ctx,
+            metricsfx.StringAttr("error", err.Error()),
+            metricsfx.StringAttr("query_type", "select"),
+        )
+        return nil, err
+    }
+
+    return rows, nil
 }
 ```
-
-### After (OpenTelemetry Collector)
-```go
-// New approach - unified pipeline
-config := &metricsfx.Config{
-    ServiceName:    "my-service",
-    ServiceVersion: "1.0.0",
-    OTLPEndpoint:   "http://otel-collector:4318",
-}
-```
-
-The collector configuration handles routing to Prometheus and other backends without any application code changes!
-
-## Performance Characteristics
-
-- **Low Overhead** - Optimized for production workloads
-- **Async Exports** - Non-blocking metric collection
-- **Batching** - Efficient data transmission
-- **Memory Efficient** - Bounded resource usage
-- **High Throughput** - Suitable for high-traffic applications
 
 ## Best Practices
 
-1. **Use OpenTelemetry Collector** for production deployments
-2. **Set appropriate export intervals** (15-60 seconds typically)
-3. **Include resource attribution** (service name/version)
-4. **Use consistent labeling** across metrics
-5. **Monitor export health** via collector metrics
-6. **Combine with logfx** for complete observability
+1. **Use Centralized Connections**: Configure OTLP connections once in `connfx`, use everywhere
+2. **Connection Health Monitoring**: Use `registry.HealthCheck(ctx)` to monitor OTLP connection health
+3. **Graceful Degradation**: Metrics provider works with or without OTLP connections
+4. **Consistent Naming**: Use standard metric naming conventions (`_total` for counters, `_seconds` for durations)
+5. **Meaningful Attributes**: Add relevant dimensions but avoid high cardinality
+6. **Resource Attribution**: Set service name/version in connection properties for proper attribution
+7. **Export Intervals**: Balance between timeliness and overhead (15-60 seconds typically)
+8. **Runtime Metrics**: Enable for production monitoring, disable for lightweight deployments
+9. **Connection Lifecycle**: Use `registry.Close(ctx)` during shutdown to properly cleanup connections
+10. **Environment-Specific Config**: Use different connection names and intervals for dev/staging/prod
 
----
+## Architecture Benefits
 
-## Legacy Interface Reference
-
-The package maintains backward compatibility with the original interface:
-
-### Types Overview
-
-The package defines several key types for metrics collection:
-
-```go
-type MetricsProvider struct {
-    // Internal implementation
-}
-
-type MetricsBuilder struct {
-    // Builder for creating metrics
-}
-
-// Metric types
-type Counter interface { Inc(ctx context.Context, attrs ...attribute.KeyValue) }
-type Histogram interface { Record(ctx context.Context, value float64, attrs ...attribute.KeyValue) }
-type Gauge interface { Set(ctx context.Context, value float64, attrs ...attribute.KeyValue) }
-```
-
-### Provider Creation
-
-```go
-provider := metricsfx.NewMetricsProvider(config)
-
-err := provider.Init()
-if err != nil {
-    log.Fatal("Failed to register metrics collectors:", err)
-}
-```
-
-The documentation below provides additional details about the package types,
-functions, and usage examples. For more detailed information, refer to the
-source code and tests.
+- **Unified Configuration** - Single place to configure OTLP connections for all observability signals
+- **Shared Resources** - Efficient connection pooling and resource utilization
+- **Consistent Attribution** - Service information automatically applied to all metrics
+- **Health Monitoring** - Built-in connection health checks and monitoring
+- **Graceful Fallbacks** - Continue working even when OTLP connections fail
+- **Environment Flexibility** - Easy switching between different collectors/environments
+- **Import Cycle Prevention** - Bridge pattern avoids circular dependencies
+- **Thread Safety** - All connection operations are thread-safe

@@ -12,26 +12,48 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/eser/ajan/httpclient"
 )
 
 const (
 	DefaultHTTPTimeout = 30 * time.Second
 	HealthCheckTimeout = 2 * time.Second
+
+	// Circuit breaker defaults.
+	DefaultCircuitBreakerFailureThreshold     = 5
+	DefaultCircuitBreakerResetTimeout         = 10 * time.Second
+	DefaultCircuitBreakerHalfOpenSuccessCount = 2
+
+	// Retry strategy defaults.
+	DefaultRetryMaxAttempts     = 3
+	DefaultRetryInitialInterval = 100 * time.Millisecond
+	DefaultRetryMaxInterval     = 10 * time.Second
+	DefaultRetryMultiplier      = 2.0
+	DefaultRetryRandomFactor    = 0.1
+
+	// HTTP error threshold.
+	DefaultServerErrorThreshold = 500
 )
 
 var (
-	ErrFailedToCreateHTTPClient = errors.New("failed to create HTTP client")
-	ErrFailedToHealthCheckHTTP  = errors.New("failed to health check HTTP endpoint")
-	ErrInvalidConfigTypeHTTP    = errors.New("invalid config type for HTTP connection")
-	ErrUnsupportedBodyType      = errors.New("unsupported body type")
-	ErrFailedToCreateRequest    = errors.New("failed to create HTTP request")
-	ErrFailedToLoadCertificate  = errors.New("failed to load client certificate")
+	ErrFailedToCreateHTTPClient      = errors.New("failed to create HTTP client")
+	ErrFailedToHealthCheckHTTP       = errors.New("failed to health check HTTP endpoint")
+	ErrInvalidConfigTypeHTTP         = errors.New("invalid config type for HTTP connection")
+	ErrUnsupportedBodyType           = errors.New("unsupported body type")
+	ErrFailedToCreateRequest         = errors.New("failed to create HTTP request")
+	ErrFailedToLoadCertificate       = errors.New("failed to load client certificate")
+	ErrFailedToCreateHealthCheckReq  = errors.New("failed to create health check request")
+	ErrFailedToPerformHealthCheckReq = errors.New("failed to perform health check request")
+	ErrFailedToCreateGetRequest      = errors.New("failed to create GET request")
+	ErrFailedToPerformGetRequest     = errors.New("failed to perform GET request")
+	ErrFailedToCreateResilientClient = errors.New("failed to create resilient HTTP client")
 )
 
-// HTTPConnection represents an HTTP API connection.
+// HTTPConnection represents an HTTP API connection with resilience features.
 type HTTPConnection struct {
 	lastHealth time.Time
-	client     *http.Client
+	client     *httpclient.Client
 	headers    map[string]string
 	protocol   string
 	baseURL    string
@@ -54,8 +76,8 @@ func (f *HTTPConnectionFactory) CreateConnection(
 	ctx context.Context,
 	config *ConfigTarget,
 ) (Connection, error) {
-	// Create HTTP client with configuration
-	client, headers, err := f.buildHTTPClient(config)
+	// Create resilient HTTP client with configuration
+	client, headers, err := f.buildResilientHTTPClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHTTPClient, err)
 	}
@@ -85,15 +107,19 @@ func (f *HTTPConnectionFactory) GetProtocol() string {
 	return f.protocol
 }
 
-func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
+func (f *HTTPConnectionFactory) buildResilientHTTPClient( //nolint:cyclop
 	config *ConfigTarget,
-) (*http.Client, map[string]string, error) {
-	// Configure transport
-	transport := &http.Transport{} //nolint:exhaustruct
+) (*httpclient.Client, map[string]string, error) {
+	// Create resilient HTTP client configuration
+	clientConfig := f.buildClientConfig(config)
 
-	// TLS configuration
+	// Create resilient client with custom transport
+	clientOptions := []httpclient.NewClientOption{
+		httpclient.WithConfig(clientConfig),
+	}
+
 	if config.TLS || config.TLSSkipVerify {
-		transport.TLSClientConfig = &tls.Config{ //nolint:exhaustruct
+		tlsConfig := &tls.Config{ //nolint:exhaustruct
 			InsecureSkipVerify: config.TLSSkipVerify, //nolint:gosec
 		}
 
@@ -110,14 +136,13 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 				)
 			}
 
-			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
+
+		clientOptions = append(clientOptions, httpclient.WithTLSClientConfig(tlsConfig))
 	}
 
-	// Create HTTP client
-	client := &http.Client{ //nolint:exhaustruct
-		Transport: transport,
-	}
+	client := httpclient.NewClient(clientOptions...)
 
 	// Set timeout
 	if config.Timeout > 0 {
@@ -132,16 +157,117 @@ func (f *HTTPConnectionFactory) buildHTTPClient( //nolint:cyclop
 
 	// Add custom headers from properties
 	if config.Properties != nil {
+		// Try map[string]any first (for runtime configuration)
 		if customHeaders, ok := config.Properties["headers"].(map[string]any); ok {
 			for k, v := range customHeaders {
 				if strVal, ok := v.(string); ok {
 					headers[k] = strVal
 				}
 			}
+		} else if customHeaders, ok := config.Properties["headers"].(map[string]string); ok {
+			// Try map[string]string (for literal configuration)
+			maps.Copy(headers, customHeaders)
 		}
 	}
 
 	return client, headers, nil
+}
+
+func (f *HTTPConnectionFactory) buildClientConfig(config *ConfigTarget) *httpclient.Config {
+	clientConfig := &httpclient.Config{
+		CircuitBreaker: httpclient.CircuitBreakerConfig{
+			Enabled:               true,
+			FailureThreshold:      DefaultCircuitBreakerFailureThreshold,
+			ResetTimeout:          DefaultCircuitBreakerResetTimeout,
+			HalfOpenSuccessNeeded: DefaultCircuitBreakerHalfOpenSuccessCount,
+		},
+		RetryStrategy: httpclient.RetryStrategyConfig{
+			Enabled:         true,
+			MaxAttempts:     DefaultRetryMaxAttempts,
+			InitialInterval: DefaultRetryInitialInterval,
+			MaxInterval:     DefaultRetryMaxInterval,
+			Multiplier:      DefaultRetryMultiplier,
+			RandomFactor:    DefaultRetryRandomFactor,
+		},
+		ServerErrorThreshold: DefaultServerErrorThreshold,
+	}
+
+	if config.Properties != nil {
+		f.applyCircuitBreakerConfig(clientConfig, config.Properties)
+		f.applyRetryStrategyConfig(clientConfig, config.Properties)
+		f.applyServerErrorThreshold(clientConfig, config.Properties)
+	}
+
+	return clientConfig
+}
+
+func (f *HTTPConnectionFactory) applyCircuitBreakerConfig(
+	clientConfig *httpclient.Config,
+	properties map[string]any,
+) {
+	cbConfig, ok := properties["circuit_breaker"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	if enabled, ok := cbConfig["enabled"].(bool); ok {
+		clientConfig.CircuitBreaker.Enabled = enabled
+	}
+
+	if threshold, ok := cbConfig["failure_threshold"].(int); ok && threshold >= 0 {
+		clientConfig.CircuitBreaker.FailureThreshold = uint(threshold)
+	}
+
+	if timeout, ok := cbConfig["reset_timeout"].(time.Duration); ok {
+		clientConfig.CircuitBreaker.ResetTimeout = timeout
+	}
+
+	if success, ok := cbConfig["half_open_success_needed"].(int); ok && success >= 0 {
+		clientConfig.CircuitBreaker.HalfOpenSuccessNeeded = uint(success)
+	}
+}
+
+func (f *HTTPConnectionFactory) applyRetryStrategyConfig(
+	clientConfig *httpclient.Config,
+	properties map[string]any,
+) {
+	retryConfig, ok := properties["retry_strategy"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	if enabled, ok := retryConfig["enabled"].(bool); ok {
+		clientConfig.RetryStrategy.Enabled = enabled
+	}
+
+	if maxAttempts, ok := retryConfig["max_attempts"].(int); ok && maxAttempts >= 0 {
+		clientConfig.RetryStrategy.MaxAttempts = uint(maxAttempts)
+	}
+
+	if initialInterval, ok := retryConfig["initial_interval"].(time.Duration); ok {
+		clientConfig.RetryStrategy.InitialInterval = initialInterval
+	}
+
+	if maxInterval, ok := retryConfig["max_interval"].(time.Duration); ok {
+		clientConfig.RetryStrategy.MaxInterval = maxInterval
+	}
+
+	if multiplier, ok := retryConfig["multiplier"].(float64); ok {
+		clientConfig.RetryStrategy.Multiplier = multiplier
+	}
+
+	if randomFactor, ok := retryConfig["random_factor"].(float64); ok {
+		clientConfig.RetryStrategy.RandomFactor = randomFactor
+	}
+}
+
+func (f *HTTPConnectionFactory) applyServerErrorThreshold(
+	clientConfig *httpclient.Config,
+	properties map[string]any,
+) {
+	if threshold, ok := properties["server_error_threshold"].(int); ok {
+		clientConfig.ServerErrorThreshold = threshold
+	}
 }
 
 // Connection interface implementation
@@ -198,8 +324,8 @@ func (c *HTTPConnection) HealthCheck(
 
 func (c *HTTPConnection) Close(ctx context.Context) error {
 	atomic.StoreInt32(&c.state, int32(ConnectionStateDisconnected))
-	// HTTP clients don't need explicit closing, but we can close idle connections
-	if transport, ok := c.client.Transport.(*http.Transport); ok {
+	// Resilient HTTP clients handle cleanup internally
+	if transport, ok := c.client.Transport.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
 
@@ -212,9 +338,14 @@ func (c *HTTPConnection) GetRawConnection() any {
 
 // Additional HTTP-specific methods
 
-// GetClient returns the underlying HTTP client.
-func (c *HTTPConnection) GetClient() *http.Client {
+// GetClient returns the underlying resilient HTTP client.
+func (c *HTTPConnection) GetClient() *httpclient.Client {
 	return c.client
+}
+
+// GetStandardClient returns the standard HTTP client from the resilient client.
+func (c *HTTPConnection) GetStandardClient() *http.Client {
+	return c.client.Client
 }
 
 // GetBaseURL returns the base URL for this connection.
@@ -228,6 +359,15 @@ func (c *HTTPConnection) GetHeaders() map[string]string {
 	maps.Copy(headers, c.headers)
 
 	return headers
+}
+
+// GetCircuitBreakerState returns the current state of the circuit breaker.
+func (c *HTTPConnection) GetCircuitBreakerState() string {
+	if c.client.Transport != nil && c.client.Transport.CircuitBreaker != nil {
+		return c.client.Transport.CircuitBreaker.State().String()
+	}
+
+	return "unknown"
 }
 
 // NewRequest creates a new HTTP request with the connection's default headers.
@@ -281,7 +421,7 @@ func (c *HTTPConnection) performHealthCheckRequest(ctx context.Context) (*http.R
 	// Create health check request (HEAD request to base URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.baseURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create health check request: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateHealthCheckReq, err)
 	}
 
 	// Add default headers
@@ -289,10 +429,10 @@ func (c *HTTPConnection) performHealthCheckRequest(ctx context.Context) (*http.R
 		req.Header.Set(k, v)
 	}
 
-	// Perform request
+	// Use the resilient client for health checks
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform health check request: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToPerformHealthCheckReq, err)
 	}
 
 	return resp, nil
@@ -343,7 +483,7 @@ func (c *HTTPConnection) tryGetRequest(ctx context.Context, start time.Time) *He
 func (c *HTTPConnection) performGetRequest(ctx context.Context) (*http.Response, error) {
 	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GET request: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateGetRequest, err)
 	}
 
 	for k, v := range c.headers {
@@ -352,7 +492,7 @@ func (c *HTTPConnection) performGetRequest(ctx context.Context) (*http.Response,
 
 	resp, err := c.client.Do(getReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform GET request: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToPerformGetRequest, err)
 	}
 
 	return resp, nil

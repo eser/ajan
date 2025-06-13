@@ -4,7 +4,7 @@
 
 **types** is a collection of custom Go types that provide enhanced functionality for common use cases in configuration, metrics, and data handling. The package focuses on types that support text marshaling/unmarshalling with intelligent parsing capabilities.
 
-## Features
+## Key Features
 
 - **Metric Types**: Integer and float types with unit suffix support (k, m, b)
 - **Text Marshaling**: Full support for encoding/decoding to/from text formats

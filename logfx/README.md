@@ -4,8 +4,8 @@
 
 **logfx** package is a configurable logging solution that leverages the
 `log/slog` of the standard library for structured logging. It includes
-pretty-printing options and **OpenTelemetry collector integration** as the
-preferred export method, with optional direct Loki export for legacy setups.
+pretty-printing options and **centralized OTLP connection management** through
+`connfx` for log export to modern observability platforms.
 The package supports OpenTelemetry-compatible severity levels and provides
 extensive test coverage to ensure reliability and correctness.
 
@@ -13,8 +13,8 @@ extensive test coverage to ensure reliability and correctness.
 
 - 🎯 **Extended Log Levels** - OpenTelemetry-compatible levels while using standard `log/slog` under the hood
 - 🔄 **Automatic Correlation IDs** - Request tracing across your entire application
-- 🌐 **OpenTelemetry Integration** - Native OTLP export to OpenTelemetry collectors
-- 📊 **Multiple Export Formats** - JSON logs, Loki export, OTLP export
+- 🌐 **Centralized OTLP Integration** - Uses `connfx` registry for shared OTLP connections
+- 📊 **Structured Logging** - JSON output for production, pretty printing for development
 - 🎨 **Pretty Printing** - Colored output for development
 - ⚡ **Performance Optimized** - Asynchronous exports, structured logging
 
@@ -113,16 +113,47 @@ logger.Panic("Panic condition")                   // Most severe
 package main
 
 import (
+    "context"
     "log/slog"
     "os"
 
+    "github.com/eser/ajan/connfx"
     "github.com/eser/ajan/logfx"
 )
 
 func main() {
-    // Create logger with OpenTelemetry collector export
-    logger := logfx.NewLogger(
-        logfx.WithOTLP("http://otel-collector:4318", true),
+    ctx := context.Background()
+
+    // Create logger first
+    logger := logfx.NewLogger()
+
+    // Create connection registry and configure OTLP connection
+    registry := connfx.NewRegistryWithDefaults(logger)
+
+    // Configure OTLP connection once, use everywhere
+    otlpConfig := &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":    "my-service",
+            "service_version": "1.0.0",
+            "insecure":        true,
+        },
+    }
+
+    // Add OTLP connection to registry
+    _, err := registry.AddConnection(ctx, "otel", otlpConfig)
+    if err != nil {
+        panic(err)
+    }
+
+    // Create logger with connection registry (enables OTLP export)
+    logger = logfx.NewLogger(
+        logfx.WithConfig(&logfx.Config{
+            Level:              "TRACE",
+            OTLPConnectionName: "otel", // Reference the connection
+        }),
+        logfx.WithRegistry(registry), // Pass the registry
     )
 
     // Use structured logging with extended levels
@@ -139,39 +170,90 @@ func main() {
 }
 ```
 
-### With HTTP Correlation IDs
+### Complete Observability Stack Integration
 
 ```go
 package main
 
 import (
+    "context"
     "log/slog"
     "net/http"
     "os"
 
+    "github.com/eser/ajan/connfx"
     "github.com/eser/ajan/httpfx"
     "github.com/eser/ajan/httpfx/middlewares"
     "github.com/eser/ajan/logfx"
+    "github.com/eser/ajan/metricsfx"
+    "github.com/eser/ajan/tracesfx"
 )
 
 func main() {
-    logger := logfx.NewLogger(
-        logfx.WithWriter(os.Stdout),
+    ctx := context.Background()
+
+    // Step 1: Create connection registry with OTLP connection
+    logger := logfx.NewLogger()
+    registry := connfx.NewRegistryWithDefaults(logger)
+
+    // Configure shared OTLP connection for all observability signals
+    _, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+        Protocol: "otlp",
+        DSN:      "otel-collector:4318",
+        Properties: map[string]any{
+            "service_name":     "my-api",
+            "service_version":  "1.0.0",
+            "insecure":         true,
+            "export_interval":  "15s",
+            "batch_timeout":    "5s",
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    // Step 2: Create observability stack using shared connection
+
+    // Logging with extended levels
+    logger = logfx.NewLogger(
         logfx.WithConfig(&logfx.Config{
-            Level:        "TRACE",  // Use extended levels for comprehensive logging
-            PrettyMode:   false,
-            OTLPEndpoint: "http://otel-collector:4318",
+            Level:              "TRACE",
+            OTLPConnectionName: "otel",
         }),
+        logfx.WithRegistry(registry),
     )
 
+    // Metrics
+    metricsProvider := metricsfx.NewMetricsProvider(&metricsfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        ExportInterval:     15 * time.Second,
+    }, registry)
+    _ = metricsProvider.Init()
+
+    // Tracing
+    tracesProvider := tracesfx.NewTracesProvider(&tracesfx.Config{
+        ServiceName:        "my-api",
+        ServiceVersion:     "1.0.0",
+        OTLPConnectionName: "otel",
+        SampleRatio:        1.0,
+    }, registry)
+    _ = tracesProvider.Init()
+
+    // Step 3: Setup HTTP service with observability middleware
     router := httpfx.NewRouter("/api")
 
     // Add correlation middleware for automatic request tracking
     router.Use(middlewares.CorrelationIDMiddleware())
     router.Use(middlewares.LoggingMiddleware(logger))
 
+    // Add metrics middleware
+    httpMetrics, _ := metricsfx.NewHTTPMetrics(metricsProvider, "my-api", "1.0.0")
+    router.Use(middlewares.MetricsMiddleware(httpMetrics))
+
     router.Route("GET /users/{id}", func(ctx *httpfx.Context) httpfx.Result {
-        // All logs automatically include correlation_id from HTTP headers
+        // All logs automatically include correlation_id and trace information
         logger.TraceContext(ctx.Request.Context(), "Starting user lookup")
         logger.InfoContext(ctx.Request.Context(), "Processing user request",
             slog.String("user_id", "123"),
@@ -184,84 +266,127 @@ func main() {
 }
 ```
 
-**Log Output with Correlation:**
+**Log Output with Complete Correlation:**
 ```json
 {"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"HTTP request started","method":"GET","path":"/api/users/123","correlation_id":"abc-123-def"}
-{"time":"2024-01-15T10:30:00Z","level":"TRACE","msg":"Starting user lookup","correlation_id":"abc-123-def"}
-{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"Processing user request","user_id":"123","correlation_id":"abc-123-def"}
-{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"HTTP request completed","method":"GET","status_code":200,"correlation_id":"abc-123-def"}
+{"time":"2024-01-15T10:30:00Z","level":"TRACE","msg":"Starting user lookup","correlation_id":"abc-123-def","trace_id":"4bf92f3577b34da6","span_id":"00f067aa0bb902b7"}
+{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"Processing user request","user_id":"123","correlation_id":"abc-123-def","trace_id":"4bf92f3577b34da6","span_id":"00f067aa0bb902b7"}
+{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"HTTP request completed","method":"GET","status_code":200,"correlation_id":"abc-123-def","trace_id":"4bf92f3577b34da6"}
 ```
 
 ## Configuration
 
 ```go
 type Config struct {
-	Level      string `conf:"level"      default:"INFO"`        // Supports: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, PANIC
-	PrettyMode bool   `conf:"pretty"     default:"true"`
-	AddSource  bool   `conf:"add_source" default:"false"`
+	Level  string `conf:"level"  default:"INFO"`    // Supports: TRACE, DEBUG, INFO, WARN, ERROR, FATAL, PANIC
 
-	// OpenTelemetry Collector configuration (preferred)
-	OTLPEndpoint string `conf:"otlp_endpoint" default:""`
-	OTLPInsecure bool   `conf:"otlp_insecure" default:"true"`
+	// Connection-based OTLP configuration (replaces direct endpoint config)
+	OTLPConnectionName string `conf:"otlp_connection_name" default:""`
 
-	// Direct Loki export (legacy/additional option)
-	LokiURI   string `conf:"loki_uri" default:""`
-	LokiLabel string `conf:"loki_label" default:""`
+	DefaultLogger bool `conf:"default"    default:"false"`
+	PrettyMode    bool `conf:"pretty"     default:"true"`
+	AddSource     bool `conf:"add_source" default:"false"`
 }
 ```
 
-### Export Priority
+## Centralized Connection Management
 
-The package automatically chooses the best export method:
+### Why Use connfx for OTLP Connections?
 
-1. **🥇 OTLP Collector** (`OTLPEndpoint`) - Preferred for production
-2. **🥈 Direct Loki** (`LokiURI`) - Legacy/fallback option
-3. **Both can run simultaneously** if needed
+The new architecture centralizes OTLP connection management through `connfx`, providing significant advantages:
 
-## OpenTelemetry Collector Integration
+**Before (Old Architecture):**
+```go
+// Each package configured separately - duplicated configuration
+logger := logfx.NewLogger(logfx.WithOTLP("otel-collector:4318", true))
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{OTLPEndpoint: "otel-collector:4318"})
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{OTLPEndpoint: "otel-collector:4318"})
+```
 
-### Recommended Setup
+**After (New Architecture):**
+```go
+// Single OTLP connection shared across all packages
+registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{Protocol: "otlp", DSN: "otel-collector:4318"})
+
+// All packages reference the same connection
+logger := logfx.NewLogger(logfx.WithOTLP("otel"), logfx.WithRegistry(registry))
+metrics := metricsfx.NewMetricsProvider(&metricsfx.Config{OTLPConnectionName: "otel"}, registry)
+traces := tracesfx.NewTracesProvider(&tracesfx.Config{OTLPConnectionName: "otel"}, registry)
+```
+
+**Benefits:**
+- 🔧 **Single Configuration Point** - Configure OTLP once, use everywhere
+- 🔄 **Shared Connections** - Efficient resource usage and connection pooling
+- 🎛️ **Centralized Management** - Health checks, monitoring, and lifecycle management
+- 🔗 **Consistent Attribution** - Service name and version automatically applied to all signals
+- 💰 **Cost Optimization** - Single connection reduces overhead
+- 🛡️ **Error Handling** - Graceful fallbacks when connections are unavailable
+
+### OTLP Connection Configuration
 
 ```go
-config := &logfx.Config{
-    Level:        "INFO",           // Use any of the 7 extended levels
-    PrettyMode:   false,
-    OTLPEndpoint: "http://otel-collector:4318",
-    OTLPInsecure: true,
+// Configure OTLP connection with full options
+otlpConfig := &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{
+        // Service identification (applied to all signals automatically)
+        "service_name":    "my-service",
+        "service_version": "1.0.0",
+
+        // Connection settings
+        "insecure":        true,                    // Use HTTP instead of HTTPS
+
+        // Export configuration
+        "export_interval": 30 * time.Second,       // Metrics export interval
+        "batch_timeout":   5 * time.Second,        // Trace batch timeout
+        "batch_size":      512,                    // Trace batch size
+        "sample_ratio":    1.0,                    // Trace sampling ratio
+    },
 }
-logger := logfx.NewLogger(
-    logfx.WithWriter(os.Stdout),
-    logfx.WithConfig(config),
-)
+
+_, err := registry.AddConnection(ctx, "otel", otlpConfig)
 ```
 
-### Benefits of OpenTelemetry Collector
+### Environment-Based Configuration
 
-- **🔄 Unified Pipeline** - All logs, metrics, and traces flow through one point
-- **🎛️ Flexibility** - Change backends without code changes
-- **⚡ Performance** - Built-in batching, retries, and buffering
-- **💰 Cost Optimization** - Sampling and filtering before export
-- **🔧 Processing** - Transform, enrich, and route data
+```bash
+# Connection configuration via environment
+CONN_TARGETS_OTEL_PROTOCOL=otlp
+CONN_TARGETS_OTEL_DSN=otel-collector:4318
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_NAME=my-service
+CONN_TARGETS_OTEL_PROPERTIES_SERVICE_VERSION=1.0.0
+CONN_TARGETS_OTEL_PROPERTIES_INSECURE=true
 
-### Example Collector Configuration
+# Package configuration references the connection
+LOG_OTLP_CONNECTION_NAME=otel
+METRICS_OTLP_CONNECTION_NAME=otel
+TRACES_OTLP_CONNECTION_NAME=otel
+```
 
-```yaml
-# otel-collector-config.yaml
-receivers:
-  otlp:
-    protocols:
-      http:
-        endpoint: 0.0.0.0:4318
+### Multiple OTLP Endpoints
 
-exporters:
-  loki:
-    endpoint: http://loki:3100/loki/api/v1/push
+```go
+// Different endpoints for different environments
+_, err := registry.AddConnection(ctx, "otel-dev", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "http://dev-collector:4318",
+    Properties: map[string]any{"service_name": "my-service-dev"},
+})
 
-service:
-  pipelines:
-    logs:
-      receivers: [otlp]
-      exporters: [loki]
+_, err = registry.AddConnection(ctx, "otel-prod", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "https://prod-collector:4317",
+    TLS:      true,
+    Properties: map[string]any{
+        "service_name": "my-service",
+        "insecure":     false,
+    },
+})
+
+// Use different connections in different packages
+devLogger := logfx.NewLogger(logfx.WithOTLP("otel-dev"), logfx.WithRegistry(registry))
+prodMetrics := metricsfx.NewMetricsProvider(&metricsfx.Config{OTLPConnectionName: "otel-prod"}, registry)
 ```
 
 ## Correlation IDs
@@ -295,15 +420,30 @@ func MyHandler(ctx *httpfx.Context) httpfx.Result {
 
 ## Advanced Usage
 
-### Multiple Export Destinations
+### Migration from Direct OTLP Configuration
 
+**Old Code:**
 ```go
-config := &logfx.Config{
-    Level:        "DEBUG",                          // Extended level support
-    OTLPEndpoint: "http://otel-collector:4318",     // Primary
-    LokiURI:      "http://backup-loki:3100",        // Backup
-    LokiLabel:    "backup=true,service=my-app",
-}
+// Before: Direct OTLP configuration
+logger := logfx.NewLogger(
+    logfx.WithOTLP("otel-collector:4318", true),
+)
+```
+
+**New Code:**
+```go
+// After: Connection-based configuration
+registry := connfx.NewRegistryWithDefaults(logger)
+_, err := registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    DSN:      "otel-collector:4318",
+    Properties: map[string]any{"insecure": true},
+})
+
+logger := logfx.NewLogger(
+    logfx.WithOTLP("otel"),
+    logfx.WithRegistry(registry),
+)
 ```
 
 ### Level Configuration Examples
@@ -311,23 +451,24 @@ config := &logfx.Config{
 ```go
 // Development - verbose logging with all levels
 devConfig := &logfx.Config{
-    Level:      "TRACE",    // Most verbose - see everything
-    PrettyMode: true,
-    AddSource:  true,
+    Level:              "TRACE",    // Most verbose - see everything
+    PrettyMode:         true,
+    AddSource:          true,
+    OTLPConnectionName: "otel-dev",
 }
 
 // Production - structured output with appropriate level
 prodConfig := &logfx.Config{
-    Level:        "INFO",   // Production appropriate
-    PrettyMode:   false,
-    OTLPEndpoint: "http://otel-collector:4318",
+    Level:              "INFO",     // Production appropriate
+    PrettyMode:         false,
+    OTLPConnectionName: "otel-prod",
 }
 
 // Debug production issues - temporary verbose logging
 debugConfig := &logfx.Config{
-    Level:        "DEBUG",  // More detail for troubleshooting
-    PrettyMode:   false,
-    OTLPEndpoint: "http://otel-collector:4318",
+    Level:              "DEBUG",    // More detail for troubleshooting
+    PrettyMode:         false,
+    OTLPConnectionName: "otel-debug",
 }
 ```
 
@@ -352,56 +493,20 @@ logger.Panic("Extended panic level")    // Not available in standard slog
 The logger handles export failures gracefully:
 
 ```go
-// Logger continues working even if exports fail
+// Logger continues working even if OTLP connection fails
+registry := connfx.NewRegistryWithDefaults(logger)
+
+// If connection fails, logger falls back to local output only
 logger := logfx.NewLogger(
     logfx.WithWriter(os.Stdout),
-    logfx.WithConfig(config),
+    logfx.WithOTLP("nonexistent-connection"),
+    logfx.WithRegistry(registry),
 )
-
-// Check for initialization errors
-if handler, ok := logger.Handler.(*logfx.Handler); ok && handler.InitError != nil {
-    log.Printf("Logger init warning: %v", handler.InitError)
-}
 
 // Logs always go to the primary writer (stdout/file)
-// Export failures are logged to stderr without affecting your app
+// Connection failures are handled gracefully without affecting your app
+logger.Info("This will always work, with or without OTLP")
 ```
-
-## Observability Integration
-
-### Complete Observability Stack
-
-Use with other `ajan` packages for full observability:
-
-```go
-import (
-    "github.com/eser/ajan/logfx"     // Extended logs
-    "github.com/eser/ajan/metricsfx" // Metrics
-    // "github.com/eser/ajan/tracesfx"  // Traces
-)
-
-// All export to the same OpenTelemetry collector
-config := &Config{
-    OTLPEndpoint: "http://otel-collector:4318",
-}
-```
-
-### Log Correlation with Traces
-
-When OpenTelemetry tracing is active, logs automatically include:
-
-```jsonc
-{
-  "time": "2024-01-15T10:30:00Z",
-  "level": "INFO",
-  "msg": "Processing request",
-  "correlation_id": "abc-123-def",  // HTTP correlation ID
-  "trace_id": "4bf92f3577b34da6",   // OpenTelemetry trace ID
-  "span_id": "00f067aa0bb902b7"     // OpenTelemetry span ID
-}
-```
-
-This provides multiple correlation dimensions for complete request traceability.
 
 ## API Reference
 
@@ -419,14 +524,15 @@ Create a logger using the flexible options pattern:
 // Basic logger with default configuration
 logger := logfx.NewLogger()
 
-// Logger with custom writer and config
+// Logger with connection registry for OTLP export
 logger := logfx.NewLogger(
     logfx.WithWriter(os.Stdout),
     logfx.WithConfig(&logfx.Config{
-        Level:        "INFO",
-        PrettyMode:   false,
-        OTLPEndpoint: "http://otel-collector:4318",
+        Level:              "INFO",
+        PrettyMode:         false,
+        OTLPConnectionName: "otel",
     }),
+    logfx.WithRegistry(registry),
 )
 
 // Logger with individual options
@@ -434,7 +540,8 @@ logger := logfx.NewLogger(
     logfx.WithLevel(slog.LevelDebug),
     logfx.WithPrettyMode(true),
     logfx.WithAddSource(true),
-    logfx.WithOTLP("http://otel-collector:4318", true),
+    logfx.WithOTLP("otel"),
+    logfx.WithRegistry(registry),
     logfx.WithDefaultLogger(), // Set as default logger
 )
 ```
@@ -453,99 +560,55 @@ WithDefaultLogger()                           // Set as default logger
 WithWriter(writer io.Writer)                  // Set output writer
 WithFromSlog(slog *slog.Logger)              // Wrap existing slog.Logger
 
-// Export options
-WithOTLP(endpoint string, insecure bool)      // OpenTelemetry collector export
-WithLoki(uri string, label string)           // Direct Loki export
+// Connection-based OTLP export (NEW)
+WithOTLP(connectionName string)               // Reference OTLP connection by name
+WithRegistry(registry ConnectionRegistry)     // Provide connection registry
 ```
 
-#### Convenience Functions
+#### Migration Guide
 
+**Before:**
 ```go
-// Quick default setup
+// Old direct endpoint configuration
 logger := logfx.NewLogger(
-    logfx.WithConfig(&logfx.Config{
-        Level:      "INFO",
-        PrettyMode: true,
-        AddSource:  false,
-    }),
-)
-
-// Wrap existing slog logger
-slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-logger := logfx.NewLogger(logfx.WithFromSlog(slogger))
-
-// Production setup
-logger := logfx.NewLogger(
-    logfx.WithConfig(&logfx.Config{
-        Level:        "INFO",
-        PrettyMode:   false,
-        OTLPEndpoint: "http://otel-collector:4318",
-    }),
-)
-
-// Development setup
-logger := logfx.NewLogger(
-    logfx.WithLevel(slog.LevelDebug),
-    logfx.WithPrettyMode(true),
-    logfx.WithAddSource(true),
-    logfx.WithDefaultLogger(),
+    logfx.WithOTLP("http://collector:4318", true),
 )
 ```
 
-**Usage Examples:**
-
+**After:**
 ```go
-// Quick default setup
-logger := logfx.NewLogger(
-    logfx.WithConfig(&logfx.Config{
-        Level:      "INFO",
-        PrettyMode: true,
-        AddSource:  false,
-    }),
-)
+// New connection-based configuration
+registry := connfx.NewRegistryWithDefaults(logger)
+registry.AddConnection(ctx, "otel", &connfx.ConfigTarget{
+    Protocol: "otlp",
+    URL:      "http://collector:4318",
+    Properties: map[string]any{"insecure": true},
+})
 
-// Wrap existing slog logger
-slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-logger := logfx.NewLogger(logfx.WithFromSlog(slogger))
-
-// Production setup
 logger := logfx.NewLogger(
-    logfx.WithConfig(&logfx.Config{
-        Level:        "INFO",
-        PrettyMode:   false,
-        OTLPEndpoint: "http://otel-collector:4318",
-    }),
-)
-
-// Development setup
-logger := logfx.NewLogger(
-    logfx.WithLevel(slog.LevelDebug),
-    logfx.WithPrettyMode(true),
-    logfx.WithAddSource(true),
-    logfx.WithDefaultLogger(),
+    logfx.WithOTLP("otel"),
+    logfx.WithRegistry(registry),
 )
 ```
 
-## Ideal Architecture
+## Best Practices
 
-**🎯 Recommended Setup**: Use OpenTelemetry Collector as the central hub for all observability data.
+1. **Use Centralized Connections**: Configure OTLP connections once in `connfx`, use everywhere
+2. **Connection Health Monitoring**: Use `registry.HealthCheck(ctx)` to monitor OTLP connection health
+3. **Graceful Degradation**: Logger works with or without OTLP connections
+4. **Correlation IDs**: Use with `httpfx` middleware for automatic request correlation
+5. **Environment-Based Config**: Use environment variables for connection configuration
+6. **Resource Attribution**: Set service name/version in connection properties for proper attribution
+7. **Connection Lifecycle**: Use `registry.Close(ctx)` during shutdown to properly cleanup connections
+8. **Multiple Environments**: Use different connection names for dev/staging/prod environments
 
-```
-┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
-│                 │    │                     │    │                 │
-│   Your App      │───▶│ OpenTelemetry       │───▶│  Backends       │
-│                 │    │ Collector           │    │                 │
-│ • logfx         │    │                     │    │ • Loki (logs)   │
-│ • metricsfx     │    │ • Receives all 3    │    │ • Prometheus    │
-│ • tracesfx      │    │   pillars (L+M+T)   │    │   (metrics)     │
-│                 │    │ • Routes & filters  │    │ • Tempo         │
-│                 │    │ • Transforms        │    │   (traces)      │
-└─────────────────┘    └─────────────────────┘    └─────────────────┘
-```
+## Architecture Benefits
 
-Benefits:
-- **Unified observability pipeline** - All logs, metrics, and traces flow through one point
-- **Flexibility** - Change backends without touching application code
-- **Processing** - Filter, transform, sample, and enrich data before export
-- **Reliability** - Built-in buffering, retries, and load balancing
-- **Cost optimization** - Sampling and filtering reduce backend costs
+- **Unified Configuration** - Single place to configure OTLP connections for all observability signals
+- **Shared Resources** - Efficient connection pooling and resource utilization
+- **Consistent Attribution** - Service information automatically applied to all logs
+- **Health Monitoring** - Built-in connection health checks and monitoring
+- **Graceful Fallbacks** - Continue working even when OTLP connections fail
+- **Environment Flexibility** - Easy switching between different collectors/environments
+- **Import Cycle Prevention** - Bridge pattern avoids circular dependencies
+- **Thread Safety** - All connection operations are thread-safe
